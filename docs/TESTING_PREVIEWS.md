@@ -13,7 +13,10 @@ online at its own web address. That address is a **preview link**.
 
 - It is a normal web link. You click it and the app opens in your browser.
 - It is a *copy*. Anything you do there cannot break the real app.
-- It expires on its own after a while. Nothing to clean up.
+- It expires on its own after a while (7 days). Nothing to clean up.
+- It is only the *website*. Accounts, games and scores live in your Firebase
+  project, so the preview is playable once the backend has been deployed
+  (README §3f) — until then you'll see a setup page or sign-in errors.
 
 ## 2. The routine, start to finish
 
@@ -45,8 +48,10 @@ This part has to be done by you, because it requires logging into **your own
 Google / Firebase account**. Devin cannot log in as you.
 
 You are giving GitHub permission to publish previews to your Firebase project
-(`broadside-dev`). That permission is stored as a "secret" in your GitHub
-repository. It is stored encrypted; nobody can read it back, not even you.
+(`broadside-dev` — if your Project ID is different, also add a repository
+*variable* `FIREBASE_PROJECT_ID`, see README §3d). That permission is stored as
+a "secret" in your GitHub repository. It is stored encrypted; nobody can read it
+back, not even you.
 
 You only need **one** of the two options below.
 
@@ -58,8 +63,9 @@ creates the GitHub secret for you automatically.
 1. Open the Terminal app on your Mac (press `Cmd` + `Space`, type "Terminal",
    press Enter). On Windows, open "PowerShell" from the Start menu instead —
    the commands are the same.
-2. Install the Firebase tool (only needed once). Copy and paste this line, press
-   Enter, and wait for it to finish:
+2. Install the Firebase tool (only needed once; needs Node.js from
+   https://nodejs.org first). Copy and paste this line, press Enter, and wait
+   for it to finish:
 
    ```
    npm install -g firebase-tools
@@ -87,7 +93,7 @@ creates the GitHub secret for you automatically.
    It will ask you a few questions:
    - "For which GitHub repository...?" → type `lalligood10/Battleship`
    - "Set up the workflow to run a build script before every deploy?" → answer
-     **No**
+     **No** (the workflow already in this project builds the web app itself)
    - "Set up automatic deployment to your site's live channel when a PR is
      merged?" → answer **No** (that part is already set up in this project)
    - If it asks whether to overwrite any existing workflow file, answer **No**.

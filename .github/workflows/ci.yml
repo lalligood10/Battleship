@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: Web app (tests, types, lint, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - working-directory: web
+        run: npm ci
+      - working-directory: web
+        run: npm test
+      - working-directory: web
+        run: npm run typecheck
+      - working-directory: web
+        run: npm run lint
+      - working-directory: web
+        run: npm run build
+
+  functions:
+    name: Cloud Functions (tests, types, lint, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - working-directory: functions
+        run: npm ci
+      - working-directory: functions
+        run: npm test
+      - working-directory: functions
+        run: npm run typecheck
+      - working-directory: functions
+        run: npm run lint
+      - working-directory: functions
+        run: npm run build
