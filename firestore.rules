@@ -1,0 +1,79 @@
+rules_version = '2';
+
+// Security model
+// --------------
+// * All game mutations go through Cloud Functions (Admin SDK bypasses these rules), so clients
+//   get READ access only, except for their own push-token document.
+// * games/{id} is readable only by its two players and never contains ship positions until the
+//   game is finished (revealedFleets).
+// * games/{id}/private/{uid} holds a player's fleet and is readable ONLY by that player. The
+//   opponent – or anyone else – cannot read it, so a modified client cannot see where ships are.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Public profiles: needed for leaderboards, opponent names, and game history.
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow write: if false; // created/updated by the setUsername + game Functions only
+
+      // FCM tokens – the owner registers/removes their own device tokens.
+      match /private/push {
+        allow read, write: if isSelf(uid)
+          && request.resource.data.keys().hasOnly(['tokens', 'updatedAt'])
+          && request.resource.data.tokens is list
+          && request.resource.data.tokens.size() <= 20;
+      }
+
+      // Who I've played against (drives the Friends leaderboard).
+      match /opponents/{oppUid} {
+        allow read: if isSelf(uid);
+        allow write: if false;
+      }
+    }
+
+    // Username uniqueness index. Availability is checked via the checkUsername Function.
+    match /usernames/{name} {
+      allow read, write: if false;
+    }
+
+    match /games/{gameId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.playerUids;
+      allow write: if false;
+
+      // A player's hidden board. Only that player may read it; nobody may write from a client.
+      match /private/{uid} {
+        allow read: if isSelf(uid);
+        allow write: if false;
+      }
+    }
+
+    // Join-code lookup happens inside the joinGame Function so codes can't be enumerated.
+    match /gameCodes/{code} {
+      allow read, write: if false;
+    }
+
+    // Weekly leaderboard.
+    match /weeklyWins/{weekId}/players/{uid} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    // Quick Match: a player may watch (and delete) only their own ticket.
+    match /quickMatch/{uid} {
+      allow read, delete: if isSelf(uid);
+      allow create, update: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
