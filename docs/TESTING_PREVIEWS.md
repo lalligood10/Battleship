@@ -139,7 +139,7 @@ page.
 You never have to touch a terminal again. From now on it is just:
 **click the preview link → try the app → leave a comment.**
 
-If a preview comment never shows up on a pull request, click the **Actions** tab
-at the top of the GitHub repository page — a red X next to the latest run
-usually means the secret above is missing or was pasted incompletely. Redoing
-section 3 fixes it.
+If a preview comment never shows up on a pull request, it almost always means
+the secret above is missing or was pasted incompletely. Click the **Actions**
+tab at the top of the GitHub repository page, open the latest run, and look for
+a yellow warning saying the secret is not set. Redoing section 3 fixes it.
