@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID.com.broadside.app",
+        "paths": ["/join/*"]
+      }
+    ]
+  }
+}

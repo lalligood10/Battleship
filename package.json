@@ -1,0 +1,15 @@
+{
+  "name": "broadside",
+  "private": true,
+  "description": "Broadside – multiplayer naval grid game. Root scripts for running everything locally; see README.md.",
+  "scripts": {
+    "setup": "npm --prefix functions ci && npm --prefix web ci && npm --prefix functions run build",
+    "firebase:login": "npm --prefix functions exec -- firebase login",
+    "emulators": "npm --prefix functions run build && npm --prefix functions exec -- firebase emulators:start --only auth,firestore,functions --project demo-broadside",
+    "web": "npm --prefix web run dev:local",
+    "web:cloud": "npm --prefix web run dev",
+    "test": "npm --prefix functions test && npm --prefix web test",
+    "deploy:backend": "npm --prefix functions exec -- firebase deploy --only functions,firestore",
+    "deploy:hosting": "npm --prefix web run build && npm --prefix functions exec -- firebase deploy --only hosting"
+  }
+}
