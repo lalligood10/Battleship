@@ -1,0 +1,31 @@
+# Node
+node_modules/
+functions/lib/
+*.log
+firebase-debug*.log
+firestore-debug.log
+ui-debug.log
+pubsub-debug.log
+.firebase/
+*.tsbuildinfo
+
+# Secrets — never commit these (see README "Manual steps")
+ios/Broadside/Config/GoogleService-Info.plist
+functions/.env
+functions/.env.*
+!functions/.env.example
+*.p8
+*.p12
+*.mobileprovision
+serviceAccountKey*.json
+
+# Xcode
+ios/**/xcuserdata/
+ios/**/*.xcuserstate
+ios/**/DerivedData/
+ios/**/.build/
+ios/**/*.xcscmblueprint
+.swiftpm/
+
+# macOS
+.DS_Store
