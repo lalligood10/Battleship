@@ -24,6 +24,11 @@ export interface Shot {
   result: ShotResult;
   /** Present when result === 'sunk'. Reveals only that a ship of this type went down. */
   sunkShip?: ShipType;
+  /**
+   * Present when result === 'sunk': where that ship was. Every one of its cells has already been hit by
+   * the shooter, so this reveals nothing new – it just lets the UI paint the whole ship as sunk.
+   */
+  sunkPlacement?: ShipPlacement;
   /** Millisecond timestamp when the shot was resolved. */
   at: number;
 }

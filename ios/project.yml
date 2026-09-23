@@ -1,0 +1,97 @@
+# XcodeGen spec. Run `./generate.sh` (or `xcodegen generate`) in this folder to produce Broadside.xcodeproj.
+# The .xcodeproj is generated (and gitignored) so merge conflicts in project files never happen.
+name: Broadside
+options:
+  bundleIdPrefix: com.broadside
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "15.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Set your Apple Developer Team ID here (or pick it in Xcode > Signing & Capabilities).
+    # DEVELOPMENT_TEAM: ABCDE12345
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+
+packages:
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    from: "11.0.0"
+
+targets:
+  Broadside:
+    type: application
+    platform: iOS
+    sources:
+      - path: Broadside
+        excludes:
+          - "Config/GoogleService-Info.example.plist"
+    resources:
+      # Copied at build time only if you have added your real Firebase config (see README).
+      - path: Broadside/Config/GoogleService-Info.plist
+        optional: true
+    dependencies:
+      - package: Firebase
+        product: FirebaseAuth
+      - package: Firebase
+        product: FirebaseFirestore
+      - package: Firebase
+        product: FirebaseFunctions
+      - package: Firebase
+        product: FirebaseMessaging
+    info:
+      path: Broadside/Info.plist
+      properties:
+        CFBundleDisplayName: Broadside
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIBackgroundModes: [remote-notification]
+        FirebaseAppDelegateProxyEnabled: false
+        ITSAppUsesNonExemptEncryption: false
+        CFBundleURLTypes:
+          - CFBundleURLName: com.broadside.join
+            CFBundleURLSchemes: [broadside]
+    entitlements:
+      path: Broadside/Broadside.entitlements
+      properties:
+        com.apple.developer.applesignin: [Default]
+        aps-environment: development
+        # Replace YOUR-FIREBASE-PROJECT-ID after creating the Firebase project (README step 3).
+        com.apple.developer.associated-domains:
+          - applinks:YOUR-FIREBASE-PROJECT-ID.web.app
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.broadside.app
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_STRICT_CONCURRENCY: minimal
+        OTHER_LDFLAGS: -ObjC
+
+  BroadsideTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [BroadsideTests]
+    dependencies:
+      - target: Broadside
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.broadside.app.tests
+
+schemes:
+  Broadside:
+    build:
+      targets:
+        Broadside: all
+        BroadsideTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [BroadsideTests]

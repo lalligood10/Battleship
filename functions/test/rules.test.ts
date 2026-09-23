@@ -136,6 +136,7 @@ describe('users and leaderboards', () => {
     await assertFails(setDoc(doc(as(BOB), 'users', ALICE, 'private', 'push'), { tokens: ['evil'], updatedAt: new Date() }));
     await assertFails(setDoc(doc(as(ALICE), 'users', ALICE, 'private', 'push'), { tokens: 'not-a-list', updatedAt: new Date() }));
     await assertFails(setDoc(doc(as(ALICE), 'users', ALICE, 'private', 'push'), { tokens: [], rating: 5000 }));
+    await assertSucceeds(getDoc(doc(as(ALICE), 'users', ALICE, 'private', 'push')));
     await assertFails(getDoc(doc(as(BOB), 'users', ALICE, 'private', 'push')));
   });
 });

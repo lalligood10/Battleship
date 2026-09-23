@@ -251,7 +251,11 @@ export async function fireShot(uid: string, data: unknown): Promise<FireShotResu
     const outcome = resolveShot(opponentBoard.fleet, previousHits, { row, col });
     const now = Timestamp.now();
     const shot: Shot = { row, col, result: outcome.result, at: now.toMillis() };
-    if (outcome.sunkShip) shot.sunkShip = outcome.sunkShip;
+    if (outcome.sunkShip) {
+      shot.sunkShip = outcome.sunkShip;
+      const placement = opponentBoard.fleet.find((s) => s.type === outcome.sunkShip);
+      if (placement) shot.sunkPlacement = placement;
+    }
 
     const isHit = outcome.result !== 'miss';
     const newHits = isHit ? new Set([...previousHits, cellKey(row, col)]) : previousHits;

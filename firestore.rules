@@ -26,7 +26,8 @@ service cloud.firestore {
 
       // FCM tokens – the owner registers/removes their own device tokens.
       match /private/push {
-        allow read, write: if isSelf(uid)
+        allow read: if isSelf(uid);
+        allow write: if isSelf(uid)
           && request.resource.data.keys().hasOnly(['tokens', 'updatedAt'])
           && request.resource.data.tokens is list
           && request.resource.data.tokens.size() <= 20;

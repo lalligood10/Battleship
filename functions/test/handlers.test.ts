@@ -215,7 +215,14 @@ describe('firing', () => {
     expect(game.players[second]).toMatchObject({ shotsFired: 2, hits: 2 });
     expect(game.players[first]).toMatchObject({ shotsFired: 2, hits: 0, sunkShips: ['destroyer'] });
     expect(game.shots[second]).toHaveLength(2);
-    expect(game.shots[second]![1]).toMatchObject({ row: 8, col: 1, result: 'sunk', sunkShip: 'destroyer' });
+    expect(game.shots[second]![1]).toMatchObject({
+      row: 8,
+      col: 1,
+      result: 'sunk',
+      sunkShip: 'destroyer',
+      sunkPlacement: { type: 'destroyer', row: 8, col: 0, horizontal: true },
+    });
+    expect(game.shots[second]![0]).not.toHaveProperty('sunkPlacement');
     // Private board of the victim records the hits; the shooter still can't see unhit cells.
     expect((await refs.privateBoard(gameId, first).get()).data()!.hitCells.sort()).toEqual(['8,0', '8,1']);
   });
