@@ -8,6 +8,9 @@ permissions:
   contents: read
   pull-requests: write
 
+env:
+  FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BROADSIDE_DEV }}
+
 jobs:
   build_and_preview:
     if: github.event.pull_request.head.repo.full_name == github.repository
@@ -15,7 +18,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Explain missing service account
+        if: env.FIREBASE_SERVICE_ACCOUNT == ''
+        run: |
+          echo "::warning::No preview was deployed because the repository secret" \
+            "FIREBASE_SERVICE_ACCOUNT_BROADSIDE_DEV is not set." \
+            "See docs/TESTING_PREVIEWS.md for the one-time setup steps."
+
       - uses: FirebaseExtended/action-hosting-deploy@v0
+        if: env.FIREBASE_SERVICE_ACCOUNT != ''
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BROADSIDE_DEV }}
