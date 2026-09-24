@@ -3,7 +3,7 @@
  * the browser never writes game or user documents directly, which is what makes the anti-cheat hold.
  */
 import { httpsCallable } from 'firebase/functions';
-import type { ShipPlacement, ShipType, ShotResult, GameStatus, Coordinate } from './types';
+import type { BotDifficulty, ShipPlacement, ShipType, ShotResult, GameStatus, Coordinate } from './types';
 import { functions } from './firebase';
 import { toAppError } from './errors';
 
@@ -55,6 +55,9 @@ export const resign = (gameId: string) => call<{ winnerUid: string }, { gameId: 
 
 export const claimTimeoutWin = (gameId: string) =>
   call<{ winnerUid: string }, { gameId: string }>('claimTimeoutWin', { gameId });
+
+export const createBotGame = (difficulty: BotDifficulty) =>
+  call<{ gameId: string }, { difficulty: BotDifficulty }>('createBotGame', { difficulty });
 
 export const joinQuickMatch = () => call<{ gameId: string | null }>('joinQuickMatch', {});
 

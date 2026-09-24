@@ -83,6 +83,26 @@ describe('hidden boards (anti-cheat)', () => {
   it('listing the private subcollection is refused', async () => {
     await assertFails(getDocs(collection(as(ALICE), 'games', GAME, 'private')));
   });
+
+  it('bot private boards are hidden too, while bot profiles stay readable', async () => {
+    const GAME2 = 'game-bot';
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'games', GAME2), {
+        code: 'BOT234',
+        status: 'active',
+        hostUid: ALICE,
+        playerUids: [ALICE, 'bot-officer'],
+        isBotGame: true,
+        currentTurnUid: ALICE,
+        updatedAt: new Date(),
+      });
+      await setDoc(doc(db, 'games', GAME2, 'private', 'bot-officer'), { fleet: [{ type: 'carrier' }], hitCells: [] });
+      await setDoc(doc(db, 'users', 'bot-officer'), { username: 'Officer Bot', isBot: true, rating: 1000 });
+    });
+    await assertFails(getDoc(doc(as(ALICE), 'games', GAME2, 'private', 'bot-officer')));
+    await assertSucceeds(getDoc(doc(as(ALICE), 'users', 'bot-officer')));
+  });
 });
 
 describe('games', () => {

@@ -27,6 +27,8 @@ const base: GameDoc = {
   ratingChanges: null,
   revealedFleets: null,
   isQuickMatch: false,
+  isBotGame: false,
+  botDifficulty: null,
   abandonTimeoutMs: 1000,
   createdAt: now,
   updatedAt: now,
@@ -96,5 +98,21 @@ describe('notificationsForChange', () => {
 
     const timeout: GameDoc = { ...sunk, endReason: 'timeout' };
     expect(notificationsForChange('g1', active, timeout)).toEqual([expect.objectContaining({ uid: 'guest', title: 'Game forfeited' })]);
+  });
+
+  it('never sends a notification to a bot uid', () => {
+    const botJoined: GameDoc = {
+      ...joined,
+      playerUids: ['host', 'bot-officer'],
+      players: { host: player('Ann'), 'bot-officer': player('Officer Bot') },
+      shots: { host: [], 'bot-officer': [] },
+    };
+    // Resign in a bot game: the "winner" is the bot, so no notification survives the filter.
+    const finished: GameDoc = { ...botJoined, status: 'finished', winnerUid: 'bot-officer', endReason: 'resign' };
+    expect(notificationsForChange('g1', botJoined, finished)).toEqual([]);
+    // Bot "joins" a waiting game: the host still gets told.
+    expect(notificationsForChange('g1', base, botJoined)).toEqual([
+      expect.objectContaining({ uid: 'host', title: 'Officer Bot joined your game' }),
+    ]);
   });
 });

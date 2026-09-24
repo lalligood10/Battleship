@@ -36,6 +36,8 @@ export function gameFromSnapshot(snap: DocumentSnapshot<DocumentData>): Game | n
     ratingChanges: (d.ratingChanges as Game['ratingChanges'] | undefined) ?? null,
     revealedFleets: (d.revealedFleets as Game['revealedFleets'] | undefined) ?? null,
     isQuickMatch: Boolean(d.isQuickMatch),
+    isBotGame: d.isBotGame === true,
+    botDifficulty: (d.botDifficulty as Game['botDifficulty'] | undefined) ?? null,
     abandonTimeoutMs: Number(d.abandonTimeoutMs ?? 0),
     createdAt: (d.createdAt as Game['createdAt'] | undefined) ?? null,
     updatedAt: (d.updatedAt as Game['updatedAt'] | undefined) ?? null,
@@ -103,7 +105,7 @@ export async function fetchHistory(uid: string, max = 50): Promise<Game[]> {
 export async function fetchGlobalLeaderboard(max = 100): Promise<UserProfile[]> {
   const q = query(collection(db(), 'users'), orderBy('rating', 'desc'), orderBy('stats.wins', 'desc'), limit(max));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => profileFromData(d.id, d.data()));
+  return snap.docs.map((d) => profileFromData(d.id, d.data())).filter((p) => p.isBot !== true);
 }
 
 export async function fetchWeeklyLeaderboard(max = 100): Promise<WeeklyWins[]> {

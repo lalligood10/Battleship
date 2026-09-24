@@ -6,7 +6,7 @@ import { SHIP_LENGTHS, SHIP_NAMES, SHIP_TYPES, type Coordinate } from '../../gam
 import { fireShot } from '../../lib/api';
 import { errorMessage } from '../../lib/errors';
 import { isMuted, play, setMuted } from '../../lib/sound';
-import { isMyTurn, opponentUid, shotsBy, type Game, type PrivateBoard, type ShipType } from '../../lib/types';
+import { isBotGame, isMyTurn, opponentUid, shotsBy, type Game, type PrivateBoard, type ShipType } from '../../lib/types';
 import { AbandonControls } from './AbandonControls';
 
 export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; board: PrivateBoard | null }) {
@@ -22,13 +22,33 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
   const [toast, setToast] = useState<string | null>(null);
   const [muted, setMutedState] = useState(isMuted);
 
+  // Against the computer the newest incoming shot is revealed after a beat so the exchange
+  // reads like a turn: we render own-board marks only from the revealed prefix meanwhile.
+  const botGame = isBotGame(game);
+  const [revealedIncoming, setRevealedIncoming] = useState(theirShots.length);
+  useEffect(() => {
+    const count = theirShots.length;
+    if (count <= revealedIncoming) {
+      if (count < revealedIncoming) setRevealedIncoming(count);
+      return;
+    }
+    if (!botGame) {
+      setRevealedIncoming(count);
+      return;
+    }
+    const t = setTimeout(() => setRevealedIncoming(count), 1000);
+    return () => clearTimeout(t);
+  }, [theirShots, botGame, revealedIncoming]);
+  const pendingIncoming = theirShots.length > revealedIncoming;
+  const visibleTheirShots = useMemo(() => theirShots.slice(0, revealedIncoming), [theirShots, revealedIncoming]);
+
   const targetMarks = useMemo(() => buildMarks(myShots), [myShots]);
-  const ownMarks = useMemo(() => buildMarks(theirShots, board?.fleet), [theirShots, board]);
+  const ownMarks = useMemo(() => buildMarks(visibleTheirShots, board?.fleet), [visibleTheirShots, board]);
 
   // Sound + toast for incoming shots (my own shots are announced from the fireShot response).
   const seenIncoming = useRef<number | null>(null);
   useEffect(() => {
-    const count = theirShots.length;
+    const count = revealedIncoming;
     if (seenIncoming.current === null) {
       seenIncoming.current = count;
       return;
@@ -45,7 +65,7 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
       }
     }
     seenIncoming.current = count;
-  }, [theirShots, opponentName]);
+  }, [revealedIncoming, theirShots, opponentName]);
 
   useEffect(() => {
     if (!myTurn) setTarget(null);
@@ -53,10 +73,10 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
 
   const onTargetTap = useCallback(
     (c: Coordinate) => {
-      if (!myTurn || busy || alreadyShot(myShots, c)) return;
+      if (!myTurn || busy || pendingIncoming || alreadyShot(myShots, c)) return;
       setTarget((t) => (t && t.row === c.row && t.col === c.col ? null : c));
     },
-    [myTurn, busy, myShots],
+    [myTurn, busy, pendingIncoming, myShots],
   );
 
   const fire = async () => {
@@ -97,8 +117,8 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
         }
       />
 
-      <div className={`alert ${myTurn ? 'alert--success' : 'alert--info'}`} role="status" style={{ justifyContent: 'center', fontWeight: 800 }}>
-        {myTurn ? 'Your turn — pick a target' : `Waiting for ${opponentName} to fire…`}
+      <div className={`alert ${myTurn && !pendingIncoming ? 'alert--success' : 'alert--info'}`} role="status" style={{ justifyContent: 'center', fontWeight: 800 }}>
+        {pendingIncoming ? 'Incoming fire…' : myTurn ? 'Your turn — pick a target' : `Waiting for ${opponentName} to fire…`}
       </div>
       {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
 
@@ -110,13 +130,13 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
         <Board
           ariaLabel="Opponent's board"
           targeting
-          disabled={!myTurn || busy}
+          disabled={!myTurn || busy || pendingIncoming}
           markOf={(c) => markAt(targetMarks, c)}
           selected={(c) => target?.row === c.row && target?.col === c.col}
           lastShot={targetMarks.lastShot}
           onCellTap={onTargetTap}
         />
-        {myTurn && (
+        {myTurn && !pendingIncoming && (
           <button className="btn btn--primary btn--block" disabled={!target || busy} onClick={fire}>
             {busy ? <span className="spinner" /> : target ? `Fire at ${coordLabel(target)}` : 'Tap a square to aim'}
           </button>

@@ -16,6 +16,7 @@ import {
   placeShips,
   resign,
 } from '../src/handlers/games';
+import { createBotGame } from '../src/handlers/bots';
 import { cancelQuickMatch, joinQuickMatch } from '../src/handlers/quickMatch';
 import { checkUsername, setUsername } from '../src/handlers/users';
 import { refs } from '../src/lib/firestore';
@@ -341,6 +342,117 @@ describe('quick match', () => {
 
     await cancelQuickMatch(ALICE);
     expect((await refs.quickMatch(ALICE).get()).exists).toBe(false);
+  });
+});
+
+describe('vs computer', () => {
+  const BOT = 'bot-officer';
+
+  async function botGame(difficulty = 'medium') {
+    await setUsername(ALICE, { username: 'Alice' });
+    const { gameId } = await createBotGame(ALICE, { difficulty });
+    return gameId;
+  }
+
+  it('rejects a bad difficulty and requires a username', async () => {
+    await setUsername(ALICE, { username: 'Alice' });
+    await expectHttpsError(createBotGame(ALICE, { difficulty: 'impossible' }), 'invalid-argument');
+    await expectHttpsError(createBotGame(BOB, { difficulty: 'easy' }), 'failed-precondition', 'username');
+  });
+
+  it('creates a placing game with a ready bot and a hidden bot fleet', async () => {
+    const gameId = await botGame();
+    const game = (await refs.game(gameId).get()).data()!;
+    expect(game.status).toBe('placing');
+    expect(game.playerUids).toEqual([ALICE, BOT]);
+    expect(game.players[BOT]).toMatchObject({ username: 'Officer Bot', rating: 1000, ready: true });
+    expect(game.isBotGame).toBe(true);
+    expect(game.botDifficulty).toBe('medium');
+    // The public doc never contains the bot's fleet.
+    expect(JSON.stringify(game)).not.toContain('"carrier"');
+
+    const bot = (await refs.user(BOT).get()).data()!;
+    expect(bot).toMatchObject({ username: 'Officer Bot', usernameLower: 'officer bot', isBot: true, rating: 1000 });
+    const board = (await refs.privateBoard(gameId, BOT).get()).data()!;
+    expect(board.fleet).toHaveLength(5);
+    expect(board.hitCells).toEqual([]);
+  });
+
+  it('gives the human the first turn and replies to every shot in the same transaction', async () => {
+    const gameId = await botGame();
+    expect(await placeShips(ALICE, { gameId, ships: FLEET })).toEqual({ status: 'active' });
+    let game = (await refs.game(gameId).get()).data()!;
+    expect(game.currentTurnUid).toBe(ALICE);
+
+    const res = await fireShot(ALICE, { gameId, row: 9, col: 9 });
+    expect(res.gameOver).toBe(false);
+    game = (await refs.game(gameId).get()).data()!;
+    expect(game.shots[ALICE]).toHaveLength(1);
+    expect(game.shots[BOT]).toHaveLength(1); // exactly one bot reply per human shot
+    expect(game.currentTurnUid).toBe(ALICE);
+    expect(game.turnNumber).toBe(3); // human + bot shots count as one exchange each
+    expect(game.players[BOT]).toMatchObject({ shotsFired: 1 });
+
+    await fireShot(ALICE, { gameId, row: 9, col: 8 });
+    game = (await refs.game(gameId).get()).data()!;
+    expect(game.shots[BOT]).toHaveLength(2);
+    expect(game.turnNumber).toBe(5);
+    // The bot's shots are stored with results only.
+    expect(game.shots[BOT]![0]).toMatchObject({ result: expect.stringMatching(/miss|hit|sunk/) });
+  });
+
+  it('refuses timeout claims against the computer', async () => {
+    const gameId = await botGame();
+    await placeShips(ALICE, { gameId, ships: FLEET });
+    await refs.game(gameId).update({ lastMoveAt: Timestamp.fromMillis(Date.now() - 4 * 24 * 3600 * 1000) });
+    await expectHttpsError(claimTimeoutWin(ALICE, { gameId }), 'failed-precondition', 'never times out');
+  });
+
+  it('plays a full unrated game to completion', async () => {
+    const gameId = await botGame();
+    await placeShips(ALICE, { gameId, ships: FLEET });
+
+    // Alice shoots through the bot's fleet cells; interleaved bot shots may finish her first.
+    const botFleet = (await refs.privateBoard(gameId, BOT).get()).data()!.fleet;
+    const targets = botFleet.flatMap((s) => cellsOf(s));
+    let final: Awaited<ReturnType<typeof fireShot>> | undefined;
+    for (const t of targets) {
+      const game = (await refs.game(gameId).get()).data()!;
+      if (game.status === 'finished') break;
+      final = await fireShot(ALICE, { gameId, row: t.row, col: t.col });
+      if (final.gameOver) break;
+    }
+
+    const game = (await refs.game(gameId).get()).data()!;
+    expect(game.status).toBe('finished');
+    expect([ALICE, BOT]).toContain(game.winnerUid);
+    expect(game.endReason).toBe('all_sunk');
+    expect(game.ratingChanges).toBeNull();
+    expect(Object.keys(game.revealedFleets ?? {}).sort()).toEqual([ALICE, BOT].sort());
+
+    const alice = (await refs.user(ALICE).get()).data()!;
+    expect(alice.rating).toBe(1000); // unrated: rating and stats untouched
+    expect(alice.stats.gamesPlayed).toBe(0);
+    expect(alice.botStats!.gamesPlayed).toBe(1);
+    expect(alice.botStats!.wins + alice.botStats!.losses).toBe(1);
+
+    expect((await refs.weeklyWins(weekId(new Date()), game.winnerUid!).get()).exists).toBe(false);
+    expect((await refs.opponent(ALICE, BOT).get()).exists).toBe(false);
+    expect((await refs.opponent(BOT, ALICE).get()).exists).toBe(false);
+    // The bot's own user doc is never touched by finishing a game.
+    expect((await refs.user(BOT).get()).data()!.botStats!.gamesPlayed).toBe(0);
+  });
+
+  it('resign hands the bot an unrated win', async () => {
+    const gameId = await botGame();
+    await placeShips(ALICE, { gameId, ships: FLEET });
+    expect(await resign(ALICE, { gameId })).toEqual({ winnerUid: BOT });
+    const game = (await refs.game(gameId).get()).data()!;
+    expect(game).toMatchObject({ status: 'finished', winnerUid: BOT, endReason: 'resign', ratingChanges: null });
+    const alice = (await refs.user(ALICE).get()).data()!;
+    expect(alice.rating).toBe(1000);
+    expect(alice.stats.gamesPlayed).toBe(0);
+    expect(alice.botStats).toMatchObject({ gamesPlayed: 1, losses: 1 });
   });
 });
 

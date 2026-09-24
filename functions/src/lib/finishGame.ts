@@ -1,6 +1,7 @@
 import { FieldValue, type Timestamp, type Transaction } from 'firebase-admin/firestore';
+import { isBotUid } from '../game/bots';
 import type { ShipPlacement } from '../game/engine';
-import { applyElo, applyGameToStats, weekId } from '../game/scoring';
+import { applyElo, applyGameToStats, EMPTY_STATS, weekId } from '../game/scoring';
 import type { EndReason, GameDoc, RatingChange, UserDoc } from '../types';
 import { refs } from './firestore';
 
@@ -32,17 +33,46 @@ export function finishGame(input: FinishGameInput): Record<string, RatingChange>
   const loser = users[loserUid];
   if (!winner || !loser) throw new Error('finishGame requires both user documents');
 
-  const elo = applyElo(winner.rating, loser.rating);
-  const ratingChanges: Record<string, RatingChange> = {
-    [winnerUid]: { before: winner.rating, after: elo.winnerNewRating, delta: elo.winnerDelta },
-    [loserUid]: { before: loser.rating, after: elo.loserNewRating, delta: elo.loserDelta },
-  };
-
   const revealedFleets: Record<string, ShipPlacement[]> = {};
   for (const uid of game.playerUids) {
     const fleet = fleets[uid];
     if (fleet) revealedFleets[uid] = fleet;
   }
+
+  // Bot games are unrated: no Elo, no weekly wins, no opponents entries. The bot's user doc is
+  // never touched; the human's result is tracked in botStats only.
+  if (game.isBotGame === true) {
+    tx.update(refs.game(gameId), {
+      ...(input.extraGameFields ?? {}),
+      status: 'finished',
+      currentTurnUid: null,
+      winnerUid,
+      endReason: reason,
+      ratingChanges: null,
+      revealedFleets,
+      finishedAt: now,
+      updatedAt: now,
+    });
+    const humanUid = isBotUid(winnerUid) ? loserUid : winnerUid;
+    const human = users[humanUid]!;
+    const won = humanUid === winnerUid;
+    const played = game.players[humanUid];
+    tx.update(refs.user(humanUid), {
+      botStats: applyGameToStats(human.botStats ?? EMPTY_STATS, won, {
+        shotsFired: played?.shotsFired ?? 0,
+        hits: played?.hits ?? 0,
+      }),
+      lastGameAt: now,
+      updatedAt: now,
+    });
+    return {};
+  }
+
+  const elo = applyElo(winner.rating, loser.rating);
+  const ratingChanges: Record<string, RatingChange> = {
+    [winnerUid]: { before: winner.rating, after: elo.winnerNewRating, delta: elo.winnerDelta },
+    [loserUid]: { before: loser.rating, after: elo.loserNewRating, delta: elo.loserDelta },
+  };
 
   tx.update(refs.game(gameId), {
     ...(input.extraGameFields ?? {}),

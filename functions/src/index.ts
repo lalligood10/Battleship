@@ -7,6 +7,7 @@ import { setGlobalOptions } from 'firebase-functions/v2';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import * as bots from './handlers/bots';
 import * as games from './handlers/games';
 import * as quickMatch from './handlers/quickMatch';
 import * as users from './handlers/users';
@@ -38,6 +39,9 @@ export const cancelGame = authed(games.cancelGame);
 export const placeShips = authed(games.placeShips);
 export const fireShot = authed(games.fireShot);
 export const resign = authed(games.resign);
+
+// Play vs Computer
+export const createBotGame = authed(bots.createBotGame);
 
 // Abandonment (M3)
 export const claimTimeoutWin = authed(games.claimTimeoutWin);

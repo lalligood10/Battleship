@@ -17,6 +17,7 @@
 import type { Timestamp } from 'firebase-admin/firestore';
 import type { ShipPlacement, Shot } from './game/engine';
 import type { ShipType } from './game/config';
+import type { BotDifficulty } from './game/bots';
 import type { PlayerStats } from './game/scoring';
 
 export interface UserDoc {
@@ -24,6 +25,10 @@ export interface UserDoc {
   usernameLower: string;
   rating: number;
   stats: PlayerStats;
+  /** True for server-controlled bot profiles. */
+  isBot?: boolean;
+  /** Bot games are unrated: humans track them here instead of `stats`/rating. */
+  botStats?: PlayerStats;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   lastGameAt: Timestamp | null;
@@ -101,6 +106,9 @@ export interface GameDoc {
   /** Populated only when status === 'finished' so the results screen can show both boards. */
   revealedFleets: Record<string, ShipPlacement[]> | null;
   isQuickMatch: boolean;
+  /** True for Play vs Computer games. Those are unrated and the bot replies in-transaction. */
+  isBotGame: boolean;
+  botDifficulty: BotDifficulty | null;
   /** Inactivity window after which the waiting player may claim a win. Copied from config at creation. */
   abandonTimeoutMs: number;
   createdAt: Timestamp;

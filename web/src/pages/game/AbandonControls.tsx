@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Modal } from '../../components/ui';
 import { claimTimeoutWin, resign } from '../../lib/api';
 import { errorMessage } from '../../lib/errors';
-import { opponentUid, type Game } from '../../lib/types';
+import { isBotGame, opponentUid, type Game } from '../../lib/types';
 
 function formatRemaining(ms: number): string {
   if (ms <= 0) return 'now';
@@ -24,6 +24,7 @@ export function AbandonControls({ game, uid }: { game: Game; uid: string }) {
     return () => clearInterval(t);
   }, []);
 
+  const bot = isBotGame(game);
   const opp = opponentUid(game, uid);
   const waitingOnOpponent =
     game.status === 'active'
@@ -49,7 +50,7 @@ export function AbandonControls({ game, uid }: { game: Game; uid: string }) {
   return (
     <div className="stack">
       {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
-      {waitingOnOpponent && (
+      {waitingOnOpponent && !bot && (
         <div className="card card--flat small muted">
           {canClaim ? (
             <div className="stack">
@@ -69,7 +70,9 @@ export function AbandonControls({ game, uid }: { game: Game; uid: string }) {
 
       {confirming === 'resign' && (
         <Modal title="Resign this game?" onClose={() => setConfirming(null)}>
-          <p className="muted">Your opponent gets the win and your rating will drop as if you'd lost.</p>
+          <p className="muted">
+            {bot ? 'The computer gets the win. This game is unrated.' : "Your opponent gets the win and your rating will drop as if you'd lost."}
+          </p>
           <button className="btn btn--danger btn--block" disabled={busy} onClick={() => run(() => resign(game.id))}>
             {busy ? <span className="spinner" /> : 'Yes, resign'}
           </button>

@@ -6,10 +6,13 @@ import type { Timestamp } from 'firebase/firestore';
 import type { ShipType } from '@shared/config';
 import type { ShipPlacement, Shot } from '@shared/engine';
 import type { PlayerStats } from '@shared/scoring';
+import type { BotDifficulty } from '@shared/bots';
 
 export type { Coordinate, ShipPlacement, Shot, ShotResult } from '@shared/engine';
 export type { ShipType } from '@shared/config';
 export type { PlayerStats } from '@shared/scoring';
+export type { BotDifficulty } from '@shared/bots';
+export { isBotUid } from '@shared/bots';
 
 export interface UserProfile {
   id: string;
@@ -17,6 +20,8 @@ export interface UserProfile {
   usernameLower: string;
   rating: number;
   stats: PlayerStats;
+  isBot?: boolean;
+  botStats?: PlayerStats;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
   lastGameAt: Timestamp | null;
@@ -55,6 +60,8 @@ export interface Game {
   ratingChanges: Record<string, RatingChange> | null;
   revealedFleets: Record<string, ShipPlacement[]> | null;
   isQuickMatch: boolean;
+  isBotGame: boolean;
+  botDifficulty: BotDifficulty | null;
   abandonTimeoutMs: number;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
@@ -85,6 +92,11 @@ export interface Opponent {
 
 export function opponentUid(game: Game, uid: string): string | undefined {
   return game.playerUids.find((u) => u !== uid);
+}
+
+/** True for Play vs Computer games (missing field on old docs reads as false). */
+export function isBotGame(game: Game): boolean {
+  return game.isBotGame === true;
 }
 
 export function isMyTurn(game: Game, uid: string): boolean {
