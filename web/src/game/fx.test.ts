@@ -14,12 +14,12 @@ describe('strikeFxKind', () => {
 });
 
 describe('fxDurationMs', () => {
-  it('holds carrier effects for the full 2s sequence', () => {
-    expect(fxDurationMs('carrier', 1400)).toBe(2000);
-    expect(fxDurationMs('carrier', 900)).toBe(2000);
+  it('holds carrier effects for the full sequence', () => {
+    expect(fxDurationMs('carrier', 1800)).toBe(2400);
+    expect(fxDurationMs('carrier', 1300)).toBe(2400);
   });
   it('keeps the caller defaults for generic effects', () => {
-    expect(fxDurationMs('generic', 1400)).toBe(1400);
-    expect(fxDurationMs('generic', 900)).toBe(900);
+    expect(fxDurationMs('generic', 1800)).toBe(1800);
+    expect(fxDurationMs('generic', 1300)).toBe(1300);
   });
 });

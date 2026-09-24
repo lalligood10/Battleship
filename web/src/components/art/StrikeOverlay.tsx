@@ -26,10 +26,10 @@ export function StrikeOverlay({
   sunkPlacement?: ShipPlacement | null;
 }) {
   // The jet flies once per overlay mount (keyed on the target by the caller) and is removed
-  // after its 700ms run even though the result phase keeps the overlay alive.
+  // after its 1.1s run even though the result phase keeps the overlay alive.
   const [jetGone, setJetGone] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setJetGone(true), 700);
+    const t = setTimeout(() => setJetGone(true), 1100);
     return () => clearTimeout(t);
   }, []);
 

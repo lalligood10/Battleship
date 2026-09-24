@@ -8,7 +8,7 @@ export function strikeFxKind(phase: string | undefined, sunkShip: ShipType | nul
   return phase === 'sunk' && sunkShip === 'carrier' ? 'carrier' : 'generic';
 }
 
-/** Overlay lifetime: the carrier sequence needs ~1.9s, so hold it for 2000ms. */
+/** Overlay lifetime: the carrier sequence needs ~2.3s, so hold it for 2400ms. */
 export function fxDurationMs(kind: StrikeFxKind, fallback: number): number {
-  return kind === 'carrier' ? 2000 : fallback;
+  return kind === 'carrier' ? 2400 : fallback;
 }
