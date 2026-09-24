@@ -108,25 +108,35 @@ export function Board(props: BoardProps) {
   }
 
   return (
-    <div
-      ref={gridRef}
-      className={`board${small ? ' board--sm' : ''}`}
-      role="grid"
-      aria-label={ariaLabel}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-    >
-      <div className="label" aria-hidden />
-      {COLUMN_LABELS.map((l) => (
-        <div className="label" key={l} aria-hidden>
-          {l}
+    <div className={`board-shell${small ? ' board-shell--sm' : ''}`}>
+      {/* Decorative sea frame: swell, drifting cloud banks and burning wrecks outside the grid. */}
+      <div className="board-sea fx" aria-hidden>
+        <span className="sea-swell" />
+        <span className="sea-clouds" />
+        <span className="sea-fire sea-fire--a" />
+        <span className="sea-fire sea-fire--b" />
+        <span className="sea-fire sea-fire--c" />
+      </div>
+      <div
+        ref={gridRef}
+        className={`board${small ? ' board--sm' : ''}`}
+        role="grid"
+        aria-label={ariaLabel}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      >
+        <div className="label" aria-hidden />
+        {COLUMN_LABELS.map((l) => (
+          <div className="label" key={l} aria-hidden>
+            {l}
+          </div>
+        ))}
+        {cells}
+        <div className="board-fx fx" style={{ left: 24, top: 20 }} aria-hidden>
+          {overlay}
         </div>
-      ))}
-      {cells}
-      <div className="board-fx fx" style={{ left: 24, top: 20 }} aria-hidden>
-        {overlay}
       </div>
     </div>
   );

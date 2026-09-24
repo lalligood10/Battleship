@@ -54,16 +54,16 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
   const [incomingFx, setIncomingFx] = useState<typeof strike>(null);
   const strikeKind = strikeFxKind(strike?.phase, strike?.sunkShip ?? strike?.sunkPlacement?.type);
   const incomingKind = strikeFxKind(incomingFx?.phase, incomingFx?.sunkShip ?? incomingFx?.sunkPlacement?.type);
-  // Carrier fx last ~1.9s (and for outgoing shots the placement lands late via the listener,
+  // Carrier fx last ~2.3s (and for outgoing shots the placement lands late via the listener,
   // so the longer timer effectively starts when it arrives since [strike] changes then).
   useEffect(() => {
     if (!strike) return;
-    const t = setTimeout(() => setStrike(null), fxDurationMs(strikeKind, 1400));
+    const t = setTimeout(() => setStrike(null), fxDurationMs(strikeKind, 1800));
     return () => clearTimeout(t);
   }, [strike, strikeKind]);
   useEffect(() => {
     if (!incomingFx) return;
-    const t = setTimeout(() => setIncomingFx(null), fxDurationMs(incomingKind, 900));
+    const t = setTimeout(() => setIncomingFx(null), fxDurationMs(incomingKind, 1300));
     return () => clearTimeout(t);
   }, [incomingFx, incomingKind]);
   // The carrier sequence is skippable by tapping anywhere.
