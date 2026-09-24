@@ -20,7 +20,7 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
 
   const [fxDone, setFxDone] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setFxDone(true), 2000);
+    const t = setTimeout(() => setFxDone(true), 2700);
     return () => clearTimeout(t);
   }, []);
 
