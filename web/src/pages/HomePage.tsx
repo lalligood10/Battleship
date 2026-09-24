@@ -188,7 +188,7 @@ function DifficultyModal({ onClose }: { onClose: () => void }) {
             {busy === level ? (
               <span className="spinner" />
             ) : (
-              <span className="stack" style={{ gap: 2, textAlign: 'left' }}>
+              <span className="stack" style={{ gap: 2, textAlign: 'left', width: '100%' }}>
                 <b>{label}</b>
                 <span className="muted small">{blurb}</span>
               </span>

@@ -38,11 +38,12 @@ export function StrikeOverlay({
   return (
     <>
       {!jetGone && (
-        <div className="strike-jet-path" style={{ top: ty }} key={`${target.row},${target.col}`}>
-          <div
-            className={`strike-jet ${from === 'left' ? 'strike-jet--l' : 'strike-jet--r'}`}
-            style={{ ['--tx' as string]: tx }}
-          >
+        <div
+          className={`strike-jet-path ${from === 'right' ? 'strike-jet-path--r' : ''}`}
+          style={{ ['--tx' as string]: tx, ['--ty' as string]: ty }}
+          key={`${target.row},${target.col}`}
+        >
+          <div className={`strike-jet ${from === 'right' ? 'strike-jet--r' : ''}`}>
             <Jet />
           </div>
         </div>

@@ -810,51 +810,64 @@ label.field {
 .board {
   position: relative;
 }
+/* The jet rides a full-width track: percentages in translateX resolve against the track width
+   (= board width), so --tx lands the nose on the target column. --tx/--ty come from the component. */
 .strike-jet-path {
   position: absolute;
   left: 0;
   right: 0;
-}
-.strike-jet {
-  width: 34px;
-  color: var(--text);
-  margin-top: -10px;
+  top: var(--ty);
+  height: 0;
   animation: strike-l 0.7s ease-in-out forwards;
 }
-.strike-jet--r {
+.strike-jet-path--r {
   animation-name: strike-r;
+}
+.strike-jet {
+  position: absolute;
+  width: 12%;
+  margin-left: calc(var(--tx) - 6%);
+  color: var(--text);
+}
+.strike-jet svg {
+  display: block;
+  width: 100%;
+  transform: translateY(-50%);
+}
+.strike-jet--r svg {
+  transform: translateY(-50%) scaleX(-1);
 }
 @keyframes strike-l {
   0% {
-    transform: translateX(-15%);
+    transform: translateX(calc(-1 * var(--tx) - 20%));
     opacity: 0;
   }
   15% {
     opacity: 1;
   }
   55% {
-    transform: translateX(var(--tx));
+    transform: translateX(0);
     opacity: 1;
   }
   100% {
-    transform: translateX(115%);
+    transform: translateX(calc(100% - var(--tx) + 20%));
     opacity: 0;
   }
 }
 @keyframes strike-r {
   0% {
-    transform: translateX(115%) scaleX(-1);
+    transform: translateX(calc(100% - var(--tx) + 20%));
     opacity: 0;
   }
   15% {
     opacity: 1;
   }
   55% {
-    transform: translateX(var(--tx)) scaleX(-1);
+    transform: translateX(0);
     opacity: 1;
   }
   100% {
-    transform: translateX(-15%) scaleX(-1);
+    transform: translateX(calc(-1 * var(--tx) - 20%));
     opacity: 0;
   }
 }
