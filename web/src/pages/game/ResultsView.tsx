@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Jet } from '../../components/art/Jet';
+import { Ship } from '../../components/art/Ship';
 import { useNavigate } from 'react-router-dom';
 import { Board } from '../../components/Board';
 import { Icon, TopBar } from '../../components/ui';
@@ -15,6 +17,12 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
   const change = game.ratingChanges?.[uid];
   const me = game.players[uid];
   const accuracy = me && me.shotsFired > 0 ? `${Math.round((me.hits / me.shotsFired) * 100)}%` : '–';
+
+  const [fxDone, setFxDone] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setFxDone(true), 2000);
+    return () => clearTimeout(t);
+  }, []);
 
   const played = useRef(false);
   useEffect(() => {
@@ -47,7 +55,20 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
   return (
     <div className="page page--wide">
       <TopBar title="Game over" back="/" />
-      <div className="card result-hero stack">
+      <div className="card result-hero stack" role="presentation" onClick={() => setFxDone(true)}>
+        {!fxDone && (
+          <div className="fx" aria-hidden>
+            {won ? (
+              <div className="result-jet">
+                <Jet />
+              </div>
+            ) : (
+              <div className="result-ship">
+                <Ship />
+              </div>
+            )}
+          </div>
+        )}
         <div className={`big ${won ? 'big--win' : 'big--lose'}`} aria-hidden>
           <Icon name={won ? 'trophy' : 'wave'} />
         </div>

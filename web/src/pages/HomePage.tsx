@@ -2,6 +2,7 @@ import { deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Alert, Empty, Modal, Spinner } from '../components/ui';
+import { HomeBanner } from '../components/art/HomeBanner';
 import * as api from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { db } from '../lib/firebase';
@@ -76,6 +77,8 @@ export function HomePage() {
           ★ {profile?.rating}
         </Link>
       </header>
+
+      <HomeBanner />
 
       {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
 

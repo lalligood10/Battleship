@@ -2,7 +2,7 @@
  * 10×10 grid with A–J / 1–10 labels. Rendering is driven by `markOf(cell)`; interaction by optional
  * `onCellTap` (single tap/click) and `onDrag*` (pointer drag across cells, used for ship placement).
  */
-import { useRef, type PointerEvent } from 'react';
+import { useRef, type PointerEvent, type ReactNode } from 'react';
 import { BOARD_SIZE, COLUMN_LABELS, ROW_LABELS, type Coordinate } from '../game/placement';
 
 export type CellMark =
@@ -27,12 +27,14 @@ export interface BoardProps {
   onDragStart?: (c: Coordinate) => boolean;
   onDragMove?: (c: Coordinate) => void;
   onDragEnd?: () => void;
+  /** Decorative overlay rendered above the 10×10 cell area (labels excluded). */
+  overlay?: ReactNode;
 }
 
 const DRAG_THRESHOLD_PX = 6;
 
 export function Board(props: BoardProps) {
-  const { markOf, selected, lastShot, targeting, disabled, small, ariaLabel, onCellTap, onDragStart, onDragMove, onDragEnd } = props;
+  const { markOf, selected, lastShot, targeting, disabled, small, ariaLabel, overlay, onCellTap, onDragStart, onDragMove, onDragEnd } = props;
   const gridRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ start: Coordinate; startX: number; startY: number; dragging: boolean; active: boolean } | null>(null);
 
@@ -123,6 +125,9 @@ export function Board(props: BoardProps) {
         </div>
       ))}
       {cells}
+      <div className="board-fx fx" style={{ left: 24, top: 20 }} aria-hidden>
+        {overlay}
+      </div>
     </div>
   );
 }
