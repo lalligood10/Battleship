@@ -1,0 +1,70 @@
+name: Deploy Cloud Functions and Firestore rules
+
+# Hosting deploys (firebase-hosting-merge.yml) ship only the browser bundle, so a merged change to
+# functions/ or the Firestore rules stayed undeployed until someone ran `npm run deploy:backend`
+# locally. This deploys the backend on merge as well.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'functions/**'
+      - 'firestore.rules'
+      - 'firestore.indexes.json'
+      - 'firebase.json'
+      - '.github/workflows/firebase-deploy-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+env:
+  FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BROADSIDE_DEV }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Explain missing service account
+        if: env.FIREBASE_SERVICE_ACCOUNT == ''
+        run: |
+          echo "::warning::Nothing was deployed because the repository secret" \
+            "FIREBASE_SERVICE_ACCOUNT_BROADSIDE_DEV is not set." \
+            "See docs/TESTING_PREVIEWS.md for the one-time setup steps."
+
+      - uses: actions/setup-node@v4
+        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install dependencies
+        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        working-directory: functions
+        run: npm ci
+
+      - name: Write service account credentials
+        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/service-account.json"
+
+      # firebase.json's predeploy hook runs `npm run build` in functions/.
+      - name: Deploy functions and Firestore rules
+        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/service-account.json
+          PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID || 'broadside-dev' }}
+        run: |
+          npm --prefix functions exec -- firebase deploy \
+            --only functions,firestore \
+            --project "$PROJECT_ID" \
+            --non-interactive \
+            --force

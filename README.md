@@ -123,8 +123,15 @@ instead of crashing.
 
 ### 3f. Deploy the server (rules, indexes, Cloud Functions)
 
-This is the one part that needs a terminal, and it's the same three commands every time the
-server code changes. From the repo folder on your computer:
+Once the `FIREBASE_SERVICE_ACCOUNT_BROADSIDE_DEV` secret exists (§4), GitHub deploys the server
+for you: merging a change under `functions/` or to the Firestore rules runs the **Deploy Cloud
+Functions and Firestore rules** workflow. You can also run it by hand from the *Actions* tab →
+that workflow → *Run workflow*. The service account needs the *Cloud Functions Admin*, *Service
+Account User*, *Firebase Rules Admin* and *Artifact Registry Administrator* roles; if the run
+fails with a permission error, add them in the Google Cloud console → IAM.
+
+To deploy from your own machine instead — the same three commands every time the server code
+changes, from the repo folder:
 
 ```
 npm run setup                                     # first time only: installs everything
@@ -243,6 +250,7 @@ providers, `web/src/game/` is browser-side pure logic that imports the shared en
 | "Broadside needs its Firebase settings" page | Locally: the four `VITE_FIREBASE_*` values are missing from `web/.env.local` (§3e). On Firebase Hosting: make sure the web app was registered with *Also set up Firebase Hosting* (§3c). |
 | "Missing or insufficient permissions" or a leaderboard tab never loads | Run `npm run deploy:backend` — rules or indexes not deployed. Indexes take a few minutes to build; Firebase console → Firestore → Indexes shows progress. |
 | Sign-in fails with *unauthenticated* / functions fail | Make sure Email/Password and Google are enabled in Authentication (§3b) and the functions were deployed (§3f). |
+| A new feature (e.g. *Play vs Computer*) says it isn't available yet | The website updated but the server didn't. Run the **Deploy Cloud Functions and Firestore rules** workflow from the *Actions* tab, or `npm run deploy:backend` (§3f). |
 | Google sign-in popup says "unauthorized domain" | Add the site's hostname under Authentication → Settings → Authorized domains (§5). |
 | No preview link comment on a PR | The `FIREBASE_SERVICE_ACCOUNT_BROADSIDE_DEV` secret is missing — see docs/TESTING_PREVIEWS.md. Check the *Actions* tab for a yellow warning. |
 | Preview/deploy fails with "project not found" | Your Project ID isn't `broadside-dev`; set the `FIREBASE_PROJECT_ID` repository variable (§3d). |
