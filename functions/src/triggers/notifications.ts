@@ -6,6 +6,7 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
 import { logger } from 'firebase-functions/v2';
+import { isBotUid } from '../game/bots';
 import { coordinateLabel } from '../game/engine';
 import { refs } from '../lib/firestore';
 import type { GameDoc } from '../types';
@@ -17,8 +18,12 @@ export interface Notification {
   gameId: string;
 }
 
-/** Pure diff: decides who should be told what. Exported for unit tests. */
+/** Pure diff: decides who should be told what. Exported for unit tests. Bots never get push. */
 export function notificationsForChange(gameId: string, before: GameDoc | undefined, after: GameDoc): Notification[] {
+  return computeNotifications(gameId, before, after).filter((n) => !isBotUid(n.uid));
+}
+
+function computeNotifications(gameId: string, before: GameDoc | undefined, after: GameDoc): Notification[] {
   const out: Notification[] = [];
   const name = (uid: string) => after.players[uid]?.username ?? 'Your opponent';
 

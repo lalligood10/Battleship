@@ -17,6 +17,8 @@ import {
   type ShotResult,
 } from '../game/engine';
 import type { ShipType } from '../game/config';
+import { isBotUid } from '../game/bots';
+import { chooseShot } from '../game/ai';
 import { finishGame } from '../lib/finishGame';
 import { db, refs } from '../lib/firestore';
 import { generateJoinCode, normaliseJoinCode } from '../lib/joinCode';
@@ -24,7 +26,7 @@ import type { GameDoc, GamePlayer, PrivateBoardDoc, UserDoc } from '../types';
 
 // ---------- shared helpers ----------
 
-async function requireUser(uid: string, tx?: Transaction): Promise<UserDoc> {
+export async function requireUser(uid: string, tx?: Transaction): Promise<UserDoc> {
   const snap = tx ? await tx.get(refs.user(uid)) : await refs.user(uid).get();
   const user = snap.data();
   if (!user) throw new HttpsError('failed-precondition', 'Choose a username before playing');
@@ -48,7 +50,7 @@ function requireMember(game: GameDoc, uid: string): void {
   if (!game.playerUids.includes(uid)) throw new HttpsError('permission-denied', 'You are not in this game');
 }
 
-function playerEntry(user: UserDoc): GamePlayer {
+export function playerEntry(user: UserDoc): GamePlayer {
   return { username: user.username, rating: user.rating, ready: false, sunkShips: [], shotsFired: 0, hits: 0 };
 }
 
@@ -73,6 +75,8 @@ export function newGameDoc(
     ratingChanges: null,
     revealedFleets: null,
     isQuickMatch: opts.isQuickMatch,
+    isBotGame: false,
+    botDifficulty: null,
     abandonTimeoutMs: GAME_CONFIG.ABANDON_TIMEOUT_MS,
     createdAt: now,
     updatedAt: now,
@@ -94,7 +98,7 @@ export function joinUpdate(game: GameDoc, uid: string, user: UserDoc, now: Times
   };
 }
 
-async function reserveJoinCode(tx: Transaction): Promise<string> {
+export async function reserveJoinCode(tx: Transaction): Promise<string> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = generateJoinCode();
     const existing = await tx.get(refs.gameCode(code));
@@ -202,10 +206,11 @@ export async function placeShips(uid: string, data: unknown): Promise<PlaceShips
     };
     let status: GameDoc['status'] = 'placing';
     if (opponentReady) {
-      // Both fleets in: pick a random first player and start the turn loop.
+      // Both fleets in: start the turn loop. Against a bot the human always fires first;
+      // otherwise pick randomly.
       status = 'active';
       update.status = status;
-      update.currentTurnUid = Math.random() < 0.5 ? uid : opponentUid;
+      update.currentTurnUid = isBotUid(opponentUid) ? uid : Math.random() < 0.5 ? uid : opponentUid;
       update.turnNumber = 1;
       update.startedAt = now;
     }
@@ -246,6 +251,17 @@ export async function fireShot(uid: string, data: unknown): Promise<FireShotResu
     const opponentUid = opponentOf(game, uid);
     const opponentBoard = (await tx.get(refs.privateBoard(gameId, opponentUid))).data();
     if (!opponentBoard) throw new HttpsError('internal', 'Opponent board is missing');
+
+    const botOpponent = isBotUid(opponentUid);
+    // Against a bot the reply shot (and possibly a bot win) is resolved inside this same
+    // transaction, so everything it might need must be read now, before any writes.
+    const [meSnap, oppSnap, myBoardSnap] = botOpponent
+      ? await Promise.all([
+          tx.get(refs.user(uid)),
+          tx.get(refs.user(opponentUid)),
+          tx.get(refs.privateBoard(gameId, uid)),
+        ])
+      : [null, null, null];
 
     const previousHits = new Set(opponentBoard.hitCells);
     const outcome = resolveShot(opponentBoard.fleet, previousHits, { row, col });
@@ -311,6 +327,79 @@ export async function fireShot(uid: string, data: unknown): Promise<FireShotResu
     }
 
     if (isHit) tx.update(refs.privateBoard(gameId, opponentUid), { hitCells: [...newHits], updatedAt: now });
+
+    if (botOpponent) {
+      const me = meSnap!.data();
+      const opp = oppSnap!.data();
+      const myBoard = myBoardSnap!.data();
+      if (!me || !opp || !myBoard) throw new HttpsError('internal', 'Player data missing');
+
+      // The bot replies immediately, seeing only its own shot history.
+      const botTarget = chooseShot({
+        shots: game.shots[opponentUid] ?? [],
+        boardSize: GAME_CONFIG.BOARD_SIZE,
+        difficulty: game.botDifficulty ?? 'easy',
+        rng: Math.random,
+      });
+      const myPreviousHits = new Set(myBoard.hitCells);
+      const botOutcome = resolveShot(myBoard.fleet, myPreviousHits, botTarget);
+      const botShot: Shot = { row: botTarget.row, col: botTarget.col, result: botOutcome.result, at: now.toMillis() + 1 };
+      if (botOutcome.sunkShip) {
+        botShot.sunkShip = botOutcome.sunkShip;
+        const placement = myBoard.fleet.find((s) => s.type === botOutcome.sunkShip);
+        if (placement) botShot.sunkPlacement = placement;
+      }
+      const botHit = botOutcome.result !== 'miss';
+      const myNewHits = botHit ? new Set([...myPreviousHits, cellKey(botTarget.row, botTarget.col)]) : myPreviousHits;
+      const fleetLost = botHit && isFleetDestroyed(myBoard.fleet, myNewHits);
+
+      gameUpdate[`shots.${opponentUid}`] = FieldValue.arrayUnion(botShot);
+      gameUpdate[`players.${opponentUid}.shotsFired`] = FieldValue.increment(1);
+      if (botHit) gameUpdate[`players.${opponentUid}.hits`] = FieldValue.increment(1);
+      if (botOutcome.sunkShip) gameUpdate[`players.${uid}.sunkShips`] = FieldValue.arrayUnion(botOutcome.sunkShip);
+      gameUpdate.currentTurnUid = uid;
+      gameUpdate.turnNumber = game.turnNumber + 2;
+      gameUpdate.lastMoveAt = now;
+
+      if (botHit) tx.update(refs.privateBoard(gameId, uid), { hitCells: [...myNewHits], updatedAt: now });
+
+      if (fleetLost) {
+        // finishGame applies stats from game.players, so reflect both final shots there first.
+        const gameForStats: GameDoc = {
+          ...game,
+          players: {
+            ...game.players,
+            [uid]: {
+              ...game.players[uid]!,
+              shotsFired: (game.players[uid]?.shotsFired ?? 0) + 1,
+              hits: (game.players[uid]?.hits ?? 0) + (isHit ? 1 : 0),
+            },
+            [opponentUid]: {
+              ...game.players[opponentUid]!,
+              shotsFired: (game.players[opponentUid]?.shotsFired ?? 0) + 1,
+              hits: (game.players[opponentUid]?.hits ?? 0) + (botHit ? 1 : 0),
+            },
+          },
+        };
+        finishGame({
+          tx,
+          gameId,
+          game: gameForStats,
+          winnerUid: opponentUid,
+          loserUid: uid,
+          reason: 'all_sunk',
+          users: { [uid]: me, [opponentUid]: opp },
+          fleets: { [uid]: myBoard.fleet, [opponentUid]: opponentBoard.fleet },
+          extraGameFields: gameUpdate,
+          now,
+        });
+        return { result: outcome.result, sunkShip: outcome.sunkShip, gameOver: true, winnerUid: opponentUid };
+      }
+
+      tx.update(refs.game(gameId), gameUpdate);
+      return { result: outcome.result, sunkShip: outcome.sunkShip, gameOver: false, winnerUid: null };
+    }
+
     gameUpdate.currentTurnUid = opponentUid;
     gameUpdate.turnNumber = FieldValue.increment(1);
     gameUpdate.lastMoveAt = now;
@@ -389,6 +478,7 @@ export async function claimTimeoutWin(uid: string, data: unknown): Promise<EndGa
       throw new HttpsError('failed-precondition', 'This game is not in progress');
     }
     const opponentUid = opponentOf(game, uid);
+    if (isBotUid(opponentUid)) throw new HttpsError('failed-precondition', 'The computer never times out');
 
     // The claimant must be the one waiting: in the active phase it must be the opponent's turn; in
     // the placing phase the claimant must have placed while the opponent has not.
