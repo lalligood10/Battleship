@@ -7,11 +7,12 @@ import { useEffect, useState } from 'react';
 import { SHIP_LENGTHS } from '@shared/config';
 import type { Coordinate, ShipPlacement } from '../../lib/types';
 import { Burst } from './Burst';
+import { CarrierStrike } from './CarrierStrike';
 import { Jet } from './Jet';
 import { Ship } from './Ship';
 import { Splash } from './Splash';
 
-export type StrikePhase = 'inbound' | 'miss' | 'hit' | 'sunk';
+export type StrikePhase = 'inbound' | 'miss' | 'hit' | 'sunk' | 'carrier';
 
 export function StrikeOverlay({
   target,
@@ -34,6 +35,12 @@ export function StrikeOverlay({
 
   const tx = `${(target.col + 0.5) * 10}%`;
   const ty = `${(target.row + 0.5) * 10}%`;
+
+  // The carrier gets its own bomb-run sequence (which includes the jet pass), so the generic
+  // inbound jet and burst are skipped for it.
+  if (phase === 'sunk' && sunkPlacement?.type === 'carrier') {
+    return <CarrierStrike placement={sunkPlacement} from={from} />;
+  }
 
   return (
     <>
@@ -63,7 +70,7 @@ export function StrikeOverlay({
   );
 }
 
-function SinkingShip({ placement }: { placement: ShipPlacement }) {
+export function SinkingShip({ placement, late }: { placement: ShipPlacement; late?: boolean }) {
   const len = SHIP_LENGTHS[placement.type];
   const cx = (placement.col + (placement.horizontal ? len / 2 : 0.5)) * 10;
   const cy = (placement.row + (placement.horizontal ? 0.5 : len / 2)) * 10;
@@ -77,7 +84,7 @@ function SinkingShip({ placement }: { placement: ShipPlacement }) {
         transform: `translate(-50%, -50%)${placement.horizontal ? '' : ' rotate(90deg)'}`,
       }}
     >
-      <div className="sink-anim">
+      <div className={`sink-anim${late ? ' sink-anim--late' : ''}`}>
         <Ship />
       </div>
     </div>

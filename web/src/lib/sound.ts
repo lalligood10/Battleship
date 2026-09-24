@@ -23,7 +23,7 @@ function tone(freq: number, durationMs: number, type: OscillatorType, startDelay
   osc.stop(t0 + durationMs / 1000);
 }
 
-export function play(kind: 'miss' | 'hit' | 'sunk' | 'win' | 'lose') {
+export function play(kind: 'miss' | 'hit' | 'sunk' | 'win' | 'lose' | 'bomb') {
   if (isMuted() || typeof AudioContext === 'undefined') return;
   try {
     switch (kind) {
@@ -38,6 +38,15 @@ export function play(kind: 'miss' | 'hit' | 'sunk' | 'win' | 'lose') {
         tone(110, 300, 'sawtooth', 0, 0.2);
         tone(82, 400, 'square', 120, 0.15);
         tone(55, 600, 'triangle', 260, 0.18);
+        break;
+      case 'bomb':
+        // Descending whistle, then the sunk chord timed to land with the burst (~800ms).
+        tone(880, 140, 'sine', 0, 0.08);
+        tone(660, 140, 'sine', 120, 0.08);
+        tone(440, 140, 'sine', 240, 0.08);
+        tone(110, 300, 'sawtooth', 800, 0.2);
+        tone(82, 400, 'square', 920, 0.15);
+        tone(55, 600, 'triangle', 1060, 0.18);
         break;
       case 'win':
         [523, 659, 784, 1046].forEach((f, i) => tone(f, 220, 'triangle', i * 120));

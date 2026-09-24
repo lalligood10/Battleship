@@ -930,6 +930,115 @@ label.field {
     opacity: 0;
   }
 }
+/* Carrier destruction: jet run along the hull → bomb drop → burst → delayed sink (~1.9s). */
+.carrier-run {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  animation: carrier-pass 0.9s ease-in-out forwards;
+}
+.carrier-run--r {
+  animation-name: carrier-pass-r;
+}
+.carrier-run--v {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+.carrier-run-jet {
+  position: absolute;
+  width: 15%;
+  margin-left: calc(var(--cx) - 7.5%);
+  color: var(--text);
+}
+.carrier-run-jet svg {
+  display: block;
+  width: 100%;
+  transform: translateY(-50%);
+}
+.carrier-run--r .carrier-run-jet svg {
+  transform: translateY(-50%) scaleX(-1);
+}
+@keyframes carrier-pass {
+  0% {
+    transform: translateX(-130%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  45% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(130%);
+    opacity: 0;
+  }
+}
+@keyframes carrier-pass-r {
+  0% {
+    transform: translateX(130%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  45% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-130%);
+    opacity: 0;
+  }
+}
+.carrier-bomb svg {
+  width: 55%;
+  color: var(--text);
+  animation: bomb-drop 0.45s ease-in 0.35s both;
+}
+@keyframes bomb-drop {
+  0% {
+    transform: translateY(-40%) scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 0;
+  }
+}
+.carrier-burst {
+  animation: carrier-burst 0.5s ease 0.75s both;
+}
+@keyframes carrier-burst {
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  35% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+.sink-ship .sink-anim--late {
+  animation-delay: 1s;
+  animation-fill-mode: both;
+}
 
 /* Results hero effects */
 .result-hero {

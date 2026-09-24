@@ -8,6 +8,7 @@ import { errorMessage } from '../../lib/errors';
 import { isMuted, play, setMuted } from '../../lib/sound';
 import { isBotGame, isMyTurn, opponentUid, shotsBy, type Game, type PrivateBoard, type ShipPlacement, type ShipType } from '../../lib/types';
 import { StrikeOverlay, type StrikePhase } from '../../components/art/StrikeOverlay';
+import { fxDurationMs, strikeFxKind } from '../../game/fx';
 import { AbandonControls } from './AbandonControls';
 
 export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; board: PrivateBoard | null }) {
@@ -44,18 +45,38 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
   const visibleTheirShots = useMemo(() => theirShots.slice(0, revealedIncoming), [theirShots, revealedIncoming]);
 
   // Decorative strike animations (no effect on game state or input).
-  const [strike, setStrike] = useState<{ target: Coordinate; phase: StrikePhase; sunkPlacement?: ShipPlacement | null } | null>(null);
+  const [strike, setStrike] = useState<{
+    target: Coordinate;
+    phase: StrikePhase;
+    sunkShip?: ShipType | null;
+    sunkPlacement?: ShipPlacement | null;
+  } | null>(null);
   const [incomingFx, setIncomingFx] = useState<typeof strike>(null);
+  const strikeKind = strikeFxKind(strike?.phase, strike?.sunkShip ?? strike?.sunkPlacement?.type);
+  const incomingKind = strikeFxKind(incomingFx?.phase, incomingFx?.sunkShip ?? incomingFx?.sunkPlacement?.type);
+  // Carrier fx last ~1.9s (and for outgoing shots the placement lands late via the listener,
+  // so the longer timer effectively starts when it arrives since [strike] changes then).
   useEffect(() => {
     if (!strike) return;
-    const t = setTimeout(() => setStrike(null), 1400);
+    const t = setTimeout(() => setStrike(null), fxDurationMs(strikeKind, 1400));
     return () => clearTimeout(t);
-  }, [strike]);
+  }, [strike, strikeKind]);
   useEffect(() => {
     if (!incomingFx) return;
-    const t = setTimeout(() => setIncomingFx(null), 900);
+    const t = setTimeout(() => setIncomingFx(null), fxDurationMs(incomingKind, 900));
     return () => clearTimeout(t);
-  }, [incomingFx]);
+  }, [incomingFx, incomingKind]);
+  // The carrier sequence is skippable by tapping anywhere.
+  const carrierActive = strikeKind === 'carrier' || incomingKind === 'carrier';
+  useEffect(() => {
+    if (!carrierActive) return;
+    const skip = () => {
+      setStrike(null);
+      setIncomingFx(null);
+    };
+    document.addEventListener('pointerdown', skip);
+    return () => document.removeEventListener('pointerdown', skip);
+  }, [carrierActive]);
   // The callable result carries no sunkPlacement; pick it up from our newest shot once the
   // game doc listener lands.
   useEffect(() => {
@@ -79,8 +100,13 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
     if (count > seenIncoming.current) {
       const last = theirShots[count - 1];
       if (last) {
-        setIncomingFx({ target: { row: last.row, col: last.col }, phase: last.result, sunkPlacement: last.sunkPlacement ?? null });
-        play(last.result);
+        setIncomingFx({
+          target: { row: last.row, col: last.col },
+          phase: last.result,
+          sunkShip: last.sunkShip ?? null,
+          sunkPlacement: last.sunkPlacement ?? null,
+        });
+        play(last.result === 'sunk' && last.sunkShip === 'carrier' ? 'bomb' : last.result);
         setToast(
           last.result === 'sunk'
             ? `${opponentName} sank your ${SHIP_NAMES[last.sunkShip ?? 'destroyer']}!`
@@ -110,8 +136,8 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
     setStrike({ target, phase: 'inbound' });
     try {
       const res = await fireShot(game.id, target);
-      setStrike({ target, phase: res.result });
-      play(res.result);
+      setStrike({ target, phase: res.result, sunkShip: res.sunkShip ?? null });
+      play(res.result === 'sunk' && res.sunkShip === 'carrier' ? 'bomb' : res.result);
       if (res.result === 'sunk') setToast(`You sank their ${SHIP_NAMES[res.sunkShip ?? 'destroyer']}!`);
       else setToast(res.result === 'hit' ? `Hit at ${coordLabel(target)}!` : `Miss at ${coordLabel(target)}.`);
       setTarget(null);
