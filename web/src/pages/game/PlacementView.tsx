@@ -25,7 +25,7 @@ import {
 } from '../../game/placement';
 import { placeShips } from '../../lib/api';
 import { errorMessage } from '../../lib/errors';
-import { opponentUid, type Game, type PrivateBoard } from '../../lib/types';
+import { isBotGame, opponentUid, type Game, type PrivateBoard } from '../../lib/types';
 import { AbandonControls } from './AbandonControls';
 
 export function PlacementView({ game, uid, board }: { game: Game; uid: string; board: PrivateBoard | null }) {
@@ -37,7 +37,11 @@ export function PlacementView({ game, uid, board }: { game: Game; uid: string; b
     return (
       <div className="page">
         <TopBar title={`vs ${opponentName}`} back="/" />
-        <Alert kind="info">Your fleet is locked in. Waiting for {opponentName} to place their ships…</Alert>
+        <Alert kind="info">
+          {isBotGame(game)
+            ? 'Your fleet is locked in — starting the battle…'
+            : `Your fleet is locked in. Waiting for ${opponentName} to place their ships…`}
+        </Alert>
         {board ? <FleetPreview fleet={board.fleet} /> : <Spinner />}
         <AbandonControls game={game} uid={uid} />
       </div>

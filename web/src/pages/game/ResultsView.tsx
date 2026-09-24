@@ -1,19 +1,28 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Jet } from '../../components/art/Jet';
+import { Ship } from '../../components/art/Ship';
 import { useNavigate } from 'react-router-dom';
 import { Board } from '../../components/Board';
 import { Icon, TopBar } from '../../components/ui';
 import { buildMarks, markAt } from '../../game/marks';
 import { play } from '../../lib/sound';
-import { opponentUid, shotsBy, type Game, type PrivateBoard } from '../../lib/types';
+import { isBotGame, opponentUid, shotsBy, type Game, type PrivateBoard } from '../../lib/types';
 
 export function ResultsView({ game, uid, board }: { game: Game; uid: string; board: PrivateBoard | null }) {
   const navigate = useNavigate();
   const won = game.winnerUid === uid;
   const opp = opponentUid(game, uid) ?? '';
   const opponentName = game.players[opp]?.username ?? 'Your opponent';
+  const botGame = isBotGame(game);
   const change = game.ratingChanges?.[uid];
   const me = game.players[uid];
   const accuracy = me && me.shotsFired > 0 ? `${Math.round((me.hits / me.shotsFired) * 100)}%` : '–';
+
+  const [fxDone, setFxDone] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setFxDone(true), 2000);
+    return () => clearTimeout(t);
+  }, []);
 
   const played = useRef(false);
   useEffect(() => {
@@ -46,23 +55,46 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
   return (
     <div className="page page--wide">
       <TopBar title="Game over" back="/" />
-      <div className="card result-hero stack">
+      <div className="card result-hero stack" role="presentation" onClick={() => setFxDone(true)}>
+        {!fxDone && (
+          <div className="fx" aria-hidden>
+            {won ? (
+              <div className="result-jet">
+                <Jet />
+              </div>
+            ) : (
+              <div className="result-ship">
+                <Ship />
+              </div>
+            )}
+          </div>
+        )}
         <div className={`big ${won ? 'big--win' : 'big--lose'}`} aria-hidden>
           <Icon name={won ? 'trophy' : 'wave'} />
         </div>
         <h2 className="title">{won ? 'Victory!' : 'Defeat'}</h2>
         <p className="muted">{reason}</p>
+        {botGame && <p className="muted small">Played against {opponentName} (computer) — rating unaffected.</p>}
         <div className="stat-grid" style={{ marginTop: 8 }}>
-          <div className="stat">
-            <b>{change?.after ?? me?.rating ?? '–'}</b>
-            <span>Rating</span>
-          </div>
-          <div className="stat">
-            <b className={change && change.delta >= 0 ? 'delta-up' : 'delta-down'}>
-              {change ? (change.delta >= 0 ? `+${change.delta}` : change.delta) : '–'}
-            </b>
-            <span>Change</span>
-          </div>
+          {botGame ? (
+            <div className="stat">
+              <b>Unrated</b>
+              <span>Rating</span>
+            </div>
+          ) : (
+            <>
+              <div className="stat">
+                <b>{change?.after ?? me?.rating ?? '–'}</b>
+                <span>Rating</span>
+              </div>
+              <div className="stat">
+                <b className={change && change.delta >= 0 ? 'delta-up' : 'delta-down'}>
+                  {change ? (change.delta >= 0 ? `+${change.delta}` : change.delta) : '–'}
+                </b>
+                <span>Change</span>
+              </div>
+            </>
+          )}
           <div className="stat">
             <b>{accuracy}</b>
             <span>Accuracy</span>

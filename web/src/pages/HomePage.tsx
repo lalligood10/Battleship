@@ -2,10 +2,11 @@ import { deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Alert, Empty, Modal, Spinner } from '../components/ui';
+import { HomeBanner } from '../components/art/HomeBanner';
 import * as api from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { db } from '../lib/firebase';
-import { needsMyAction, opponentUid, type Game } from '../lib/types';
+import { gameRowStatus, isBotGame, needsMyAction, opponentAvatar, opponentUid, type BotDifficulty, type Game } from '../lib/types';
 import { useActiveGames } from '../state/ActiveGamesProvider';
 import { useSession, useUid } from '../state/SessionProvider';
 import { GAME_CONFIG } from '@shared/config';
@@ -16,9 +17,10 @@ export function HomePage() {
   const navigate = useNavigate();
   const { games, loaded, error: listError } = useActiveGames();
   const [code, setCode] = useState('');
-  const [busy, setBusy] = useState<'create' | 'join' | 'quick' | null>(null);
+  const [busy, setBusy] = useState<'create' | 'join' | 'quick' | 'bot' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [quickMatching, setQuickMatching] = useState(false);
+  const [pickingComputer, setPickingComputer] = useState(false);
 
   const create = async () => {
     setBusy('create');
@@ -76,10 +78,20 @@ export function HomePage() {
         </Link>
       </header>
 
+      <HomeBanner />
+
       {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
 
       <section className="card stack">
-        <button className="btn btn--primary btn--block" onClick={create} disabled={busy !== null}>
+        <div className="stack" style={{ gap: 4 }}>
+          <button className="btn btn--primary btn--block" onClick={() => setPickingComputer(true)} disabled={busy !== null}>
+            {busy === 'bot' ? <span className="spinner" /> : 'Play vs Computer'}
+          </button>
+          <p className="muted small center" style={{ margin: 0 }}>
+            Instant game · Easy, Medium or Hard · unrated
+          </p>
+        </div>
+        <button className="btn btn--secondary btn--block" onClick={create} disabled={busy !== null}>
           {busy === 'create' ? <span className="spinner" /> : 'Start a game with a friend'}
         </button>
         <form className="row" onSubmit={join}>
@@ -113,7 +125,11 @@ export function HomePage() {
         {!loaded ? (
           <Spinner />
         ) : games.length === 0 ? (
-          <Empty title="No games yet" message="Start a game and send the code to a friend, or join theirs." />
+          <Empty title="No games yet" message="No one's online right now? Play the computer instead.">
+            <button className="btn btn--primary" onClick={() => setPickingComputer(true)}>
+              Play vs Computer
+            </button>
+          </Empty>
         ) : (
           <div className="list">
             {waiting.map((g) => (
@@ -126,8 +142,61 @@ export function HomePage() {
         )}
       </section>
 
-      {quickMatching && <QuickMatchModal uid={uid} onClose={() => setQuickMatching(false)} />}
+      {quickMatching && (
+        <QuickMatchModal uid={uid} onClose={() => setQuickMatching(false)} onPlayComputer={() => setPickingComputer(true)} />
+      )}
+      {pickingComputer && <DifficultyModal onClose={() => setPickingComputer(false)} />}
     </div>
+  );
+}
+
+const DIFFICULTY_OPTIONS: { level: BotDifficulty; label: string; blurb: string }[] = [
+  { level: 'easy', label: 'Easy — Cadet Bot', blurb: 'Cadet Bot fires at random. Good for learning the ropes.' },
+  { level: 'medium', label: 'Medium — Officer Bot', blurb: 'Officer Bot hunts down ships once it lands a hit.' },
+  { level: 'hard', label: 'Hard — Admiral Bot', blurb: 'Admiral Bot hunts with parity and never wastes a shot.' },
+];
+
+function DifficultyModal({ onClose }: { onClose: () => void }) {
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState<BotDifficulty | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const pick = async (difficulty: BotDifficulty) => {
+    setBusy(difficulty);
+    setError(null);
+    try {
+      const { gameId } = await api.createBotGame(difficulty);
+      navigate(`/game/${gameId}`);
+    } catch (err) {
+      setError(errorMessage(err));
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Modal title="Play vs Computer" onClose={onClose}>
+      {error && <Alert>{error}</Alert>}
+      <div className="stack">
+        {DIFFICULTY_OPTIONS.map(({ level, label, blurb }) => (
+          <button
+            key={level}
+            className="btn btn--secondary btn--block"
+            aria-label={`Play vs computer on ${level}`}
+            disabled={busy !== null}
+            onClick={() => pick(level)}
+          >
+            {busy === level ? (
+              <span className="spinner" />
+            ) : (
+              <span className="stack" style={{ gap: 2, textAlign: 'left', width: '100%' }}>
+                <b>{label}</b>
+                <span className="muted small">{blurb}</span>
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    </Modal>
   );
 }
 
@@ -135,15 +204,20 @@ function GameRow({ game, uid }: { game: Game; uid: string }) {
   const oppUid = opponentUid(game, uid);
   const opponent = oppUid ? game.players[oppUid]?.username : null;
   const attention = needsMyAction(game, uid);
-  let status: string;
-  if (game.status === 'waiting') status = `Waiting for a friend · code ${game.code}`;
-  else if (game.status === 'placing') status = attention ? 'Place your ships' : 'Waiting for opponent to place ships';
-  else status = attention ? 'Your turn' : "Opponent's turn";
+  const status = gameRowStatus(game, uid);
+  const bot = isBotGame(game);
   return (
     <Link to={`/game/${game.id}`} className={`list-item${attention ? ' list-item--attention' : ''}`}>
-      <div className="avatar">{(opponent ?? '?').slice(0, 1).toUpperCase()}</div>
+      <div className="avatar">{opponentAvatar(game, uid)}</div>
       <div className="grow">
-        <b>{opponent ? `vs ${opponent}` : 'New game'}</b>
+        <b>
+          {opponent ? `vs ${opponent}` : 'New game'}
+          {bot && (
+            <span className="badge" style={{ marginLeft: 6 }}>
+              Computer
+            </span>
+          )}
+        </b>
         <p className="muted small">{status}</p>
       </div>
       {attention && <span className="badge badge--turn badge--dot">{game.status === 'placing' ? 'Setup' : 'Go'}</span>}
@@ -152,9 +226,18 @@ function GameRow({ game, uid }: { game: Game; uid: string }) {
 }
 
 /** Waits on quickMatch/{uid} until another player's joinQuickMatch fills in our gameId. */
-function QuickMatchModal({ uid, onClose }: { uid: string; onClose: () => void }) {
+/** After this long in the queue we offer Play vs Computer instead. */
+const QUICK_MATCH_FALLBACK_SECONDS = 20;
+
+function QuickMatchModal({ uid, onClose, onPlayComputer }: { uid: string; onClose: () => void; onPlayComputer: () => void }) {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     const ref = doc(db(), 'quickMatch', uid);
@@ -170,6 +253,16 @@ function QuickMatchModal({ uid, onClose }: { uid: string; onClose: () => void })
       (err) => setError(errorMessage(err)),
     );
   }, [uid, navigate]);
+
+  const playComputer = async () => {
+    try {
+      await api.cancelQuickMatch();
+    } catch {
+      // Best effort only — an already-matched or expired ticket can fail to cancel.
+    }
+    onClose();
+    onPlayComputer();
+  };
 
   const cancel = async () => {
     try {
@@ -191,6 +284,16 @@ function QuickMatchModal({ uid, onClose }: { uid: string; onClose: () => void })
       <button className="btn btn--secondary btn--block" onClick={cancel}>
         Cancel
       </button>
+      {elapsed >= QUICK_MATCH_FALLBACK_SECONDS && (
+        <div className="stack">
+          <p className="muted small center" style={{ margin: 0 }}>
+            No one's online right now — play the computer instead
+          </p>
+          <button className="btn btn--ghost btn--block" onClick={playComputer}>
+            Play vs Computer
+          </button>
+        </div>
+      )}
     </Modal>
   );
 }

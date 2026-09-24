@@ -112,3 +112,22 @@ export function needsMyAction(game: Game, uid: string): boolean {
   if (game.status === 'placing') return game.players[uid]?.ready !== true;
   return isMyTurn(game, uid);
 }
+
+/** Avatar text for the game list: "AI" for computer games, else the opponent's initial. */
+export function opponentAvatar(game: Game, uid: string): string {
+  if (isBotGame(game)) return 'AI';
+  const opp = opponentUid(game, uid);
+  const name = opp ? game.players[opp]?.username : null;
+  return (name ?? '?').slice(0, 1).toUpperCase();
+}
+
+/** One-line status shown under each game row on the home screen. */
+export function gameRowStatus(game: Game, uid: string): string {
+  if (game.status === 'waiting') return `Waiting for a friend · code ${game.code}`;
+  const attention = needsMyAction(game, uid);
+  if (game.status === 'placing') {
+    return attention ? 'Place your ships' : 'Waiting for opponent to place ships';
+  }
+  if (attention) return 'Your turn';
+  return isBotGame(game) ? "Computer's turn" : "Opponent's turn";
+}

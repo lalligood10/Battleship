@@ -6,7 +6,8 @@ import { SHIP_LENGTHS, SHIP_NAMES, SHIP_TYPES, type Coordinate } from '../../gam
 import { fireShot } from '../../lib/api';
 import { errorMessage } from '../../lib/errors';
 import { isMuted, play, setMuted } from '../../lib/sound';
-import { isBotGame, isMyTurn, opponentUid, shotsBy, type Game, type PrivateBoard, type ShipType } from '../../lib/types';
+import { isBotGame, isMyTurn, opponentUid, shotsBy, type Game, type PrivateBoard, type ShipPlacement, type ShipType } from '../../lib/types';
+import { StrikeOverlay, type StrikePhase } from '../../components/art/StrikeOverlay';
 import { AbandonControls } from './AbandonControls';
 
 export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; board: PrivateBoard | null }) {
@@ -42,6 +43,28 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
   const pendingIncoming = theirShots.length > revealedIncoming;
   const visibleTheirShots = useMemo(() => theirShots.slice(0, revealedIncoming), [theirShots, revealedIncoming]);
 
+  // Decorative strike animations (no effect on game state or input).
+  const [strike, setStrike] = useState<{ target: Coordinate; phase: StrikePhase; sunkPlacement?: ShipPlacement | null } | null>(null);
+  const [incomingFx, setIncomingFx] = useState<typeof strike>(null);
+  useEffect(() => {
+    if (!strike) return;
+    const t = setTimeout(() => setStrike(null), 1400);
+    return () => clearTimeout(t);
+  }, [strike]);
+  useEffect(() => {
+    if (!incomingFx) return;
+    const t = setTimeout(() => setIncomingFx(null), 900);
+    return () => clearTimeout(t);
+  }, [incomingFx]);
+  // The callable result carries no sunkPlacement; pick it up from our newest shot once the
+  // game doc listener lands.
+  useEffect(() => {
+    if (strike?.phase === 'sunk' && !strike.sunkPlacement) {
+      const last = myShots.at(-1);
+      if (last?.sunkPlacement) setStrike((s) => (s ? { ...s, sunkPlacement: last.sunkPlacement } : s));
+    }
+  }, [myShots, strike]);
+
   const targetMarks = useMemo(() => buildMarks(myShots), [myShots]);
   const ownMarks = useMemo(() => buildMarks(visibleTheirShots, board?.fleet), [visibleTheirShots, board]);
 
@@ -56,6 +79,7 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
     if (count > seenIncoming.current) {
       const last = theirShots[count - 1];
       if (last) {
+        setIncomingFx({ target: { row: last.row, col: last.col }, phase: last.result, sunkPlacement: last.sunkPlacement ?? null });
         play(last.result);
         setToast(
           last.result === 'sunk'
@@ -83,13 +107,16 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
     if (!target) return;
     setBusy(true);
     setError(null);
+    setStrike({ target, phase: 'inbound' });
     try {
       const res = await fireShot(game.id, target);
+      setStrike({ target, phase: res.result });
       play(res.result);
       if (res.result === 'sunk') setToast(`You sank their ${SHIP_NAMES[res.sunkShip ?? 'destroyer']}!`);
       else setToast(res.result === 'hit' ? `Hit at ${coordLabel(target)}!` : `Miss at ${coordLabel(target)}.`);
       setTarget(null);
     } catch (err) {
+      setStrike(null);
       setError(errorMessage(err));
     } finally {
       setBusy(false);
@@ -101,6 +128,13 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
     setMuted(next);
     setMutedState(next);
   };
+
+  const pendingShot = pendingIncoming ? theirShots[revealedIncoming] : null;
+  const ownOverlay = pendingShot ? (
+    <StrikeOverlay key={`p${revealedIncoming}`} target={pendingShot} phase="inbound" from="right" />
+  ) : incomingFx ? (
+    <StrikeOverlay {...incomingFx} from="right" />
+  ) : undefined;
 
   const mySunk = game.players[uid]?.sunkShips ?? [];
   const theirSunk = game.players[opp]?.sunkShips ?? [];
@@ -134,6 +168,7 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
           markOf={(c) => markAt(targetMarks, c)}
           selected={(c) => target?.row === c.row && target?.col === c.col}
           lastShot={targetMarks.lastShot}
+          overlay={strike ? <StrikeOverlay {...strike} from="left" /> : undefined}
           onCellTap={onTargetTap}
         />
         {myTurn && !pendingIncoming && (
@@ -149,7 +184,7 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
           <FleetStatus sunk={mySunk} />
         </div>
         {board ? (
-          <Board ariaLabel="Your board" small disabled markOf={(c) => markAt(ownMarks, c)} lastShot={ownMarks.lastShot} />
+          <Board ariaLabel="Your board" small disabled markOf={(c) => markAt(ownMarks, c)} lastShot={ownMarks.lastShot} overlay={ownOverlay} />
         ) : (
           <Spinner />
         )}

@@ -694,9 +694,301 @@ label.field {
   color: var(--danger);
 }
 
+/* Motion ------------------------------------------------------------------------------------
+   Decorative overlays only: everything inside .fx is pointer-events-free, aria-hidden, and
+   animated with transform/opacity only. */
+.fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.fx-paused .fx * {
+  animation-play-state: paused !important;
+}
+
+/* Home banner */
+.hero-banner {
+  position: relative;
+  height: 110px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: linear-gradient(to bottom, #a8cdec 0%, #d4e7f7 54%, #6aa3d0 55%, #3f7fb5 100%);
+}
+[data-theme='dark'] .hero-banner {
+  background: linear-gradient(to bottom, #16263e 0%, #1d3556 54%, #16294a 55%, #0e1e38 100%);
+}
+.hero-horizon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 55%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.45);
+}
+.hero-ship {
+  position: absolute;
+  top: 56%;
+  left: 0;
+  right: 0;
+  animation: drift 45s linear infinite;
+}
+.hero-bob {
+  width: 64px;
+  color: #2d4a63;
+  animation: bob 3s ease-in-out infinite;
+}
+.hero-jet {
+  position: absolute;
+  top: 16%;
+  left: 0;
+  right: 0;
+  animation: flyover 14s linear infinite;
+}
+.hero-jet svg {
+  width: 36px;
+  color: #33506a;
+  transform: scaleX(-1);
+}
+@keyframes drift {
+  from {
+    transform: translateX(-15%);
+  }
+  to {
+    transform: translateX(115%);
+  }
+}
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(-2px);
+  }
+  50% {
+    transform: translateY(2px);
+  }
+}
+@keyframes flyover {
+  0% {
+    transform: translateX(115%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-15%);
+    opacity: 0;
+  }
+}
+
+/* Placement settle / invalid shake */
+.cell--ship {
+  animation: settle 0.25s ease-out;
+}
+.cell--ship-invalid {
+  animation: shake 0.3s ease;
+}
+@keyframes settle {
+  from {
+    transform: scale(0.7);
+    opacity: 0.4;
+  }
+}
+@keyframes shake {
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
+
+/* Board strike overlay */
+.board {
+  position: relative;
+}
+/* The jet rides a full-width track: percentages in translateX resolve against the track width
+   (= board width), so --tx lands the nose on the target column. --tx/--ty come from the component. */
+.strike-jet-path {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--ty);
+  height: 0;
+  animation: strike-l 0.7s ease-in-out forwards;
+}
+.strike-jet-path--r {
+  animation-name: strike-r;
+}
+.strike-jet {
+  position: absolute;
+  width: 12%;
+  margin-left: calc(var(--tx) - 6%);
+  color: var(--text);
+}
+.strike-jet svg {
+  display: block;
+  width: 100%;
+  transform: translateY(-50%);
+}
+.strike-jet--r svg {
+  transform: translateY(-50%) scaleX(-1);
+}
+@keyframes strike-l {
+  0% {
+    transform: translateX(calc(-1 * var(--tx) - 20%));
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  55% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(calc(100% - var(--tx) + 20%));
+    opacity: 0;
+  }
+}
+@keyframes strike-r {
+  0% {
+    transform: translateX(calc(100% - var(--tx) + 20%));
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  55% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(calc(-1 * var(--tx) - 20%));
+    opacity: 0;
+  }
+}
+.strike-result {
+  position: absolute;
+  width: 10%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.strike-splash {
+  width: 70%;
+  color: var(--miss);
+  animation: ring 0.6s ease-out forwards;
+}
+@keyframes ring {
+  from {
+    transform: scale(0.2);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+.strike-burst {
+  width: 80%;
+  color: #ffd166;
+  animation: pop 0.3s ease, fade-out 0.5s ease forwards;
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+.sink-ship {
+  position: absolute;
+  height: 10%;
+  transform-origin: center;
+}
+.sink-ship .sink-anim {
+  width: 100%;
+  height: 100%;
+  color: var(--ship);
+  animation: sink 0.9s ease-in forwards;
+}
+.sink-ship svg {
+  width: 100%;
+  height: 100%;
+}
+@keyframes sink {
+  0% {
+    transform: rotate(-8deg) translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(14deg) translateY(60%);
+    opacity: 0;
+  }
+}
+
+/* Results hero effects */
+.result-hero {
+  position: relative;
+  overflow: hidden;
+}
+.result-jet {
+  position: absolute;
+  top: 30%;
+  left: 0;
+  right: 0;
+}
+.result-jet svg {
+  width: 44px;
+  color: var(--text);
+  animation: flypast 1.6s ease-in-out forwards;
+}
+@keyframes flypast {
+  0% {
+    transform: translateX(-30%) rotate(-6deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(130%) rotate(-6deg);
+    opacity: 0;
+  }
+}
+.result-ship {
+  position: absolute;
+  left: 50%;
+  bottom: 10%;
+  width: 90px;
+  margin-left: -45px;
+  color: var(--ship);
+  animation: list-sink 1.8s ease-in forwards;
+}
+@keyframes list-sink {
+  0% {
+    transform: rotate(0) translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(18deg) translateY(70%);
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;
     transition: none !important;
+  }
+  .fx {
+    display: none !important;
   }
 }
