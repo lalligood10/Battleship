@@ -944,7 +944,7 @@ label.field {
 .carrier-run--v {
   position: absolute;
   inset: 0;
-  transform: rotate(90deg);
+  transform: rotate(-90deg);
 }
 .carrier-run-jet {
   position: absolute;
@@ -1019,7 +1019,7 @@ label.field {
   }
 }
 .carrier-burst {
-  animation: carrier-burst 0.5s ease 0.8s both;
+  animation: carrier-burst 0.5s ease 0.75s both;
 }
 @keyframes carrier-burst {
   0% {
@@ -1035,8 +1035,8 @@ label.field {
     opacity: 0;
   }
 }
-.sink-anim--late {
-  animation-delay: 0.9s;
+.sink-ship .sink-anim--late {
+  animation-delay: 1s;
   animation-fill-mode: both;
 }
 

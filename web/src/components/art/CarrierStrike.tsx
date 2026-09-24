@@ -34,6 +34,7 @@ export function CarrierStrike({ placement, from }: { placement: ShipPlacement; f
 
   return (
     <>
+      <SinkingShip placement={placement} late />
       {placement.horizontal ? run : <div className="carrier-run--v">{run}</div>}
       <div className="strike-result carrier-bomb" style={{ left: `${cx}%`, top: `${cy}%` }}>
         <Bomb />
@@ -41,7 +42,6 @@ export function CarrierStrike({ placement, from }: { placement: ShipPlacement; f
       <div className="strike-result" style={{ left: `${cx}%`, top: `${cy}%` }}>
         <Burst className="strike-burst carrier-burst" />
       </div>
-      <SinkingShip placement={placement} late />
     </>
   );
 }
