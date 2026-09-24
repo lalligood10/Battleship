@@ -15,6 +15,10 @@ Tick these off in order. Details for each are in the matching README section.
 ## Deploy the game server (once, then whenever server code changes)
 - [ ] Install Node.js 22, then in the repo folder run `npm run setup`. *(§2)*
 - [ ] `npm run firebase:login`, then `npm run deploy:backend`. *(§3f)*
+- [ ] After the `FIREBASE_SERVICE_ACCOUNT_BROADSIDE_DEV` secret exists, server deploys happen on
+      merge instead — grant that service account the *Cloud Functions Admin*, *Service Account
+      User*, *Firebase Rules Admin* and *Artifact Registry Administrator* roles in Google Cloud
+      → IAM. *(§3f)*
 
 ## Preview links + automatic live site (once, ~10 min)
 - [ ] Follow **docs/TESTING_PREVIEWS.md** to create the GitHub secret
@@ -31,6 +35,6 @@ Tick these off in order. Details for each are in the matching README section.
       (In-app "your turn" indicators already work without this.)
 - [ ] Custom domain: Hosting → *Add custom domain*, then add it to Authorized domains too.
 - [ ] Change rules (ships may touch, timeout, Elo K-factor) in `functions/src/game/*.ts`,
-      then `npm run deploy:backend` and merge. *(§6)*
+      then merge (the deploy workflow ships them) or run `npm run deploy:backend`. *(§6)*
 - [ ] Native iPhone app (on hold): see `ios/README.md` — needs a Mac, Xcode and an Apple
       Developer account.

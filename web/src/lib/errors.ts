@@ -27,6 +27,7 @@ const FUNCTIONS_MESSAGES: Record<string, string> = {
   'functions/unavailable': "Can't reach the server. Check your connection and try again.",
   'functions/deadline-exceeded': "Can't reach the server. Check your connection and try again.",
   'functions/internal': 'Something went wrong on the server. Please try again.',
+  'functions/not-found': 'This feature is not available yet — the server is running an older version.',
 };
 
 export function toAppError(err: unknown): AppError {
