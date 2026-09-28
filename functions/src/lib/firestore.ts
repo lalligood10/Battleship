@@ -13,6 +13,7 @@ import type {
   PrivateBoardDoc,
   PushDoc,
   QuickMatchTicketDoc,
+  ReactionDoc,
   UserDoc,
   UsernameDoc,
   WeeklyWinsDoc,
@@ -36,6 +37,7 @@ export const refs = {
   games: () => typed<CollectionReference<GameDoc>>(db.collection('games')),
   privateBoard: (gameId: string, uid: string) =>
     typed<DocumentReference<PrivateBoardDoc>>(db.doc(`games/${gameId}/private/${uid}`)),
+  reactions: (gameId: string) => typed<CollectionReference<ReactionDoc>>(db.collection(`games/${gameId}/reactions`)),
   gameCode: (code: string) => typed<DocumentReference<GameCodeDoc>>(db.doc(`gameCodes/${code}`)),
   weeklyWins: (weekId: string, uid: string) =>
     typed<DocumentReference<WeeklyWinsDoc>>(db.doc(`weeklyWins/${weekId}/players/${uid}`)),

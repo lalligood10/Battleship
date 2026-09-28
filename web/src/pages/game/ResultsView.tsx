@@ -10,6 +10,7 @@ import { errorMessage } from '../../lib/errors';
 import { listenRematch, type RematchState } from '../../lib/firestore';
 import { play } from '../../lib/sound';
 import { isBotGame, opponentUid, shotsBy, type Game, type PrivateBoard } from '../../lib/types';
+import { Reactions } from '../../components/Reactions';
 
 export function ResultsView({ game, uid, board }: { game: Game; uid: string; board: PrivateBoard | null }) {
   const navigate = useNavigate();
@@ -118,6 +119,7 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
         <Board ariaLabel="Your board" small disabled markOf={(c) => markAt(myBoard, c)} />
       </section>
 
+      <Reactions game={game} uid={uid} />
       {botGame ? (
         <BotRematch game={game} />
       ) : (

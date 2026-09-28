@@ -54,6 +54,12 @@ service cloud.firestore {
         allow read: if isSelf(uid);
         allow write: if false;
       }
+
+      // Quick-chat reactions are readable only by the game's players.
+      match /reactions/{id} {
+        allow read: if signedIn() && request.auth.uid in get(/databases/$(database)/documents/games/$(gameId)).data.playerUids;
+        allow write: if false;
+      }
     }
 
     // Join-code lookup happens inside the joinGame Function so codes can't be enumerated.

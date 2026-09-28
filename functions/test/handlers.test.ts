@@ -6,7 +6,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { cellsOf, type ShipPlacement } from '../src/game/engine';
-import { weekId } from '../src/game/scoring';
+import { applyElo, weekId } from '../src/game/scoring';
 import {
   cancelGame,
   claimTimeoutWin,
@@ -15,6 +15,7 @@ import {
   joinGame,
   placeShips,
   resign,
+  sendReaction,
 } from '../src/handlers/games';
 import { createBotGame } from '../src/handlers/bots';
 import { cancelChallenge, createChallenge, respondChallenge } from '../src/handlers/challenges';
@@ -343,6 +344,139 @@ describe('quick match', () => {
 
     await cancelQuickMatch(ALICE);
     expect((await refs.quickMatch(ALICE).get()).exists).toBe(false);
+  });
+
+  it('keeps far-apart ratings apart until the waiting ticket is old enough', async () => {
+    await setupPlayers();
+    await refs.user(BOB).update({ rating: 1450 });
+    const t0 = Date.now();
+    const at = (sec: number) => Timestamp.fromMillis(t0 + sec * 1000);
+
+    expect(await joinQuickMatch(ALICE, {}, at(0))).toEqual({ gameId: null });
+    expect(await joinQuickMatch(BOB, {}, at(1))).toEqual({ gameId: null });
+    // Alice re-polls: Bob's ticket is 59s old (band 250) and the gap is 450.
+    expect(await joinQuickMatch(ALICE, {}, at(60))).toEqual({ gameId: null });
+    // Re-polling keeps the original ticket time so the band keeps widening.
+    expect((await refs.quickMatch(ALICE).get()).data()!.createdAt.toMillis()).toBe(t0);
+
+    // Alice's ticket is now 120s old, so it accepts anyone.
+    const paired = await joinQuickMatch(BOB, {}, at(120));
+    expect(paired.gameId).toBeTruthy();
+    const game = (await refs.game(paired.gameId!).get()).data()!;
+    expect(game).toMatchObject({ hostUid: ALICE, isQuickMatch: true });
+    expect((await refs.quickMatch(ALICE).get()).data()!.gameId).toBe(paired.gameId);
+    expect((await refs.quickMatch(BOB).get()).exists).toBe(false);
+    // Alice's next poll hands back the same game instead of re-queueing.
+    expect(await joinQuickMatch(ALICE, {}, at(121))).toEqual({ gameId: paired.gameId });
+  });
+
+  it('prefers the closer rating and skips a recent opponent', async () => {
+    await setupPlayers();
+    await setUsername(CAROL, { username: 'Carol' });
+    await refs.user(CAROL).update({ rating: 1150 });
+    const t0 = Date.now();
+    expect(await joinQuickMatch(BOB, {}, Timestamp.fromMillis(t0))).toEqual({ gameId: null });
+    expect(await joinQuickMatch(CAROL, {}, Timestamp.fromMillis(t0 + 1000))).toEqual({ gameId: null });
+
+    // 30s later both tickets accept a 200-point gap. Bob (1000) is the closest fit for
+    // Alice (1000), but they just played, so Carol (1150) is picked instead.
+    await refs.opponent(ALICE, BOB).set({ username: 'Bob', gamesPlayed: 1, lastPlayedAt: Timestamp.fromMillis(t0) });
+    const paired = await joinQuickMatch(ALICE, {}, Timestamp.fromMillis(t0 + 31_000));
+    const game = (await refs.game(paired.gameId!).get()).data()!;
+    expect(game.playerUids.sort()).toEqual([ALICE, CAROL].sort());
+    expect((await refs.quickMatch(BOB).get()).data()!.gameId).toBeNull();
+  });
+});
+
+describe('same-pair anti-farming', () => {
+  it('halves K from the fourth rated game between the same pair within 24h', async () => {
+    await setupPlayers();
+    const deltas: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      const before = (await refs.user(ALICE).get()).data()!.rating;
+      const loser = (await refs.user(BOB).get()).data()!.rating;
+      const { gameId, code } = await createGame(ALICE);
+      await joinGame(BOB, { code });
+      await resign(BOB, { gameId });
+      const change = (await refs.game(gameId).get()).data()!.ratingChanges![ALICE]!;
+      expect(change.before).toBe(before);
+      expect(change.delta).toBe(applyElo(before, loser, i < 3 ? 1 : 0.5).winnerDelta);
+      deltas.push(change.delta);
+    }
+    expect(deltas[3]).toBeLessThan(deltas[2]!);
+    const pair = (await refs.opponent(ALICE, BOB).get()).data()!;
+    expect(pair.gamesPlayed).toBe(4);
+    expect(pair.recentGames).toHaveLength(4);
+    expect((await refs.opponent(BOB, ALICE).get()).data()!.recentGames).toHaveLength(4);
+  });
+});
+
+describe('reactions', () => {
+  it('lets a member react in an active game without changing the game document', async () => {
+    await setupPlayers();
+    const { gameId, first } = await startedGame();
+    const before = (await refs.game(gameId).get()).data()!;
+
+    await sendReaction(first, { gameId, reactionId: 'nice_shot' });
+
+    const reactions = await refs.reactions(gameId).get();
+    expect(reactions.docs).toHaveLength(1);
+    expect(reactions.docs[0]!.data()).toMatchObject({ uid: first, reactionId: 'nice_shot', at: expect.any(Timestamp) });
+    expect((await refs.game(gameId).get()).data()!.updatedAt).toEqual(before.updatedAt);
+  });
+
+  it('limits each player independently to one reaction every 10 seconds', async () => {
+    await setupPlayers();
+    const { gameId } = await startedGame();
+
+    await sendReaction(ALICE, { gameId, reactionId: 'gg' });
+    await expectHttpsError(sendReaction(ALICE, { gameId, reactionId: 'oops' }), 'resource-exhausted');
+    await sendReaction(BOB, { gameId, reactionId: 'fire' });
+    expect((await refs.reactions(gameId).get()).size).toBe(2);
+  });
+
+  it('allows another reaction after the latest one is older than the cooldown', async () => {
+    await setupPlayers();
+    const { gameId } = await startedGame();
+    await refs.reactions(gameId).add({
+      uid: ALICE,
+      reactionId: 'gg',
+      at: Timestamp.fromMillis(Date.now() - 11_000),
+    });
+
+    await sendReaction(ALICE, { gameId, reactionId: 'nice_shot' });
+    expect((await refs.reactions(gameId).where('uid', '==', ALICE).get()).size).toBe(2);
+  });
+
+  it('rejects a non-member', async () => {
+    await setupPlayers();
+    await setUsername(CAROL, { username: 'Carol' });
+    const { gameId } = await startedGame();
+    await expectHttpsError(sendReaction(CAROL, { gameId, reactionId: 'gg' }), 'permission-denied');
+  });
+
+  it('rejects unknown reaction ids before opening the transaction', async () => {
+    await setupPlayers();
+    const { gameId } = await startedGame();
+    for (const input of [{ reactionId: 'hello' }, { reactionId: 'GG' }, { reactionId: 123 }, {}]) {
+      await expectHttpsError(sendReaction(ALICE, { gameId, ...input }), 'invalid-argument');
+    }
+  });
+
+  it('rejects waiting and cancelled games, but allows placing and finished games', async () => {
+    await setupPlayers();
+    const waiting = await createGame(ALICE);
+    await expectHttpsError(sendReaction(ALICE, { gameId: waiting.gameId, reactionId: 'gg' }), 'failed-precondition');
+    await cancelGame(ALICE, { gameId: waiting.gameId });
+    await expectHttpsError(sendReaction(ALICE, { gameId: waiting.gameId, reactionId: 'gg' }), 'failed-precondition');
+
+    const placing = await createGame(ALICE);
+    await joinGame(BOB, { code: placing.code });
+    await sendReaction(ALICE, { gameId: placing.gameId, reactionId: 'gg' });
+
+    const { gameId } = await startedGame();
+    await resign(ALICE, { gameId });
+    await sendReaction(BOB, { gameId, reactionId: 'well_played' });
   });
 });
 

@@ -1,5 +1,5 @@
 import { deleteDoc, doc, onSnapshot } from 'firebase/firestore';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Alert, Empty, Modal, Spinner } from '../components/ui';
 import { HomeBanner } from '../components/art/HomeBanner';
@@ -356,7 +356,38 @@ function QuickMatchModal({ uid, onClose, onPlayComputer }: { uid: string; onClos
     );
   }, [uid, navigate]);
 
+  // Re-join periodically: the server keeps our ticket's age (so its rating band keeps widening)
+  // and may now find a fit among players who queued after us.
+  const polling = useRef<Promise<unknown> | null>(null);
+  const stopped = useRef(false);
+  useEffect(() => {
+    stopped.current = false;
+    const t = setInterval(() => {
+      if (stopped.current || polling.current) return;
+      polling.current = api
+        .joinQuickMatch()
+        .then(({ gameId }) => {
+          if (gameId && !stopped.current) navigate(`/game/${gameId}`);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          polling.current = null;
+        });
+    }, GAME_CONFIG.QUICK_MATCH_BAND_INTERVAL_SEC * 1000);
+    return () => {
+      stopped.current = true;
+      clearInterval(t);
+    };
+  }, [navigate]);
+
+  /** Stops polling and waits for any in-flight re-join so it can't recreate the ticket after we cancel. */
+  const stopPolling = async () => {
+    stopped.current = true;
+    await polling.current;
+  };
+
   const playComputer = async () => {
+    await stopPolling();
     try {
       await api.cancelQuickMatch();
     } catch {
@@ -367,9 +398,11 @@ function QuickMatchModal({ uid, onClose, onPlayComputer }: { uid: string; onClos
   };
 
   const cancel = async () => {
+    await stopPolling();
     try {
       await api.cancelQuickMatch();
     } catch (err) {
+      stopped.current = false;
       setError(errorMessage(err));
       return;
     }
@@ -379,7 +412,7 @@ function QuickMatchModal({ uid, onClose, onPlayComputer }: { uid: string; onClos
   return (
     <Modal title="Looking for an opponent…" onClose={() => undefined}>
       {error && <Alert>{error}</Alert>}
-      <Spinner label="You'll be matched with the next player who taps Quick Match." />
+      <Spinner label="Matching you with a player near your rating. The range widens the longer you wait." />
       <p className="muted small center">
         Your request stays open for {GAME_CONFIG.QUICK_MATCH_TICKET_TTL_MS / 60000} minutes.
       </p>

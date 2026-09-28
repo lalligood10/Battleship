@@ -84,6 +84,14 @@
         { "fieldPath": "toUid", "order": "ASCENDING" },
         { "fieldPath": "sourceGameId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "reactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "at", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

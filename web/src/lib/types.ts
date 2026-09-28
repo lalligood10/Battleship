@@ -7,12 +7,15 @@ import type { ShipType } from '@shared/config';
 import type { ShipPlacement, Shot } from '@shared/engine';
 import type { PlayerStats } from '@shared/scoring';
 import type { BotDifficulty } from '@shared/bots';
+import type { ReactionId } from '@shared/reactions';
 
 export type { Coordinate, ShipPlacement, Shot, ShotResult } from '@shared/engine';
 export type { ShipType } from '@shared/config';
 export type { PlayerStats } from '@shared/scoring';
 export type { BotDifficulty } from '@shared/bots';
 export { isBotUid } from '@shared/bots';
+export { REACTIONS, REACTION_LABELS, REACTION_COOLDOWN_MS, isReactionId } from '@shared/reactions';
+export type { ReactionId } from '@shared/reactions';
 
 export interface UserProfile {
   id: string;
@@ -88,6 +91,13 @@ export interface Challenge {
 export interface PrivateBoard {
   fleet: ShipPlacement[];
   hitCells: string[];
+}
+
+export interface Reaction {
+  id: string;
+  uid: string;
+  reactionId: ReactionId;
+  at: Timestamp | null;
 }
 
 export interface WeeklyWins {

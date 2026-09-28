@@ -15,9 +15,10 @@ import {
 } from 'firebase/firestore';
 import { GAME_CONFIG } from '@shared/config';
 import { weekId } from '@shared/scoring';
+import { isReactionId } from '@shared/reactions';
 import { db } from './firebase';
 import { profileFromData } from '../state/SessionProvider';
-import type { Challenge, Game, Opponent, PrivateBoard, UserProfile, WeeklyWins } from './types';
+import type { Challenge, Game, Opponent, PrivateBoard, Reaction, UserProfile, WeeklyWins } from './types';
 
 export function gameFromSnapshot(snap: DocumentSnapshot<DocumentData>): Game | null {
   const d = snap.data();
@@ -72,6 +73,28 @@ export function listenPrivateBoard(
           : null,
       );
     },
+    onError,
+  );
+}
+
+export function listenReactions(gameId: string, onData: (r: Reaction[]) => void, onError: (e: unknown) => void): Unsubscribe {
+  const q = query(collection(db(), 'games', gameId, 'reactions'), orderBy('at', 'desc'), limit(20));
+  return onSnapshot(
+    q,
+    (snap) =>
+      onData(
+        snap.docs
+          .map((d) => {
+            const data = d.data();
+            return {
+              id: d.id,
+              uid: String(data.uid ?? ''),
+              reactionId: data.reactionId,
+              at: (data.at as Reaction['at'] | undefined) ?? null,
+            };
+          })
+          .filter((reaction): reaction is Reaction => isReactionId(reaction.reactionId)),
+      ),
     onError,
   );
 }

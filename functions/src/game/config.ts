@@ -25,6 +25,20 @@ export const GAME_CONFIG = {
 
   /** Pending direct challenges expire after this long (ms). Default 48 hours. */
   CHALLENGE_TTL_MS: 48 * 60 * 60 * 1000,
+
+  /**
+   * Quick Match rating band: a waiting ticket accepts opponents within
+   * min(BASE + STEP * floor(ageSec / INTERVAL_SEC), MAX) rating points, and anyone at all once it
+   * is OPEN_AFTER_SEC old.
+   */
+  QUICK_MATCH_BAND_BASE: 100,
+  QUICK_MATCH_BAND_STEP: 50,
+  QUICK_MATCH_BAND_INTERVAL_SEC: 15,
+  QUICK_MATCH_BAND_MAX: 400,
+  QUICK_MATCH_BAND_OPEN_AFTER_SEC: 120,
+
+  /** Quick Match won't pair two players who finished a rated game together within this long (ms). */
+  QUICK_MATCH_REPEAT_COOLDOWN_MS: 15 * 60 * 1000,
 } as const;
 
 /** The five classic ship types and their lengths. Order here is the display order. */

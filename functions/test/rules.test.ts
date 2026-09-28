@@ -54,6 +54,11 @@ beforeEach(async () => {
       currentTurnUid: ALICE,
       updatedAt: new Date(),
     });
+    await setDoc(doc(db, 'games', GAME, 'reactions', 'r1'), {
+      uid: ALICE,
+      reactionId: 'nice_shot',
+      at: new Date(),
+    });
     await setDoc(doc(db, 'games', GAME, 'private', ALICE), { fleet: [{ type: 'carrier' }], hitCells: [] });
     await setDoc(doc(db, 'games', GAME, 'private', BOB), { fleet: [{ type: 'carrier' }], hitCells: [] });
     await setDoc(doc(db, 'gameCodes', 'ABC234'), { gameId: GAME });
@@ -139,6 +144,29 @@ describe('games', () => {
   it('join codes cannot be enumerated from a client', async () => {
     await assertFails(getDoc(doc(as(ALICE), 'gameCodes', 'ABC234')));
     await assertFails(getDocs(collection(as(ALICE), 'gameCodes')));
+  });
+});
+
+describe('reactions', () => {
+  it('game players can read and list reactions; outsiders and anonymous users cannot', async () => {
+    await assertSucceeds(getDoc(doc(as(ALICE), 'games', GAME, 'reactions', 'r1')));
+    await assertSucceeds(getDoc(doc(as(BOB), 'games', GAME, 'reactions', 'r1')));
+    await assertSucceeds(getDocs(collection(as(ALICE), 'games', GAME, 'reactions')));
+    await assertSucceeds(getDocs(collection(as(BOB), 'games', GAME, 'reactions')));
+    await assertFails(getDoc(doc(as(EVE), 'games', GAME, 'reactions', 'r1')));
+    await assertFails(getDocs(collection(as(EVE), 'games', GAME, 'reactions')));
+    await assertFails(getDoc(doc(anon(), 'games', GAME, 'reactions', 'r1')));
+    await assertFails(getDocs(collection(anon(), 'games', GAME, 'reactions')));
+  });
+
+  it('clients cannot create, update, or delete reactions', async () => {
+    await assertFails(setDoc(doc(as(ALICE), 'games', GAME, 'reactions', 'r2'), {
+      uid: ALICE,
+      reactionId: 'gg',
+      at: new Date(),
+    }));
+    await assertFails(updateDoc(doc(as(ALICE), 'games', GAME, 'reactions', 'r1'), { reactionId: 'gg' }));
+    await assertFails(deleteDoc(doc(as(ALICE), 'games', GAME, 'reactions', 'r1')));
   });
 });
 
