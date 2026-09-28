@@ -9,6 +9,7 @@ import { requestRematch } from '../../lib/api';
 import { errorMessage } from '../../lib/errors';
 import { play } from '../../lib/sound';
 import { isBotGame, opponentUid, rematchState, shotsBy, type Game, type PrivateBoard } from '../../lib/types';
+import { Reactions } from '../../components/Reactions';
 
 export function ResultsView({ game, uid, board }: { game: Game; uid: string; board: PrivateBoard | null }) {
   const navigate = useNavigate();
@@ -140,6 +141,7 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
         <Board ariaLabel="Your board" small disabled markOf={(c) => markAt(myBoard, c)} />
       </section>
 
+      <Reactions game={game} uid={uid} />
       {game.status === 'finished' && (
         <>
           {rematchError && <Alert onDismiss={() => setRematchError(null)}>{rematchError}</Alert>}

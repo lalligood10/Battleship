@@ -51,6 +51,9 @@ export const claimTimeoutWin = authed(games.claimTimeoutWin);
 export const joinQuickMatch = authed(quickMatch.joinQuickMatch);
 export const cancelQuickMatch = authed(quickMatch.cancelQuickMatch);
 
+// Quick-chat reactions (F5)
+export const sendReaction = authed(games.sendReaction);
+
 // Push notifications on every game change (M3)
 export const onGameWritten = onDocumentWritten('games/{gameId}', async (event) => {
   const after = event.data?.after.data() as GameDoc | undefined;
