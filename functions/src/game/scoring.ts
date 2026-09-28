@@ -18,6 +18,15 @@ export const SCORING_CONFIG = {
   K_FACTOR: 32,
   /** Ratings never drop below this floor. */
   MIN_RATING: 100,
+  /**
+   * Anti-farming: once two players have already played SAME_PAIR_FULL_K_GAMES rated games against
+   * each other within SAME_PAIR_WINDOW_MS, further games between them use K * SAME_PAIR_K_MULTIPLIER.
+   */
+  SAME_PAIR_WINDOW_MS: 24 * 60 * 60 * 1000,
+  SAME_PAIR_FULL_K_GAMES: 3,
+  SAME_PAIR_K_MULTIPLIER: 0.5,
+  /** How many recent game times are kept per opponent pair (must be >= SAME_PAIR_FULL_K_GAMES). */
+  SAME_PAIR_HISTORY_CAP: 5,
 } as const;
 
 export function expectedScore(rating: number, opponentRating: number): number {
@@ -33,14 +42,23 @@ export interface EloOutcome {
   loserNewRating: number;
 }
 
-/** Computes new ratings after a decisive game (no draws in this game). */
-export function applyElo(winnerRating: number, loserRating: number): EloOutcome {
+/**
+ * Computes new ratings after a decisive game (no draws in this game). `kMultiplier` scales the
+ * K-factor (see `samePairKMultiplier`).
+ */
+export function applyElo(winnerRating: number, loserRating: number, kMultiplier = 1): EloOutcome {
   const { K_FACTOR, MIN_RATING } = SCORING_CONFIG;
-  const winnerDelta = Math.round(K_FACTOR * (1 - expectedScore(winnerRating, loserRating)));
-  const loserDelta = Math.round(K_FACTOR * (0 - expectedScore(loserRating, winnerRating)));
+  const k = K_FACTOR * kMultiplier;
+  const winnerDelta = Math.round(k * (1 - expectedScore(winnerRating, loserRating)));
+  const loserDelta = Math.round(k * (0 - expectedScore(loserRating, winnerRating)));
   const winnerNewRating = winnerRating + winnerDelta;
   const loserNewRating = Math.max(MIN_RATING, loserRating + loserDelta);
   return { winnerDelta, loserDelta: loserNewRating - loserRating, winnerNewRating, loserNewRating };
+}
+
+/** K multiplier for a game between two players given how many rated games they played in the window. */
+export function samePairKMultiplier(priorGamesInWindow: number): number {
+  return priorGamesInWindow >= SCORING_CONFIG.SAME_PAIR_FULL_K_GAMES ? SCORING_CONFIG.SAME_PAIR_K_MULTIPLIER : 1;
 }
 
 /** Per-user lifetime statistics stored on users/{uid}. */

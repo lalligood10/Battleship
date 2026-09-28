@@ -434,6 +434,49 @@ label.field {
   max-width: calc(100vw - 32px);
   text-align: center;
 }
+.reaction-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.reaction-bar button {
+  min-height: 34px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.reaction-bar button:active {
+  transform: scale(0.98);
+}
+.reaction-bar button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.reaction-error {
+  margin-top: -10px;
+}
+.reaction-toast {
+  position: fixed;
+  z-index: 21;
+  top: calc(env(safe-area-inset-top) + 64px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-weight: 700;
+  text-align: center;
+  animation: toast-in 0.25s ease;
+}
 @keyframes toast-in {
   from {
     opacity: 0;

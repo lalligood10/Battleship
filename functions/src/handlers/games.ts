@@ -19,6 +19,7 @@ import {
 import type { ShipType } from '../game/config';
 import { isBotUid } from '../game/bots';
 import { chooseShot } from '../game/ai';
+import { isReactionId, REACTION_COOLDOWN_MS } from '../game/reactions';
 import { finishGame } from '../lib/finishGame';
 import { db, refs } from '../lib/firestore';
 import { generateJoinCode, normaliseJoinCode } from '../lib/joinCode';
@@ -289,10 +290,11 @@ export async function fireShot(uid: string, data: unknown): Promise<FireShotResu
 
     if (destroyed) {
       // All reads must precede writes in a transaction, so fetch what finishGame needs first.
-      const [meSnap, oppSnap, myBoardSnap] = await Promise.all([
+      const [meSnap, oppSnap, myBoardSnap, pairSnap] = await Promise.all([
         tx.get(refs.user(uid)),
         tx.get(refs.user(opponentUid)),
         tx.get(refs.privateBoard(gameId, uid)),
+        game.isBotGame === true ? null : tx.get(refs.opponent(uid, opponentUid)),
       ]);
       const me = meSnap.data();
       const opp = oppSnap.data();
@@ -320,6 +322,7 @@ export async function fireShot(uid: string, data: unknown): Promise<FireShotResu
         reason: 'all_sunk',
         users: { [uid]: me, [opponentUid]: opp },
         fleets: { [uid]: myBoardSnap.data()?.fleet, [opponentUid]: opponentBoard.fleet },
+        pairHistory: pairSnap?.data(),
         extraGameFields: gameUpdate,
         now,
       });
@@ -421,11 +424,12 @@ interface EndByRuleInput {
 /** Shared tail for resign and timeout: reads users + boards, then finishes the game. */
 async function endGameByRule(tx: Transaction, game: GameDoc, input: EndByRuleInput): Promise<void> {
   const { gameId, winnerUid, loserUid, reason } = input;
-  const [winnerSnap, loserSnap, winnerBoard, loserBoard] = await Promise.all([
+  const [winnerSnap, loserSnap, winnerBoard, loserBoard, pairSnap] = await Promise.all([
     tx.get(refs.user(winnerUid)),
     tx.get(refs.user(loserUid)),
     tx.get(refs.privateBoard(gameId, winnerUid)),
     tx.get(refs.privateBoard(gameId, loserUid)),
+    game.isBotGame === true ? null : tx.get(refs.opponent(winnerUid, loserUid)),
   ]);
   const winner = winnerSnap.data();
   const loser = loserSnap.data();
@@ -439,6 +443,7 @@ async function endGameByRule(tx: Transaction, game: GameDoc, input: EndByRuleInp
     reason,
     users: { [winnerUid]: winner, [loserUid]: loser },
     fleets: { [winnerUid]: winnerBoard.data()?.fleet, [loserUid]: loserBoard.data()?.fleet },
+    pairHistory: pairSnap?.data(),
     now: Timestamp.now(),
   });
 }
@@ -497,5 +502,30 @@ export async function claimTimeoutWin(uid: string, data: unknown): Promise<EndGa
 
     await endGameByRule(tx, game, { gameId, winnerUid: uid, loserUid: opponentUid, reason: 'timeout' });
     return { winnerUid: uid };
+  });
+}
+
+// ---------- sendReaction ----------
+export async function sendReaction(uid: string, data: unknown): Promise<void> {
+  const input = data as { gameId?: unknown; reactionId?: unknown } | undefined;
+  const gameId = requireString(input?.gameId, 'gameId');
+  if (!isReactionId(input?.reactionId)) throw new HttpsError('invalid-argument', 'Unknown reaction');
+  const reactionId = input.reactionId;
+
+  await db.runTransaction(async (tx) => {
+    const game = (await tx.get(refs.game(gameId))).data();
+    if (!game) throw new HttpsError('not-found', 'Game not found');
+    requireMember(game, uid);
+    if (game.status !== 'placing' && game.status !== 'active' && game.status !== 'finished') {
+      throw new HttpsError('failed-precondition', 'Reactions are only available during a game');
+    }
+
+    const latest = await tx.get(refs.reactions(gameId).where('uid', '==', uid).orderBy('at', 'desc').limit(1));
+    const now = Timestamp.now();
+    const lastReaction = latest.docs[0]?.data();
+    if (lastReaction && now.toMillis() - lastReaction.at.toMillis() < REACTION_COOLDOWN_MS) {
+      throw new HttpsError('resource-exhausted', 'Slow down — one reaction every 10 seconds');
+    }
+    tx.create(refs.reactions(gameId).doc(), { uid, reactionId, at: now });
   });
 }

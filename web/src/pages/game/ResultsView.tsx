@@ -8,6 +8,7 @@ import { buildMarks, markAt } from '../../game/marks';
 import { hasReplay } from '../../game/replay';
 import { play } from '../../lib/sound';
 import { isBotGame, opponentUid, shotsBy, type Game, type PrivateBoard } from '../../lib/types';
+import { Reactions } from '../../components/Reactions';
 
 export function ResultsView({ game, uid, board }: { game: Game; uid: string; board: PrivateBoard | null }) {
   const navigate = useNavigate();
@@ -116,6 +117,7 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
         <Board ariaLabel="Your board" small disabled markOf={(c) => markAt(myBoard, c)} />
       </section>
 
+      <Reactions game={game} uid={uid} />
       {hasReplay(game) && (
         <button className="btn btn--secondary btn--block" onClick={() => navigate(`/game/${game.id}?replay=1`)}>
           Watch replay
