@@ -4,16 +4,17 @@
  * they can be unit tested without the Functions runtime.
  */
 import { setGlobalOptions } from 'firebase-functions/v2';
-import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as bots from './handlers/bots';
+import * as challenges from './handlers/challenges';
 import * as games from './handlers/games';
 import * as quickMatch from './handlers/quickMatch';
 import * as users from './handlers/users';
 import { cleanupStale } from './triggers/cleanup';
-import { deliver, notificationsForChange } from './triggers/notifications';
-import type { GameDoc } from './types';
+import { deliver, notificationForChallenge, notificationsForChange } from './triggers/notifications';
+import type { ChallengeDoc, GameDoc } from './types';
 
 setGlobalOptions({ region: 'us-central1', maxInstances: 10 });
 
@@ -49,6 +50,17 @@ export const claimTimeoutWin = authed(games.claimTimeoutWin);
 // Quick Match (M4)
 export const joinQuickMatch = authed(quickMatch.joinQuickMatch);
 export const cancelQuickMatch = authed(quickMatch.cancelQuickMatch);
+
+// Direct challenges (F1)
+export const createChallenge = authed(challenges.createChallenge);
+export const respondChallenge = authed(challenges.respondChallenge);
+export const cancelChallenge = authed(challenges.cancelChallenge);
+
+export const onChallengeCreated = onDocumentCreated('challenges/{challengeId}', async (event) => {
+  const challenge = event.data?.data() as ChallengeDoc | undefined;
+  const notification = challenge ? notificationForChallenge(event.params.challengeId, challenge) : null;
+  if (notification) await deliver([notification]);
+});
 
 // Push notifications on every game change (M3)
 export const onGameWritten = onDocumentWritten('games/{gameId}', async (event) => {

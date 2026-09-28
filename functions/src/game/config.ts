@@ -22,6 +22,9 @@ export const GAME_CONFIG = {
 
   /** Quick-match tickets older than this are ignored/cleaned (ms). */
   QUICK_MATCH_TICKET_TTL_MS: 10 * 60 * 1000,
+
+  /** Pending direct challenges expire after this long (ms). Default 48 hours. */
+  CHALLENGE_TTL_MS: 48 * 60 * 60 * 1000,
 } as const;
 
 /** The five classic ship types and their lengths. Order here is the display order. */

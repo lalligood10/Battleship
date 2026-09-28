@@ -6,7 +6,16 @@ import { HomeBanner } from '../components/art/HomeBanner';
 import * as api from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { db } from '../lib/firebase';
-import { gameRowStatus, isBotGame, needsMyAction, opponentAvatar, opponentUid, type BotDifficulty, type Game } from '../lib/types';
+import {
+  gameRowStatus,
+  isBotGame,
+  needsMyAction,
+  opponentAvatar,
+  opponentUid,
+  type BotDifficulty,
+  type Challenge,
+  type Game,
+} from '../lib/types';
 import { useActiveGames } from '../state/ActiveGamesProvider';
 import { useSession, useUid } from '../state/SessionProvider';
 import { GAME_CONFIG } from '@shared/config';
@@ -15,7 +24,7 @@ export function HomePage() {
   const uid = useUid();
   const { profile } = useSession();
   const navigate = useNavigate();
-  const { games, loaded, error: listError } = useActiveGames();
+  const { games, loaded, error: listError, incomingChallenges, outgoingChallenges } = useActiveGames();
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState<'create' | 'join' | 'quick' | 'bot' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +128,20 @@ export function HomePage() {
         </button>
       </section>
 
+      {(incomingChallenges.length > 0 || outgoingChallenges.length > 0) && (
+        <section className="stack">
+          <h2 style={{ fontSize: 18 }}>Challenges</h2>
+          <div className="list">
+            {incomingChallenges.map((c) => (
+              <IncomingChallengeRow key={c.id} challenge={c} onError={setError} />
+            ))}
+            {outgoingChallenges.map((c) => (
+              <OutgoingChallengeRow key={c.id} challenge={c} onError={setError} />
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="stack">
         <h2 style={{ fontSize: 18 }}>Your games</h2>
         {listError && <Alert>{listError}</Alert>}
@@ -197,6 +220,85 @@ function DifficultyModal({ onClose }: { onClose: () => void }) {
         ))}
       </div>
     </Modal>
+  );
+}
+
+function IncomingChallengeRow({ challenge, onError }: { challenge: Challenge; onError: (msg: string) => void }) {
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState<'accept' | 'decline' | null>(null);
+
+  const respond = async (accept: boolean) => {
+    setBusy(accept ? 'accept' : 'decline');
+    try {
+      const { gameId } = await api.respondChallenge(challenge.id, accept);
+      if (gameId) navigate(`/game/${gameId}`);
+    } catch (err) {
+      onError(errorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="list-item list-item--attention">
+      <div className="avatar">{challenge.fromUsername.slice(0, 1).toUpperCase()}</div>
+      <div className="grow">
+        <b>{challenge.fromUsername} challenged you</b>
+        <p className="muted small">Accept to start placing ships</p>
+      </div>
+      <button
+        type="button"
+        className="btn btn--primary btn--sm"
+        aria-label={`Accept ${challenge.fromUsername}'s challenge`}
+        disabled={busy !== null}
+        onClick={() => void respond(true)}
+      >
+        {busy === 'accept' ? <span className="spinner" /> : 'Accept'}
+      </button>
+      <button
+        type="button"
+        className="btn btn--ghost btn--sm"
+        aria-label={`Decline ${challenge.fromUsername}'s challenge`}
+        disabled={busy !== null}
+        onClick={() => void respond(false)}
+      >
+        {busy === 'decline' ? <span className="spinner" /> : 'Decline'}
+      </button>
+    </div>
+  );
+}
+
+function OutgoingChallengeRow({ challenge, onError }: { challenge: Challenge; onError: (msg: string) => void }) {
+  const [busy, setBusy] = useState(false);
+
+  const cancel = async () => {
+    setBusy(true);
+    try {
+      await api.cancelChallenge(challenge.id);
+    } catch (err) {
+      onError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="list-item">
+      <div className="avatar">{challenge.toUsername.slice(0, 1).toUpperCase()}</div>
+      <div className="grow">
+        <b>vs {challenge.toUsername}</b>
+        <p className="muted small">Waiting for {challenge.toUsername}</p>
+      </div>
+      <button
+        type="button"
+        className="btn btn--ghost btn--sm"
+        aria-label={`Cancel challenge to ${challenge.toUsername}`}
+        disabled={busy}
+        onClick={() => void cancel()}
+      >
+        {busy ? <span className="spinner" /> : 'Cancel'}
+      </button>
+    </div>
   );
 }
 

@@ -13,10 +13,11 @@ import {
   type DocumentSnapshot,
   type Unsubscribe,
 } from 'firebase/firestore';
+import { GAME_CONFIG } from '@shared/config';
 import { weekId } from '@shared/scoring';
 import { db } from './firebase';
 import { profileFromData } from '../state/SessionProvider';
-import type { Game, Opponent, PrivateBoard, UserProfile, WeeklyWins } from './types';
+import type { Challenge, Game, Opponent, PrivateBoard, UserProfile, WeeklyWins } from './types';
 
 export function gameFromSnapshot(snap: DocumentSnapshot<DocumentData>): Game | null {
   const d = snap.data();
@@ -148,4 +149,65 @@ export async function fetchOpponents(uid: string): Promise<Opponent[]> {
     username: String(d.data().username ?? ''),
     gamesPlayed: Number(d.data().gamesPlayed ?? 0),
   }));
+}
+
+export function challengeFromSnapshot(snap: DocumentSnapshot<DocumentData>): Challenge | null {
+  const d = snap.data();
+  if (!d) return null;
+  return {
+    id: snap.id,
+    fromUid: String(d.fromUid ?? ''),
+    toUid: String(d.toUid ?? ''),
+    fromUsername: String(d.fromUsername ?? ''),
+    toUsername: String(d.toUsername ?? ''),
+    status: d.status as Challenge['status'],
+    sourceGameId: (d.sourceGameId as string | null | undefined) ?? null,
+    gameId: (d.gameId as string | null | undefined) ?? null,
+    createdAt: (d.createdAt as Challenge['createdAt'] | undefined) ?? null,
+    respondedAt: (d.respondedAt as Challenge['respondedAt'] | undefined) ?? null,
+  };
+}
+
+/** Pending challenges that haven't passed their TTL yet (cleanup only runs daily). */
+function listenPendingChallenges(
+  field: 'fromUid' | 'toUid',
+  uid: string,
+  onData: (challenges: Challenge[]) => void,
+  onError: (e: unknown) => void,
+): Unsubscribe {
+  const q = query(
+    collection(db(), 'challenges'),
+    where(field, '==', uid),
+    where('status', '==', 'pending'),
+    orderBy('createdAt', 'desc'),
+    limit(20),
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const cutoff = Date.now() - GAME_CONFIG.CHALLENGE_TTL_MS;
+      onData(
+        snap.docs
+          .map(challengeFromSnapshot)
+          .filter((c): c is Challenge => c !== null && (c.createdAt?.toMillis() ?? Date.now()) >= cutoff),
+      );
+    },
+    onError,
+  );
+}
+
+export function listenIncomingChallenges(
+  uid: string,
+  onData: (challenges: Challenge[]) => void,
+  onError: (e: unknown) => void,
+): Unsubscribe {
+  return listenPendingChallenges('toUid', uid, onData, onError);
+}
+
+export function listenOutgoingChallenges(
+  uid: string,
+  onData: (challenges: Challenge[]) => void,
+  onError: (e: unknown) => void,
+): Unsubscribe {
+  return listenPendingChallenges('fromUid', uid, onData, onError);
 }

@@ -1,7 +1,7 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { describe, expect, it } from 'vitest';
-import type { GameDoc, GamePlayer } from '../types';
-import { notificationsForChange } from './notifications';
+import type { ChallengeDoc, GameDoc, GamePlayer } from '../types';
+import { notificationForChallenge, notificationsForChange } from './notifications';
 
 const now = Timestamp.fromMillis(1_700_000_000_000);
 const player = (username: string, ready = false): GamePlayer => ({
@@ -114,5 +114,33 @@ describe('notificationsForChange', () => {
     expect(notificationsForChange('g1', base, botJoined)).toEqual([
       expect.objectContaining({ uid: 'host', title: 'Officer Bot joined your game' }),
     ]);
+  });
+});
+
+describe('notificationForChallenge', () => {
+  const challenge: ChallengeDoc = {
+    fromUid: 'host',
+    toUid: 'guest',
+    fromUsername: 'Ann',
+    toUsername: 'Bob',
+    status: 'pending',
+    sourceGameId: null,
+    gameId: null,
+    createdAt: now,
+    respondedAt: null,
+  };
+
+  it('tells the invitee who challenged them', () => {
+    expect(notificationForChallenge('c1', challenge)).toEqual({
+      uid: 'guest',
+      challengeId: 'c1',
+      title: 'Ann challenged you',
+      body: 'Open Broadside to accept or decline.',
+    });
+  });
+
+  it('never notifies a bot and ignores non-pending challenges', () => {
+    expect(notificationForChallenge('c1', { ...challenge, toUid: 'bot-officer' })).toBeNull();
+    expect(notificationForChallenge('c1', { ...challenge, status: 'accepted' })).toBeNull();
   });
 });

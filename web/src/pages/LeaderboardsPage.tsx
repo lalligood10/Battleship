@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ChallengeButton } from '../components/ChallengeButton';
 import { Alert, Empty, Spinner, TopBar } from '../components/ui';
 import { errorMessage } from '../lib/errors';
 import { fetchFriendsLeaderboard, fetchGlobalLeaderboard, fetchWeeklyLeaderboard } from '../lib/firestore';
@@ -103,6 +104,7 @@ export function LeaderboardsPage() {
                   {unit}
                 </div>
               </span>
+              {tab === 'friends' && r.id !== uid && <ChallengeButton opponentUid={r.id} opponentName={r.username} />}
             </li>
           ))}
         </ol>

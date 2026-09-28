@@ -70,6 +70,21 @@ export interface Game {
   lastMoveAt: Timestamp | null;
 }
 
+export type ChallengeStatus = 'pending' | 'accepted' | 'declined' | 'cancelled' | 'expired';
+
+export interface Challenge {
+  id: string;
+  fromUid: string;
+  toUid: string;
+  fromUsername: string;
+  toUsername: string;
+  status: ChallengeStatus;
+  sourceGameId: string | null;
+  gameId: string | null;
+  createdAt: Timestamp | null;
+  respondedAt: Timestamp | null;
+}
+
 export interface PrivateBoard {
   fleet: ShipPlacement[];
   hitCells: string[];

@@ -59,6 +59,17 @@ beforeEach(async () => {
     await setDoc(doc(db, 'gameCodes', 'ABC234'), { gameId: GAME });
     await setDoc(doc(db, 'weeklyWins', '2026-W39', 'players', ALICE), { username: 'Alice', wins: 1 });
     await setDoc(doc(db, 'quickMatch', ALICE), { username: 'Alice', gameId: null });
+    await setDoc(doc(db, 'challenges', 'ch-1'), {
+      fromUid: ALICE,
+      toUid: BOB,
+      fromUsername: 'Alice',
+      toUsername: 'Bob',
+      status: 'pending',
+      sourceGameId: null,
+      gameId: null,
+      createdAt: new Date(),
+      respondedAt: null,
+    });
   });
 });
 
@@ -168,5 +179,30 @@ describe('quick match', () => {
     await assertFails(setDoc(doc(as(BOB), 'quickMatch', BOB), { username: 'Bob' }));
     await assertFails(getDocs(collection(as(BOB), 'quickMatch')));
     await assertSucceeds(deleteDoc(doc(as(ALICE), 'quickMatch', ALICE)));
+  });
+});
+
+describe('challenges', () => {
+  it('only the challenger and invitee can read a challenge', async () => {
+    await assertSucceeds(getDoc(doc(as(ALICE), 'challenges', 'ch-1')));
+    await assertSucceeds(getDoc(doc(as(BOB), 'challenges', 'ch-1')));
+    await assertFails(getDoc(doc(as(EVE), 'challenges', 'ch-1')));
+    await assertFails(getDoc(doc(anon(), 'challenges', 'ch-1')));
+  });
+
+  it('list queries must be scoped to my own uid', async () => {
+    await assertSucceeds(
+      getDocs(query(collection(as(BOB), 'challenges'), where('toUid', '==', BOB), where('status', '==', 'pending'))),
+    );
+    await assertSucceeds(getDocs(query(collection(as(ALICE), 'challenges'), where('fromUid', '==', ALICE))));
+    await assertFails(getDocs(query(collection(as(EVE), 'challenges'), where('toUid', '==', BOB))));
+    await assertFails(getDocs(collection(as(ALICE), 'challenges')));
+  });
+
+  it('nobody can write a challenge from a client', async () => {
+    await assertFails(updateDoc(doc(as(BOB), 'challenges', 'ch-1'), { status: 'accepted' }));
+    await assertFails(updateDoc(doc(as(ALICE), 'challenges', 'ch-1'), { status: 'cancelled' }));
+    await assertFails(setDoc(doc(as(ALICE), 'challenges', 'ch-2'), { fromUid: ALICE, toUid: BOB, status: 'pending' }));
+    await assertFails(deleteDoc(doc(as(ALICE), 'challenges', 'ch-1')));
   });
 });
