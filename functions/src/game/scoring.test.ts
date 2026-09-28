@@ -6,6 +6,7 @@ import {
   applyElo,
   applyGameToStats,
   expectedScore,
+  samePairKMultiplier,
   weekId,
   winPercentage,
 } from './scoring';
@@ -48,6 +49,33 @@ describe('Elo', () => {
     const e1 = 1 / (1 + Math.pow(10, (r2 - r1) / 400));
     expect(out.winnerDelta).toBe(Math.round(32 * (1 - e1)));
     expect(out.winnerNewRating).toBe(r1 + out.winnerDelta);
+  });
+
+  it('a K multiplier scales the exchange and stays zero-sum before the floor', () => {
+    expect(applyElo(1000, 1000, 0.5)).toEqual({
+      winnerDelta: 8,
+      loserDelta: -8,
+      winnerNewRating: 1008,
+      loserNewRating: 992,
+    });
+    for (const [w, l] of [
+      [1000, 1000],
+      [1000, 1400],
+      [1400, 1000],
+      [1150, 1075],
+      [1523, 1210],
+    ] as const) {
+      const half = applyElo(w, l, 0.5);
+      expect(half.winnerDelta + half.loserDelta).toBe(0);
+      expect(half.winnerDelta).toBeLessThanOrEqual(applyElo(w, l).winnerDelta);
+    }
+  });
+
+  it('halves K once a pair has already played three rated games in the window', () => {
+    expect(samePairKMultiplier(0)).toBe(1);
+    expect(samePairKMultiplier(2)).toBe(1);
+    expect(samePairKMultiplier(3)).toBe(0.5);
+    expect(samePairKMultiplier(5)).toBe(0.5);
   });
 
   it('never drops a loser below the floor', () => {

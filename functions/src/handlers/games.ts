@@ -289,10 +289,11 @@ export async function fireShot(uid: string, data: unknown): Promise<FireShotResu
 
     if (destroyed) {
       // All reads must precede writes in a transaction, so fetch what finishGame needs first.
-      const [meSnap, oppSnap, myBoardSnap] = await Promise.all([
+      const [meSnap, oppSnap, myBoardSnap, pairSnap] = await Promise.all([
         tx.get(refs.user(uid)),
         tx.get(refs.user(opponentUid)),
         tx.get(refs.privateBoard(gameId, uid)),
+        game.isBotGame === true ? null : tx.get(refs.opponent(uid, opponentUid)),
       ]);
       const me = meSnap.data();
       const opp = oppSnap.data();
@@ -320,6 +321,7 @@ export async function fireShot(uid: string, data: unknown): Promise<FireShotResu
         reason: 'all_sunk',
         users: { [uid]: me, [opponentUid]: opp },
         fleets: { [uid]: myBoardSnap.data()?.fleet, [opponentUid]: opponentBoard.fleet },
+        pairHistory: pairSnap?.data(),
         extraGameFields: gameUpdate,
         now,
       });
@@ -421,11 +423,12 @@ interface EndByRuleInput {
 /** Shared tail for resign and timeout: reads users + boards, then finishes the game. */
 async function endGameByRule(tx: Transaction, game: GameDoc, input: EndByRuleInput): Promise<void> {
   const { gameId, winnerUid, loserUid, reason } = input;
-  const [winnerSnap, loserSnap, winnerBoard, loserBoard] = await Promise.all([
+  const [winnerSnap, loserSnap, winnerBoard, loserBoard, pairSnap] = await Promise.all([
     tx.get(refs.user(winnerUid)),
     tx.get(refs.user(loserUid)),
     tx.get(refs.privateBoard(gameId, winnerUid)),
     tx.get(refs.privateBoard(gameId, loserUid)),
+    game.isBotGame === true ? null : tx.get(refs.opponent(winnerUid, loserUid)),
   ]);
   const winner = winnerSnap.data();
   const loser = loserSnap.data();
@@ -439,6 +442,7 @@ async function endGameByRule(tx: Transaction, game: GameDoc, input: EndByRuleInp
     reason,
     users: { [winnerUid]: winner, [loserUid]: loser },
     fleets: { [winnerUid]: winnerBoard.data()?.fleet, [loserUid]: loserBoard.data()?.fleet },
+    pairHistory: pairSnap?.data(),
     now: Timestamp.now(),
   });
 }

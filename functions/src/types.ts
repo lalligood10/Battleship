@@ -47,6 +47,8 @@ export interface OpponentDoc {
   username: string;
   gamesPlayed: number;
   lastPlayedAt: Timestamp;
+  /** End times of the most recent rated games with this opponent (oldest first, capped). */
+  recentGames?: Timestamp[];
 }
 
 export interface WeeklyWinsDoc {
