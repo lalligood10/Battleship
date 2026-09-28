@@ -58,7 +58,8 @@ struct ResultsView: View {
 
     private func accuracy(_ p: GamePlayer?) -> String {
         guard let p, p.shotsFired > 0 else { return "–" }
-        return "\(Int((Double(p.hits) / Double(p.shotsFired) * 100).rounded()))%"
+        let ratio = min(1, max(0, Double(p.hits) / Double(p.shotsFired)))
+        return "\(Int((ratio * 100).rounded()))%"
     }
 
     private func stat(_ label: String, _ value: String, color: Color = .primary) -> some View {

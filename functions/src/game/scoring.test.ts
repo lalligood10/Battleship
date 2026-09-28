@@ -88,6 +88,31 @@ describe('stats', () => {
   });
 });
 
+describe('percentages', () => {
+  it('clamps percentages to 100', () => {
+    expect(accuracyPercentage({ hits: 12, shotsFired: 10 })).toBe(100);
+    expect(winPercentage({ wins: 5, gamesPlayed: 3 })).toBe(100);
+  });
+
+  it('rounds percentages to one decimal', () => {
+    expect(winPercentage({ wins: 2, gamesPlayed: 3 })).toBe(66.7);
+    expect(winPercentage({ wins: 1, gamesPlayed: 3 })).toBe(33.3);
+    expect(accuracyPercentage({ hits: 1, shotsFired: 8 })).toBe(12.5);
+  });
+
+  it('returns 0 for non-positive denominators', () => {
+    expect(winPercentage({ wins: 3, gamesPlayed: 0 })).toBe(0);
+    expect(accuracyPercentage({ hits: 4, shotsFired: 0 })).toBe(0);
+    expect(winPercentage({ wins: 3, gamesPlayed: -1 })).toBe(0);
+    expect(accuracyPercentage({ hits: 4, shotsFired: -1 })).toBe(0);
+  });
+
+  it('clamps negative numerators to 0', () => {
+    expect(winPercentage({ wins: -1, gamesPlayed: 3 })).toBe(0);
+    expect(accuracyPercentage({ hits: -1, shotsFired: 3 })).toBe(0);
+  });
+});
+
 describe('weekId', () => {
   it('uses ISO weeks starting Monday', () => {
     expect(weekId(new Date('2026-09-23T20:00:00Z'))).toBe('2026-W39'); // Wednesday

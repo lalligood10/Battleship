@@ -50,6 +50,7 @@ describe('stats', () => {
     expect(accuracyPercentage(s)).toBeCloseTo(36.7);
     expect(winPercentage(EMPTY_STATS)).toBe(0);
     expect(accuracyPercentage(EMPTY_STATS)).toBe(0);
+    expect(accuracyPercentage({ hits: 12, shotsFired: 10 })).toBe(100);
   });
 });
 
