@@ -35,11 +35,25 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
       if (count < revealedIncoming) setRevealedIncoming(count);
       return;
     }
-    if (!botGame) {
+    // Reveal and start the result fx in one render so the pending inbound overlay is updated
+    // in place rather than unmounted for a frame.
+    const reveal = () => {
       setRevealedIncoming(count);
+      const last = theirShots[count - 1];
+      if (last) {
+        setIncomingFx({
+          target: { row: last.row, col: last.col },
+          phase: last.result,
+          sunkShip: last.sunkShip ?? null,
+          sunkPlacement: last.sunkPlacement ?? null,
+        });
+      }
+    };
+    if (!botGame) {
+      reveal();
       return;
     }
-    const t = setTimeout(() => setRevealedIncoming(count), 1000);
+    const t = setTimeout(reveal, 1000);
     return () => clearTimeout(t);
   }, [theirShots, botGame, revealedIncoming]);
   const pendingIncoming = theirShots.length > revealedIncoming;
@@ -101,12 +115,6 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
     if (count > seenIncoming.current) {
       const last = theirShots[count - 1];
       if (last) {
-        setIncomingFx({
-          target: { row: last.row, col: last.col },
-          phase: last.result,
-          sunkShip: last.sunkShip ?? null,
-          sunkPlacement: last.sunkPlacement ?? null,
-        });
         play(last.result === 'sunk' && last.sunkShip === 'carrier' ? 'bomb' : last.result);
         setToast(
           last.result === 'sunk'
@@ -157,10 +165,12 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
   };
 
   const pendingShot = pendingIncoming ? theirShots[revealedIncoming] : null;
+  // Keyed on the cell so the pending → result phase change updates the same overlay instance
+  // and the inbound jet keeps flying instead of restarting.
   const ownOverlay = pendingShot ? (
-    <StrikeOverlay key={`p${revealedIncoming}`} target={pendingShot} phase="inbound" from="right" />
+    <StrikeOverlay key={`${pendingShot.row},${pendingShot.col}`} target={pendingShot} phase="inbound" from="right" />
   ) : incomingFx ? (
-    <StrikeOverlay {...incomingFx} from="right" />
+    <StrikeOverlay key={`${incomingFx.target.row},${incomingFx.target.col}`} {...incomingFx} from="right" />
   ) : undefined;
 
   const mySunk = game.players[uid]?.sunkShips ?? [];
