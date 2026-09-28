@@ -101,16 +101,19 @@ export function applyGameToStats(stats: PlayerStats, won: boolean, delta: GameSt
   };
 }
 
-/** Win percentage 0..100, rounded to one decimal. */
+/** Win percentage clamped to 0..100, rounded to one decimal. */
 export function winPercentage(stats: Pick<PlayerStats, 'wins' | 'gamesPlayed'>): number {
-  if (stats.gamesPlayed === 0) return 0;
-  return Math.round((stats.wins / stats.gamesPlayed) * 1000) / 10;
+  return percent(stats.wins, stats.gamesPlayed);
 }
 
-/** Shooting accuracy 0..100, rounded to one decimal. */
+/** Shooting accuracy clamped to 0..100, rounded to one decimal. */
 export function accuracyPercentage(stats: Pick<PlayerStats, 'hits' | 'shotsFired'>): number {
-  if (stats.shotsFired === 0) return 0;
-  return Math.round((stats.hits / stats.shotsFired) * 1000) / 10;
+  return percent(stats.hits, stats.shotsFired);
+}
+
+function percent(n: number, d: number): number {
+  if (!(d > 0)) return 0;
+  return Math.min(100, Math.max(0, Math.round((n / d) * 1000) / 10));
 }
 
 /**
