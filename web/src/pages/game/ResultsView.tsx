@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Board } from '../../components/Board';
 import { Icon, TopBar } from '../../components/ui';
 import { buildMarks, markAt } from '../../game/marks';
+import { hasReplay } from '../../game/replay';
 import { play } from '../../lib/sound';
 import { isBotGame, opponentUid, shotsBy, type Game, type PrivateBoard } from '../../lib/types';
 
@@ -115,6 +116,11 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
         <Board ariaLabel="Your board" small disabled markOf={(c) => markAt(myBoard, c)} />
       </section>
 
+      {hasReplay(game) && (
+        <button className="btn btn--secondary btn--block" onClick={() => navigate(`/game/${game.id}?replay=1`)}>
+          Watch replay
+        </button>
+      )}
       <button className="btn btn--primary btn--block" onClick={() => navigate('/')}>
         Back to home
       </button>
