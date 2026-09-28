@@ -76,10 +76,10 @@ export function ReplayView({ game, uid, board }: { game: Game; uid: string; boar
 
   const oppFleet = game.revealedFleets?.[opp] ?? [];
   const myFleet = game.revealedFleets?.[uid] ?? board?.fleet ?? [];
-  const theirShots = shotsUpTo(timeline, uid, step);
-  const myShots = shotsUpTo(timeline, opp, step);
-  const theirMarks = buildMarks(theirShots, oppFleet, true);
-  const myMarks = buildMarks(myShots, myFleet, true);
+  const shotsAtThem = shotsUpTo(timeline, uid, step);
+  const shotsAtMe = shotsUpTo(timeline, opp, step);
+  const theirMarks = buildMarks(shotsAtThem, oppFleet, true);
+  const myMarks = buildMarks(shotsAtMe, myFleet, true);
   const current = step > 0 ? timeline[step - 1] : undefined;
   const status = current
     ? `Shot ${step} of ${timeline.length} · ${current.shooterUid === uid ? 'You' : opponentName} fired at ${coordLabel(current.shot)} — ${
