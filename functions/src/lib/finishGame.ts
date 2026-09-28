@@ -1,8 +1,8 @@
 import { FieldValue, type Timestamp, type Transaction } from 'firebase-admin/firestore';
 import { isBotUid } from '../game/bots';
 import type { ShipPlacement } from '../game/engine';
-import { applyElo, applyGameToStats, EMPTY_STATS, weekId } from '../game/scoring';
-import type { EndReason, GameDoc, RatingChange, UserDoc } from '../types';
+import { applyElo, applyGameToStats, EMPTY_STATS, samePairKMultiplier, SCORING_CONFIG, weekId } from '../game/scoring';
+import type { EndReason, GameDoc, OpponentDoc, RatingChange, UserDoc } from '../types';
 import { refs } from './firestore';
 
 export interface FinishGameInput {
@@ -15,6 +15,8 @@ export interface FinishGameInput {
   reason: EndReason;
   /** Both users' docs, read earlier in the same transaction. */
   users: Record<string, UserDoc>;
+  /** The winner's users/{winner}/opponents/{loser} doc, if any (rated games only; drives anti-farming K). */
+  pairHistory?: OpponentDoc;
   /** Both players' fleets (may be missing if a player never placed). */
   fleets: Record<string, ShipPlacement[] | undefined>;
   /** Extra fields to merge into the game document (e.g. the final shot). */
@@ -68,7 +70,11 @@ export function finishGame(input: FinishGameInput): Record<string, RatingChange>
     return {};
   }
 
-  const elo = applyElo(winner.rating, loser.rating);
+  // Same-pair farming: K is reduced once the pair has already played several rated games recently.
+  const windowStartMs = now.toMillis() - SCORING_CONFIG.SAME_PAIR_WINDOW_MS;
+  const priorGames = (input.pairHistory?.recentGames ?? []).filter((t) => t.toMillis() > windowStartMs);
+  const recentGames = [...priorGames, now].slice(-SCORING_CONFIG.SAME_PAIR_HISTORY_CAP);
+  const elo = applyElo(winner.rating, loser.rating, samePairKMultiplier(priorGames.length));
   const ratingChanges: Record<string, RatingChange> = {
     [winnerUid]: { before: winner.rating, after: elo.winnerNewRating, delta: elo.winnerDelta },
     [loserUid]: { before: loser.rating, after: elo.loserNewRating, delta: elo.loserDelta },
@@ -117,12 +123,12 @@ export function finishGame(input: FinishGameInput): Record<string, RatingChange>
 
   tx.set(
     refs.opponent(winnerUid, loserUid),
-    { username: loser.username, gamesPlayed: FieldValue.increment(1), lastPlayedAt: now },
+    { username: loser.username, gamesPlayed: FieldValue.increment(1), lastPlayedAt: now, recentGames },
     { merge: true },
   );
   tx.set(
     refs.opponent(loserUid, winnerUid),
-    { username: winner.username, gamesPlayed: FieldValue.increment(1), lastPlayedAt: now },
+    { username: winner.username, gamesPlayed: FieldValue.increment(1), lastPlayedAt: now, recentGames },
     { merge: true },
   );
 
