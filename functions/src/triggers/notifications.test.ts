@@ -100,6 +100,19 @@ describe('notificationsForChange', () => {
     expect(notificationsForChange('g1', active, timeout)).toEqual([expect.objectContaining({ uid: 'guest', title: 'Game forfeited' })]);
   });
 
+  it('notifies only the non-requester once when a rematch is requested', () => {
+    const finished: GameDoc = { ...joined, status: 'finished', winnerUid: 'host', endReason: 'all_sunk' };
+    const requested: GameDoc = {
+      ...finished,
+      rematch: { gameId: 'rematch-1', requestedBy: 'host' },
+    };
+
+    expect(notificationsForChange('g1', finished, requested)).toEqual([
+      { uid: 'guest', gameId: 'g1', title: 'Ann wants a rematch', body: 'Tap to accept.' },
+    ]);
+    expect(notificationsForChange('g1', requested, { ...requested, updatedAt: now })).toEqual([]);
+  });
+
   it('never sends a notification to a bot uid', () => {
     const botJoined: GameDoc = {
       ...joined,
@@ -114,5 +127,18 @@ describe('notificationsForChange', () => {
     expect(notificationsForChange('g1', base, botJoined)).toEqual([
       expect.objectContaining({ uid: 'host', title: 'Officer Bot joined your game' }),
     ]);
+
+    const finishedBotGame: GameDoc = {
+      ...botJoined,
+      status: 'finished',
+      winnerUid: 'host',
+      endReason: 'all_sunk',
+    };
+    expect(
+      notificationsForChange('g1', finishedBotGame, {
+        ...finishedBotGame,
+        rematch: { gameId: 'bot-rematch', requestedBy: 'host' },
+      }),
+    ).toEqual([]);
   });
 });

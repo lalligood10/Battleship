@@ -3,10 +3,12 @@ import { Jet } from '../../components/art/Jet';
 import { Ship } from '../../components/art/Ship';
 import { useNavigate } from 'react-router-dom';
 import { Board } from '../../components/Board';
-import { Icon, TopBar } from '../../components/ui';
+import { Alert, Icon, TopBar } from '../../components/ui';
 import { buildMarks, markAt } from '../../game/marks';
+import { requestRematch } from '../../lib/api';
+import { errorMessage } from '../../lib/errors';
 import { play } from '../../lib/sound';
-import { isBotGame, opponentUid, shotsBy, type Game, type PrivateBoard } from '../../lib/types';
+import { isBotGame, opponentUid, rematchState, shotsBy, type Game, type PrivateBoard } from '../../lib/types';
 
 export function ResultsView({ game, uid, board }: { game: Game; uid: string; board: PrivateBoard | null }) {
   const navigate = useNavigate();
@@ -19,6 +21,8 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
   const accuracy = me && me.shotsFired > 0 ? `${Math.round((me.hits / me.shotsFired) * 100)}%` : '–';
 
   const [fxDone, setFxDone] = useState(false);
+  const [rematchBusy, setRematchBusy] = useState(false);
+  const [rematchError, setRematchError] = useState<string | null>(null);
   useEffect(() => {
     const t = setTimeout(() => setFxDone(true), 2700);
     return () => clearTimeout(t);
@@ -36,6 +40,27 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
     () => buildMarks(shotsBy(game, opp), game.revealedFleets?.[uid] ?? board?.fleet ?? [], true),
     [game, opp, uid, board],
   );
+
+  const rematch = rematchState(game, uid);
+  const rematchLabel = botGame
+    ? 'Play again'
+    : rematch === 'requested-by-me'
+      ? 'Rematch sent · open'
+      : rematch === 'requested-by-them'
+        ? 'Accept rematch'
+        : 'Rematch';
+
+  const playRematch = async () => {
+    setRematchBusy(true);
+    setRematchError(null);
+    try {
+      const { gameId } = await requestRematch(game.id);
+      navigate(`/game/${gameId}`);
+    } catch (err) {
+      setRematchError(errorMessage(err));
+      setRematchBusy(false);
+    }
+  };
 
   let reason = '';
   switch (game.endReason) {
@@ -115,6 +140,14 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
         <Board ariaLabel="Your board" small disabled markOf={(c) => markAt(myBoard, c)} />
       </section>
 
+      {game.status === 'finished' && (
+        <>
+          {rematchError && <Alert onDismiss={() => setRematchError(null)}>{rematchError}</Alert>}
+          <button className="btn btn--secondary btn--block" onClick={playRematch} disabled={rematchBusy}>
+            {rematchBusy ? <span className="spinner" /> : rematchLabel}
+          </button>
+        </>
+      )}
       <button className="btn btn--primary btn--block" onClick={() => navigate('/')}>
         Back to home
       </button>

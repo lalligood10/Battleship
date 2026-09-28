@@ -6,7 +6,7 @@
  *   users/{uid}/private/push             FCM tokens (owner only)
  *   users/{uid}/opponents/{oppUid}       people this user has played (owner only) – drives "Friends" board
  *   usernames/{usernameLower}            uniqueness index -> { uid }
- *   games/{gameId}                       public game state (both players only). NEVER contains fleets
+ *   games/{gameId}                       public game state (players only). NEVER contains fleets
  *                                        until the game is finished.
  *   games/{gameId}/private/{uid}         that player's fleet + which of their cells were hit (owner only;
  *                                        clients cannot write, only Functions)
@@ -109,6 +109,11 @@ export interface GameDoc {
   /** True for Play vs Computer games. Those are unrated and the bot replies in-transaction. */
   isBotGame: boolean;
   botDifficulty: BotDifficulty | null;
+  /** Rematch request recorded on the finished game. */
+  rematch?: { gameId: string; requestedBy: string } | null;
+  /** Link from a rematch game to the finished game and its invited opponent. */
+  rematchOf?: string | null;
+  invitedUid?: string | null;
   /** Inactivity window after which the waiting player may claim a win. Copied from config at creation. */
   abandonTimeoutMs: number;
   createdAt: Timestamp;

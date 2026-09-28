@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gameRowStatus, opponentAvatar, type Game } from './types';
+import { gameRowStatus, opponentAvatar, rematchState, type Game } from './types';
 
 const base: Game = {
   id: 'g1',
@@ -55,5 +55,23 @@ describe('game list helpers', () => {
     expect(gameRowStatus({ ...base, status: 'placing', players: { ...base.players, me: { ...base.players['me']!, ready: false } } }, 'me')).toBe(
       'Place your ships',
     );
+  });
+
+  it('reports who requested a rematch and shows the invited opponent in waiting rows', () => {
+    expect(rematchState(base, 'me')).toBe('none');
+    const requestedByMe = { ...base, rematch: { gameId: 'g2', requestedBy: 'me' } };
+    const requestedByThem = { ...base, rematch: { gameId: 'g2', requestedBy: 'bob' } };
+    expect(rematchState(requestedByMe, 'me')).toBe('requested-by-me');
+    expect(rematchState(requestedByThem, 'me')).toBe('requested-by-them');
+    expect(
+      gameRowStatus(
+        {
+          ...base,
+          status: 'waiting',
+          invitedUid: 'bob',
+        },
+        'me',
+      ),
+    ).toBe('Rematch · waiting for Bob');
   });
 });

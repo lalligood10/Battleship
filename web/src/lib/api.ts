@@ -33,6 +33,9 @@ export const createGame = () => call<{ gameId: string; code: string }>('createGa
 
 export const joinGame = (code: string) => call<{ gameId: string }, { code: string }>('joinGame', { code });
 
+export const requestRematch = (gameId: string) =>
+  call<{ gameId: string; status: GameStatus }, { gameId: string }>('requestRematch', { gameId });
+
 export const cancelGame = (gameId: string) => call<unknown, { gameId: string }>('cancelGame', { gameId });
 
 export const placeShips = (gameId: string, ships: ShipPlacement[]) =>
