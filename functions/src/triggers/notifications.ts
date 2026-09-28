@@ -27,7 +27,12 @@ function computeNotifications(gameId: string, before: GameDoc | undefined, after
   const out: Notification[] = [];
   const name = (uid: string) => after.players[uid]?.username ?? 'Your opponent';
 
-  if (before?.status === 'finished' && after.status === 'finished' && !before.rematch && after.rematch) {
+  if (
+    before?.status === 'finished' &&
+    after.status === 'finished' &&
+    after.rematch &&
+    before.rematch?.gameId !== after.rematch.gameId
+  ) {
     const recipient = after.playerUids.find((uid) => uid !== after.rematch!.requestedBy);
     if (recipient) {
       out.push({

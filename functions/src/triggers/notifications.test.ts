@@ -111,6 +111,14 @@ describe('notificationsForChange', () => {
       { uid: 'guest', gameId: 'g1', title: 'Ann wants a rematch', body: 'Tap to accept.' },
     ]);
     expect(notificationsForChange('g1', requested, { ...requested, updatedAt: now })).toEqual([]);
+
+    const replaced: GameDoc = {
+      ...requested,
+      rematch: { gameId: 'rematch-2', requestedBy: 'host' },
+    };
+    expect(notificationsForChange('g1', requested, replaced)).toEqual([
+      { uid: 'guest', gameId: 'g1', title: 'Ann wants a rematch', body: 'Tap to accept.' },
+    ]);
   });
 
   it('never sends a notification to a bot uid', () => {
