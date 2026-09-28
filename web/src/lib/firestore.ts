@@ -211,3 +211,41 @@ export function listenOutgoingChallenges(
 ): Unsubscribe {
   return listenPendingChallenges('fromUid', uid, onData, onError);
 }
+
+export interface RematchState {
+  /** My latest rematch request for this game, if any. */
+  outgoing: Challenge | null;
+  /** The opponent's latest rematch request for this game, if any. */
+  incoming: Challenge | null;
+}
+
+/** Rematch challenges between `uid` and `opponentUid` for the finished game `sourceGameId`, both directions. */
+export function listenRematch(
+  uid: string,
+  opponentUid: string,
+  sourceGameId: string,
+  onData: (state: RematchState) => void,
+  onError: (e: unknown) => void,
+): Unsubscribe {
+  const state: RematchState = { outgoing: null, incoming: null };
+  const listen = (fromUid: string, toUid: string, key: keyof RematchState) =>
+    onSnapshot(
+      query(
+        collection(db(), 'challenges'),
+        where('fromUid', '==', fromUid),
+        where('toUid', '==', toUid),
+        where('sourceGameId', '==', sourceGameId),
+      ),
+      (snap) => {
+        const latest = snap.docs
+          .map(challengeFromSnapshot)
+          .filter((c): c is Challenge => c !== null)
+          .sort((a, b) => (b.createdAt?.toMillis() ?? Infinity) - (a.createdAt?.toMillis() ?? Infinity))[0];
+        state[key] = latest ?? null;
+        onData({ ...state });
+      },
+      onError,
+    );
+  const unsubs = [listen(uid, opponentUid, 'outgoing'), listen(opponentUid, uid, 'incoming')];
+  return () => unsubs.forEach((u) => u());
+}
