@@ -63,8 +63,11 @@ export const joinQuickMatch = () => call<{ gameId: string | null }>('joinQuickMa
 
 export const cancelQuickMatch = () => call<unknown>('cancelQuickMatch', {});
 
-export const createChallenge = (opponentUid: string) =>
-  call<{ challengeId: string; gameId: string | null }, { opponentUid: string }>('createChallenge', { opponentUid });
+export const createChallenge = (opponentUid: string, sourceGameId?: string) =>
+  call<{ challengeId: string; gameId: string | null }, { opponentUid: string; sourceGameId?: string }>(
+    'createChallenge',
+    sourceGameId ? { opponentUid, sourceGameId } : { opponentUid },
+  );
 
 export const respondChallenge = (challengeId: string, accept: boolean) =>
   call<{ gameId: string | null }, { challengeId: string; accept: boolean }>('respondChallenge', { challengeId, accept });

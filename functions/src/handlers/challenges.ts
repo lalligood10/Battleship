@@ -2,6 +2,7 @@
  * Direct challenges (F1): invite a past opponent to a new game. Challenges live in their own
  * collection because games/{id} is only readable by its players, so an invitee could never see a
  * waiting game. Accepting creates a game that skips 'waiting' and goes straight to 'placing'.
+ * A challenge with a `sourceGameId` is a rematch (F2) of that finished game.
  */
 import { Timestamp, type DocumentReference, type Transaction } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
@@ -65,21 +66,32 @@ async function acceptInTx(
   return gameRef.id;
 }
 
+/** Rematch of an already-accepted `sourceGameId`: the game it started, if any. */
+function acceptedRematch(tx: Transaction, sourceGameId: string) {
+  return tx.get(
+    refs.challenges().where('sourceGameId', '==', sourceGameId).where('status', '==', 'accepted').limit(1),
+  );
+}
+
 // ---------- createChallenge ----------
 
 export async function createChallenge(uid: string, data: unknown): Promise<CreateChallengeResult> {
-  const input = (data ?? {}) as { opponentUid?: unknown };
+  const input = (data ?? {}) as { opponentUid?: unknown; sourceGameId?: unknown };
   const opponentUid = requireId(input.opponentUid, 'opponentUid');
+  const sourceGameId =
+    input.sourceGameId === undefined || input.sourceGameId === null ? null : requireId(input.sourceGameId, 'sourceGameId');
   if (opponentUid === uid) throw new HttpsError('invalid-argument', "You can't challenge yourself");
   if (isBotUid(opponentUid)) throw new HttpsError('invalid-argument', 'Use Play vs Computer to play a bot');
 
   return db.runTransaction(async (tx) => {
-    const [me, opponentSnap, playedSnap, forward, reverse] = await Promise.all([
+    const [me, opponentSnap, playedSnap, forward, reverse, sourceSnap, rematched] = await Promise.all([
       requireUser(uid, tx),
       tx.get(refs.user(opponentUid)),
       tx.get(refs.opponent(uid, opponentUid)),
       pendingBetween(tx, uid, opponentUid),
       pendingBetween(tx, opponentUid, uid),
+      sourceGameId ? tx.get(refs.game(sourceGameId)) : null,
+      sourceGameId ? acceptedRematch(tx, sourceGameId) : null,
     ]);
     const opponent = opponentSnap.data();
     if (!opponent) throw new HttpsError('not-found', 'Player not found');
@@ -87,6 +99,16 @@ export async function createChallenge(uid: string, data: unknown): Promise<Creat
     if (!playedSnap.exists) {
       throw new HttpsError('failed-precondition', "You can only challenge players you've already played");
     }
+    if (sourceSnap) {
+      const source = sourceSnap.data();
+      if (!source || !source.playerUids.includes(uid) || !source.playerUids.includes(opponentUid)) {
+        throw new HttpsError('permission-denied', 'You can only rematch a game you both played');
+      }
+      if (source.status !== 'finished') throw new HttpsError('failed-precondition', 'That game is not finished yet');
+    }
+    // Both players already agreed to this rematch: point at the game it started.
+    const done = rematched?.docs[0];
+    if (done) return { challengeId: done.id, gameId: done.data().gameId };
 
     const now = Timestamp.now();
     const live = (d: (typeof forward.docs)[number]) => !isChallengeExpired(d.data(), now.toMillis());
@@ -100,7 +122,9 @@ export async function createChallenge(uid: string, data: unknown): Promise<Creat
       return { challengeId: incoming.id, gameId };
     }
 
-    if (forward.docs.some(live)) {
+    const mine = forward.docs.find(live);
+    if (mine && sourceGameId && mine.data().sourceGameId === sourceGameId) return { challengeId: mine.id, gameId: null };
+    if (mine) {
       throw new HttpsError('already-exists', `You already challenged ${opponent.username}`);
     }
 
@@ -112,7 +136,7 @@ export async function createChallenge(uid: string, data: unknown): Promise<Creat
       fromUsername: me.username,
       toUsername: opponent.username,
       status: 'pending',
-      sourceGameId: null,
+      sourceGameId,
       gameId: null,
       createdAt: now,
       respondedAt: null,

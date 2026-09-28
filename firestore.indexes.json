@@ -75,6 +75,15 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "challenges",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "fromUid", "order": "ASCENDING" },
+        { "fieldPath": "toUid", "order": "ASCENDING" },
+        { "fieldPath": "sourceGameId", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

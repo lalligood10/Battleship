@@ -595,4 +595,56 @@ describe('challenges', () => {
     expect((await refs.challenge(old.challengeId).get()).data()!.status).toBe('expired');
     expect((await refs.games().get()).size).toBe(0);
   });
+
+  describe('rematch', () => {
+    async function finishedGame() {
+      await setupPlayers();
+      const { gameId } = await startedGame();
+      await resign(ALICE, { gameId });
+      return gameId;
+    }
+
+    it('both players asking for a rematch of the same game produces exactly one game', async () => {
+      const sourceGameId = await finishedGame();
+      const mine = await createChallenge(ALICE, { opponentUid: BOB, sourceGameId });
+      expect(mine.gameId).toBeNull();
+      expect((await refs.challenge(mine.challengeId).get()).data()).toMatchObject({ sourceGameId, status: 'pending' });
+      // Tapping again before Bob answers is a no-op rather than an error.
+      expect(await createChallenge(ALICE, { opponentUid: BOB, sourceGameId })).toEqual(mine);
+
+      const theirs = await createChallenge(BOB, { opponentUid: ALICE, sourceGameId });
+      expect(theirs.challengeId).toBe(mine.challengeId);
+      expect(theirs.gameId).toEqual(expect.any(String));
+      const game = (await refs.game(theirs.gameId!).get()).data()!;
+      expect(game).toMatchObject({ status: 'placing', playerUids: [ALICE, BOB] });
+
+      // A late tap from either side points at the same game instead of opening another challenge.
+      expect(await createChallenge(ALICE, { opponentUid: BOB, sourceGameId })).toEqual(theirs);
+      expect(await createChallenge(BOB, { opponentUid: ALICE, sourceGameId })).toEqual(theirs);
+      expect((await refs.challenges().get()).size).toBe(1);
+      expect((await refs.games().where('status', '==', 'placing').get()).size).toBe(1);
+    });
+
+    it('rejects a rematch of an unfinished game or one the pair did not both play', async () => {
+      await setupPlayers();
+      await setUsername(CAROL, { username: 'Carol' });
+      const lastPlayedAt = Timestamp.now();
+      await refs.opponent(ALICE, BOB).set({ username: 'Bob', gamesPlayed: 1, lastPlayedAt });
+      await refs.opponent(ALICE, CAROL).set({ username: 'Carol', gamesPlayed: 1, lastPlayedAt });
+      await refs.opponent(CAROL, BOB).set({ username: 'Bob', gamesPlayed: 1, lastPlayedAt });
+
+      const { gameId: active } = await startedGame();
+      await expectHttpsError(
+        createChallenge(ALICE, { opponentUid: BOB, sourceGameId: active }),
+        'failed-precondition',
+        'not finished',
+      );
+      await resign(ALICE, { gameId: active });
+      await expectHttpsError(createChallenge(ALICE, { opponentUid: CAROL, sourceGameId: active }), 'permission-denied');
+      await expectHttpsError(createChallenge(CAROL, { opponentUid: BOB, sourceGameId: active }), 'permission-denied');
+      await expectHttpsError(createChallenge(ALICE, { opponentUid: BOB, sourceGameId: 'missing' }), 'permission-denied');
+      await expectHttpsError(createChallenge(ALICE, { opponentUid: BOB, sourceGameId: 42 }), 'invalid-argument');
+      expect((await refs.challenges().get()).size).toBe(0);
+    });
+  });
 });
