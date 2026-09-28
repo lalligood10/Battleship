@@ -15,6 +15,7 @@ import {
   joinGame,
   placeShips,
   resign,
+  sendReaction,
 } from '../src/handlers/games';
 import { createBotGame } from '../src/handlers/bots';
 import { cancelQuickMatch, joinQuickMatch } from '../src/handlers/quickMatch';
@@ -342,6 +343,75 @@ describe('quick match', () => {
 
     await cancelQuickMatch(ALICE);
     expect((await refs.quickMatch(ALICE).get()).exists).toBe(false);
+  });
+});
+
+describe('reactions', () => {
+  it('lets a member react in an active game without changing the game document', async () => {
+    await setupPlayers();
+    const { gameId, first } = await startedGame();
+    const before = (await refs.game(gameId).get()).data()!;
+
+    await sendReaction(first, { gameId, reactionId: 'nice_shot' });
+
+    const reactions = await refs.reactions(gameId).get();
+    expect(reactions.docs).toHaveLength(1);
+    expect(reactions.docs[0]!.data()).toMatchObject({ uid: first, reactionId: 'nice_shot', at: expect.any(Timestamp) });
+    expect((await refs.game(gameId).get()).data()!.updatedAt).toEqual(before.updatedAt);
+  });
+
+  it('limits each player independently to one reaction every 10 seconds', async () => {
+    await setupPlayers();
+    const { gameId } = await startedGame();
+
+    await sendReaction(ALICE, { gameId, reactionId: 'gg' });
+    await expectHttpsError(sendReaction(ALICE, { gameId, reactionId: 'oops' }), 'resource-exhausted');
+    await sendReaction(BOB, { gameId, reactionId: 'fire' });
+    expect((await refs.reactions(gameId).get()).size).toBe(2);
+  });
+
+  it('allows another reaction after the latest one is older than the cooldown', async () => {
+    await setupPlayers();
+    const { gameId } = await startedGame();
+    await refs.reactions(gameId).add({
+      uid: ALICE,
+      reactionId: 'gg',
+      at: Timestamp.fromMillis(Date.now() - 11_000),
+    });
+
+    await sendReaction(ALICE, { gameId, reactionId: 'nice_shot' });
+    expect((await refs.reactions(gameId).where('uid', '==', ALICE).get()).size).toBe(2);
+  });
+
+  it('rejects a non-member', async () => {
+    await setupPlayers();
+    await setUsername(CAROL, { username: 'Carol' });
+    const { gameId } = await startedGame();
+    await expectHttpsError(sendReaction(CAROL, { gameId, reactionId: 'gg' }), 'permission-denied');
+  });
+
+  it('rejects unknown reaction ids before opening the transaction', async () => {
+    await setupPlayers();
+    const { gameId } = await startedGame();
+    for (const input of [{ reactionId: 'hello' }, { reactionId: 'GG' }, { reactionId: 123 }, {}]) {
+      await expectHttpsError(sendReaction(ALICE, { gameId, ...input }), 'invalid-argument');
+    }
+  });
+
+  it('rejects waiting and cancelled games, but allows placing and finished games', async () => {
+    await setupPlayers();
+    const waiting = await createGame(ALICE);
+    await expectHttpsError(sendReaction(ALICE, { gameId: waiting.gameId, reactionId: 'gg' }), 'failed-precondition');
+    await cancelGame(ALICE, { gameId: waiting.gameId });
+    await expectHttpsError(sendReaction(ALICE, { gameId: waiting.gameId, reactionId: 'gg' }), 'failed-precondition');
+
+    const placing = await createGame(ALICE);
+    await joinGame(BOB, { code: placing.code });
+    await sendReaction(ALICE, { gameId: placing.gameId, reactionId: 'gg' });
+
+    const { gameId } = await startedGame();
+    await resign(ALICE, { gameId });
+    await sendReaction(BOB, { gameId, reactionId: 'well_played' });
   });
 });
 

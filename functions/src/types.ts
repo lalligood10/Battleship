@@ -10,6 +10,7 @@
  *                                        until the game is finished.
  *   games/{gameId}/private/{uid}         that player's fleet + which of their cells were hit (owner only;
  *                                        clients cannot write, only Functions)
+ *   games/{gameId}/reactions/{autoId}    quick-chat reactions { uid, reactionId, at } (both players read; Functions write)
  *   gameCodes/{code}                     join-code lookup -> { gameId } (Functions only)
  *   weeklyWins/{weekId}/players/{uid}    wins in a calendar week (readable by signed-in users)
  *   quickMatch/{uid}                     waiting ticket for Quick Match (Functions only)
@@ -19,6 +20,7 @@ import type { ShipPlacement, Shot } from './game/engine';
 import type { ShipType } from './game/config';
 import type { BotDifficulty } from './game/bots';
 import type { PlayerStats } from './game/scoring';
+import type { ReactionId } from './game/reactions';
 
 export interface UserDoc {
   username: string;
@@ -124,6 +126,12 @@ export interface PrivateBoardDoc {
   /** Cell keys ("row,col") of this player's ship cells that have been hit. */
   hitCells: string[];
   updatedAt: Timestamp;
+}
+
+export interface ReactionDoc {
+  uid: string;
+  reactionId: ReactionId;
+  at: Timestamp;
 }
 
 export interface GameCodeDoc {

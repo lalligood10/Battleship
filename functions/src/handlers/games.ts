@@ -19,6 +19,7 @@ import {
 import type { ShipType } from '../game/config';
 import { isBotUid } from '../game/bots';
 import { chooseShot } from '../game/ai';
+import { isReactionId, REACTION_COOLDOWN_MS } from '../game/reactions';
 import { finishGame } from '../lib/finishGame';
 import { db, refs } from '../lib/firestore';
 import { generateJoinCode, normaliseJoinCode } from '../lib/joinCode';
@@ -497,5 +498,30 @@ export async function claimTimeoutWin(uid: string, data: unknown): Promise<EndGa
 
     await endGameByRule(tx, game, { gameId, winnerUid: uid, loserUid: opponentUid, reason: 'timeout' });
     return { winnerUid: uid };
+  });
+}
+
+// ---------- sendReaction ----------
+export async function sendReaction(uid: string, data: unknown): Promise<void> {
+  const input = data as { gameId?: unknown; reactionId?: unknown } | undefined;
+  const gameId = requireString(input?.gameId, 'gameId');
+  if (!isReactionId(input?.reactionId)) throw new HttpsError('invalid-argument', 'Unknown reaction');
+  const reactionId = input.reactionId;
+
+  await db.runTransaction(async (tx) => {
+    const game = (await tx.get(refs.game(gameId))).data();
+    if (!game) throw new HttpsError('not-found', 'Game not found');
+    requireMember(game, uid);
+    if (game.status !== 'placing' && game.status !== 'active' && game.status !== 'finished') {
+      throw new HttpsError('failed-precondition', 'Reactions are only available during a game');
+    }
+
+    const latest = await tx.get(refs.reactions(gameId).where('uid', '==', uid).orderBy('at', 'desc').limit(1));
+    const now = Timestamp.now();
+    const lastReaction = latest.docs[0]?.data();
+    if (lastReaction && now.toMillis() - lastReaction.at.toMillis() < REACTION_COOLDOWN_MS) {
+      throw new HttpsError('resource-exhausted', 'Slow down — one reaction every 10 seconds');
+    }
+    tx.create(refs.reactions(gameId).doc(), { uid, reactionId, at: now });
   });
 }
