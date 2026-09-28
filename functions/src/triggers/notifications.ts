@@ -27,6 +27,24 @@ function computeNotifications(gameId: string, before: GameDoc | undefined, after
   const out: Notification[] = [];
   const name = (uid: string) => after.players[uid]?.username ?? 'Your opponent';
 
+  if (
+    before?.status === 'finished' &&
+    after.status === 'finished' &&
+    after.rematch &&
+    before.rematch?.gameId !== after.rematch.gameId
+  ) {
+    const recipient = after.playerUids.find((uid) => uid !== after.rematch!.requestedBy);
+    if (recipient) {
+      out.push({
+        uid: recipient,
+        gameId,
+        title: `${name(after.rematch.requestedBy)} wants a rematch`,
+        body: 'Tap to accept.',
+      });
+    }
+    return out;
+  }
+
   if (before?.status === 'waiting' && after.status === 'placing') {
     const joiner = after.playerUids.find((u) => u !== after.hostUid);
     if (joiner) {

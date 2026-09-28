@@ -5,9 +5,16 @@ struct ResultsView: View {
     let game: Game
     @Environment(\.dismiss) private var dismiss
     @State private var appeared = false
+    @State private var rematchBusy = false
 
     private var won: Bool { game.winnerUid == store.uid }
     private var myChange: RatingChange? { game.ratingChanges?[store.uid] }
+    private var isBotGame: Bool { game.opponentUid(of: store.uid)?.hasPrefix("bot-") == true }
+    private var rematchTitle: String {
+        if isBotGame { return "Play again" }
+        guard let rematch = game.rematch else { return "Rematch" }
+        return rematch.requestedBy == store.uid ? "Rematch sent · open" : "Accept rematch"
+    }
 
     var body: some View {
         ScrollView {
@@ -37,7 +44,17 @@ struct ResultsView: View {
                     revealedBoard(title: "Your fleet", fleet: fleets[store.uid] ?? store.myBoard?.fleet ?? [], shots: game.shots(by: oppUid))
                 }
 
-                Button("Back to Home") { dismiss() }.buttonStyle(PrimaryButtonStyle())
+                HStack(spacing: 12) {
+                    Button {
+                        requestRematch()
+                    } label: {
+                        if rematchBusy { ProgressView() } else { Text(rematchTitle) }
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(rematchBusy)
+
+                    Button("Back to Home") { dismiss() }.buttonStyle(SecondaryButtonStyle())
+                }
             }
             .padding()
         }
@@ -59,6 +76,20 @@ struct ResultsView: View {
     private func accuracy(_ p: GamePlayer?) -> String {
         guard let p, p.shotsFired > 0 else { return "–" }
         return "\(Int((Double(p.hits) / Double(p.shotsFired) * 100).rounded()))%"
+    }
+
+    private func requestRematch() {
+        rematchBusy = true
+        Task {
+            defer { rematchBusy = false }
+            do {
+                let result = try await GameService.shared.requestRematch(gameId: game.id)
+                PushService.shared.pendingGameId = result.gameId
+                dismiss()
+            } catch {
+                store.error = AppError.from(error)
+            }
+        }
     }
 
     private func stat(_ label: String, _ value: String, color: Color = .primary) -> some View {

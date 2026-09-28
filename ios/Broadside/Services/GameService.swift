@@ -22,6 +22,7 @@ struct GameService {
         let winnerUid: String?
     }
     struct EndGameResult: Decodable { let winnerUid: String }
+    struct RematchResult: Decodable { let gameId: String; let status: GameStatus }
     struct CheckUsernameResult: Decodable { let available: Bool; let reason: String? }
     struct SetUsernameResult: Decodable { let username: String }
     struct QuickMatchResult: Decodable { let gameId: String? }
@@ -59,6 +60,10 @@ struct GameService {
 
     func resign(gameId: String) async throws -> EndGameResult {
         try await call("resign", ["gameId": gameId])
+    }
+
+    func requestRematch(gameId: String) async throws -> RematchResult {
+        try await call("requestRematch", ["gameId": gameId])
     }
 
     func claimTimeoutWin(gameId: String) async throws -> EndGameResult {
