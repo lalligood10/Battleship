@@ -424,6 +424,7 @@ label.field {
   animation: toast-in 0.25s ease;
   max-width: calc(100vw - 32px);
   text-align: center;
+  pointer-events: none;
 }
 .reaction-bar {
   display: flex;
