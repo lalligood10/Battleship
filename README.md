@@ -176,9 +176,9 @@ Once the `FIREBASE_SERVICE_ACCOUNT_BROADSIDE_DEV` secret exists (§4), GitHub de
 for you: merging a change under `functions/` or to the Firestore rules runs the **Deploy Cloud
 Functions and Firestore rules** workflow. You can also run it by hand from the *Actions* tab →
 that workflow → *Run workflow*. The service account needs the *Cloud Functions Admin*, *Service
-Account User*, *Firebase Rules Admin*, *Cloud Datastore Index Admin* and *Artifact Registry
-Administrator* roles. If the run fails with a permission error, add them in the Google Cloud
-console → IAM.
+Account User*, *Firebase Rules Admin*, *Cloud Datastore Index Admin*, *Cloud Scheduler Admin* and
+*Artifact Registry Administrator* roles. If the run fails with a permission error, add them in the
+Google Cloud console → IAM.
 
 To deploy from your own machine instead — the same three commands every time the server code
 changes, from the repo folder:

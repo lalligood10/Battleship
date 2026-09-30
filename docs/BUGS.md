@@ -7,7 +7,7 @@ the commit or PR, so you can check it against the code.
 
 | Area | Bugs | Status |
 | --- | --- | --- |
-| Deploy / live site (web ahead of backend, CI secrets) | 3 | 2 fixed in code; 1 still open, needs an IAM role granted by the owner (#1) |
+| Deploy / live site (web ahead of backend, CI secrets) | 3 | 2 fixed in code; 1 still open, needs two IAM roles granted by the owner (#1) |
 | Game server & stats (rematch notifications, percentages) | 2 | Fixed, with unit tests |
 | Game UI & animation (jet passes, carrier strike, results timing, mobile toast) | 5 | Fixed, checked in the browser |
 
@@ -38,12 +38,13 @@ OPTIONS …/sendReaction   -> 404   (added in PR #21, never deployed)
   `.github/workflows/firebase-deploy-backend.yml`, which deploys functions and rules on merge. It
   also maps `functions/not-found` to a friendly "server is running an older version" message.
 - **Still open.** Every run of that workflow has failed on permissions. The first run (Sept 24)
-  failed on `iam.serviceAccounts.ActAs`. The runs for PRs #16, #18, #21 and #23 (Sept 28) all
-  failed with `403 The caller does not have permission` on
+  failed on `iam.serviceAccounts.ActAs`; that role was granted and the backend was deployed by hand
+  the same day. On Sept 28 the run for PR #23 updated every callable but failed with a 403 from
+  Cloud Scheduler on the `cleanupStaleGames` schedule. The runs for PRs #21, #18 and #16 then
+  failed before any function was deployed, with `403 The caller does not have permission` on
   `firestore.googleapis.com/…/collectionGroups/reactions/indexes`. The CI service account was
-  created for Hosting only. The fix is an IAM grant (Cloud Datastore Index Admin, plus the roles
-  listed in README §3f) followed by a re-run of the workflow. This PR adds the missing role to
-  README §3f and MANUAL_STEPS.
+  created for Hosting only. The fix is an IAM grant (Cloud Datastore Index Admin and Cloud
+  Scheduler Admin, plus the other roles listed in README §3f) followed by a re-run of the workflow.
 
 **How it was verified.** I sent `curl -X OPTIONS` requests to each callable on the live project
 (results above), read the failed Actions logs (`gh run view --log-failed`), and reproduced the
@@ -187,8 +188,8 @@ game-integrity issues rather than cosmetic ones:
 ## Known limitations / next steps
 
 - **Web and backend deploys aren't linked.** Until the CI service account has the missing IAM
-  role, Rematch/Play again, quick-chat reactions and rating-banded Quick Match exist in the web
-  bundle but not on the live server. Next step: grant the role, re-run *Deploy Cloud Functions
+  roles, Rematch/Play again and quick-chat reactions exist in the web bundle but not on the live
+  server (rating-banded Quick Match's callables did deploy). Next step: grant the roles, re-run *Deploy Cloud Functions
   and Firestore rules*, and consider making the Hosting deploy wait for a successful backend
   deploy.
 - **A missing function shows a generic error.** Because a missing callable fails as a CORS

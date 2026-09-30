@@ -17,8 +17,8 @@ Tick these off in order. Details for each are in the matching README section.
 - [ ] `npm run firebase:login`, then `npm run deploy:backend`. *(§3f)*
 - [ ] After the `FIREBASE_SERVICE_ACCOUNT_BROADSIDE_DEV` secret exists, server deploys happen on
       merge instead — grant that service account the *Cloud Functions Admin*, *Service Account
-      User*, *Firebase Rules Admin*, *Cloud Datastore Index Admin* and *Artifact Registry
-      Administrator* roles in Google Cloud → IAM. *(§3f)*
+      User*, *Firebase Rules Admin*, *Cloud Datastore Index Admin*, *Cloud Scheduler Admin* and
+      *Artifact Registry Administrator* roles in Google Cloud → IAM. *(§3f)*
 
 ## Preview links + automatic live site (once, ~10 min)
 - [ ] Follow **docs/TESTING_PREVIEWS.md** to create the GitHub secret
