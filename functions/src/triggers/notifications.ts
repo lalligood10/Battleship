@@ -9,18 +9,31 @@ import { logger } from 'firebase-functions/v2';
 import { isBotUid } from '../game/bots';
 import { coordinateLabel } from '../game/engine';
 import { refs } from '../lib/firestore';
-import type { GameDoc } from '../types';
+import type { ChallengeDoc, GameDoc } from '../types';
 
 export interface Notification {
   uid: string;
   title: string;
   body: string;
-  gameId: string;
+  /** Game to open when tapped. Absent for notifications that aren't about a game yet (challenges). */
+  gameId?: string;
+  challengeId?: string;
 }
 
 /** Pure diff: decides who should be told what. Exported for unit tests. Bots never get push. */
 export function notificationsForChange(gameId: string, before: GameDoc | undefined, after: GameDoc): Notification[] {
   return computeNotifications(gameId, before, after).filter((n) => !isBotUid(n.uid));
+}
+
+/** Push for a newly created challenge. Null when there is nobody (human) to tell. */
+export function notificationForChallenge(challengeId: string, challenge: ChallengeDoc): Notification | null {
+  if (challenge.status !== 'pending' || isBotUid(challenge.toUid)) return null;
+  return {
+    uid: challenge.toUid,
+    challengeId,
+    title: `${challenge.fromUsername} challenged you`,
+    body: 'Open Broadside to accept or decline.',
+  };
 }
 
 function computeNotifications(gameId: string, before: GameDoc | undefined, after: GameDoc): Notification[] {
@@ -117,8 +130,8 @@ export async function deliver(notifications: Notification[]): Promise<void> {
     const response = await getMessaging().sendEachForMulticast({
       tokens,
       notification: { title: n.title, body: n.body },
-      data: { gameId: n.gameId },
-      apns: { payload: { aps: { sound: 'default', badge: 1, 'thread-id': n.gameId } } },
+      data: n.gameId ? { gameId: n.gameId } : n.challengeId ? { challengeId: n.challengeId } : {},
+      apns: { payload: { aps: { sound: 'default', badge: 1, 'thread-id': n.gameId ?? 'challenges' } } },
     });
 
     const dead = response.responses
