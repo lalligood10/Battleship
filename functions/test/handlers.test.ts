@@ -7,6 +7,7 @@ import { HttpsError } from 'firebase-functions/v2/https';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { cellsOf, type ShipPlacement } from '../src/game/engine';
 import { applyElo, weekId } from '../src/game/scoring';
+import { requireAdmin, updateUser } from '../src/handlers/admin';
 import {
   cancelGame,
   claimTimeoutWin,
@@ -20,7 +21,6 @@ import {
   sendReaction,
 } from '../src/handlers/games';
 import { createBotGame } from '../src/handlers/bots';
-import { requireAdmin, updateUser } from '../src/handlers/admin';
 import { cancelQuickMatch, joinQuickMatch } from '../src/handlers/quickMatch';
 import { checkUsername, setUsername } from '../src/handlers/users';
 import { refs } from '../src/lib/firestore';

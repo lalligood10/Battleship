@@ -17,7 +17,8 @@ import { weekId } from '@shared/scoring';
 import { isReactionId } from '@shared/reactions';
 import { db } from './firebase';
 import { profileFromData } from '../state/SessionProvider';
-import type { ChatMessage, Game, Opponent, PrivateBoard, Reaction, UserProfile, WeeklyWins } from './types';
+import type { ChatMessage } from './types';
+import type { Game, Opponent, PrivateBoard, Reaction, UserProfile, WeeklyWins } from './types';
 
 export function gameFromSnapshot(snap: DocumentSnapshot<DocumentData>): Game | null {
   const d = snap.data();
