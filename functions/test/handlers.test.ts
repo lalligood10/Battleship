@@ -19,6 +19,7 @@ import {
   sendReaction,
 } from '../src/handlers/games';
 import { createBotGame } from '../src/handlers/bots';
+import { requireAdmin, updateUser } from '../src/handlers/admin';
 import { cancelQuickMatch, joinQuickMatch } from '../src/handlers/quickMatch';
 import { checkUsername, setUsername } from '../src/handlers/users';
 import { refs } from '../src/lib/firestore';
@@ -96,6 +97,32 @@ describe('usernames', () => {
   it('rejects invalid names', async () => {
     await expectHttpsError(setUsername(ALICE, { username: 'x' }), 'invalid-argument');
     await expectHttpsError(setUsername(ALICE, {}), 'invalid-argument');
+  });
+
+  it('lets the owner rename users and control leaderboard visibility', async () => {
+    await setUsername(ALICE, { username: 'Alice' });
+    const owner = { uid: 'owner-uid', email: 'lalligood10@gmail.com', emailVerified: true };
+
+    await updateUser(owner, { uid: ALICE, username: 'Admiral', leaderboardVisible: false });
+    expect((await refs.user(ALICE).get()).data()).toMatchObject({
+      username: 'Admiral',
+      usernameLower: 'admiral',
+      leaderboardVisible: false,
+    });
+    expect((await refs.username('alice').get()).exists).toBe(false);
+    expect((await refs.username('admiral').get()).data()).toEqual({ uid: ALICE });
+  });
+
+  it('rejects admin actions from other accounts', async () => {
+    expect(() => requireAdmin({ uid: BOB, email: 'bob@example.com', emailVerified: true })).toThrow(HttpsError);
+    await setUsername(ALICE, { username: 'Alice' });
+    await expectHttpsError(
+      updateUser(
+        { uid: BOB, email: 'bob@example.com', emailVerified: true },
+        { uid: ALICE, leaderboardVisible: false },
+      ),
+      'permission-denied',
+    );
   });
 });
 

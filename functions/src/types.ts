@@ -27,6 +27,8 @@ export interface UserDoc {
   usernameLower: string;
   rating: number;
   stats: PlayerStats;
+  leaderboardVisible?: boolean;
+  suspended?: boolean;
   /** True for server-controlled bot profiles. */
   isBot?: boolean;
   /** Bot games are unrated: humans track them here instead of `stats`/rating. */

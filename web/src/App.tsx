@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Alert, Spinner, TabBar } from './components/ui';
 import { isConfigured } from './lib/firebase';
+import { AdminPage } from './pages/AdminPage';
 import { GamePage } from './pages/GamePage';
 import { HomePage } from './pages/HomePage';
 import { JoinPage } from './pages/JoinPage';
@@ -26,7 +27,7 @@ export default function App() {
 }
 
 function Shell() {
-  const { state, error, clearError } = useSession();
+  const { state, error, clearError, signOut } = useSession();
   const location = useLocation();
 
   if (state.kind === 'loading') {
@@ -58,6 +59,20 @@ function Shell() {
     );
   }
 
+  if (state.profile.suspended) {
+    return (
+      <div className="app page page--center">
+        <div className="card stack center">
+          <h1 className="title">Account suspended</h1>
+          <p className="muted">This account cannot play or appear on the leaderboards.</p>
+          <button className="btn btn--secondary" onClick={() => void signOut()}>
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const hideTabs = location.pathname.startsWith('/game/');
   return (
     <ActiveGamesProvider uid={state.user.uid}>
@@ -69,6 +84,7 @@ function Shell() {
           <Route path="/game/:gameId" element={<GamePage />} />
           <Route path="/leaderboards" element={<LeaderboardsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         {!hideTabs && <TabBarWithBadge />}

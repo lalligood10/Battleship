@@ -23,6 +23,8 @@ export interface UserProfile {
   usernameLower: string;
   rating: number;
   stats: PlayerStats;
+  leaderboardVisible: boolean;
+  suspended: boolean;
   isBot?: boolean;
   botStats?: PlayerStats;
   createdAt: Timestamp | null;

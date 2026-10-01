@@ -29,6 +29,31 @@ export const checkUsername = (username: string) =>
 export const setUsername = (username: string) =>
   call<{ username: string }, { username: string }>('setUsername', { username });
 
+export const adminStatus = () => call<{ isAdmin: boolean }>('adminStatus', {});
+
+export interface AdminUser {
+  uid: string;
+  email: string | null;
+  username: string;
+  rating: number;
+  wins: number;
+  losses: number;
+  leaderboardVisible: boolean;
+  suspended: boolean;
+  createdAt: string | null;
+}
+
+export const adminListUsers = () => call<{ users: AdminUser[] }>('adminListUsers', {});
+
+export interface AdminUserUpdate {
+  uid: string;
+  username?: string;
+  leaderboardVisible?: boolean;
+  suspended?: boolean;
+}
+
+export const adminUpdateUser = (update: AdminUserUpdate) => call<unknown, AdminUserUpdate>('adminUpdateUser', update);
+
 export const createGame = () => call<{ gameId: string; code: string }>('createGame', {});
 
 export const joinGame = (code: string) => call<{ gameId: string }, { code: string }>('joinGame', { code });

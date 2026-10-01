@@ -129,9 +129,12 @@ export async function fetchHistory(uid: string, max = 50): Promise<Game[]> {
 }
 
 export async function fetchGlobalLeaderboard(max = 100): Promise<UserProfile[]> {
-  const q = query(collection(db(), 'users'), orderBy('rating', 'desc'), orderBy('stats.wins', 'desc'), limit(max));
+  const q = query(collection(db(), 'users'), orderBy('rating', 'desc'), orderBy('stats.wins', 'desc'), limit(max + 100));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => profileFromData(d.id, d.data())).filter((p) => p.isBot !== true);
+  return snap.docs
+    .map((d) => profileFromData(d.id, d.data()))
+    .filter((p) => p.isBot !== true && p.leaderboardVisible && !p.suspended)
+    .slice(0, max);
 }
 
 export async function fetchWeeklyLeaderboard(max = 100): Promise<WeeklyWins[]> {
@@ -139,10 +142,10 @@ export async function fetchWeeklyLeaderboard(max = 100): Promise<WeeklyWins[]> {
     collection(db(), 'weeklyWins', weekId(new Date()), 'players'),
     orderBy('wins', 'desc'),
     orderBy('rating', 'desc'),
-    limit(max),
+    limit(max + 100),
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => {
+  const rows = snap.docs.map((d) => {
     const data = d.data();
     return {
       id: d.id,
@@ -151,6 +154,16 @@ export async function fetchWeeklyLeaderboard(max = 100): Promise<WeeklyWins[]> {
       rating: Number(data.rating ?? 0),
     };
   });
+  const visible = new Set<string>();
+  for (let i = 0; i < rows.length; i += 10) {
+    const ids = rows.slice(i, i + 10).map((row) => row.id);
+    const profiles = await getDocs(query(collection(db(), 'users'), where(documentId(), 'in', ids)));
+    for (const profile of profiles.docs) {
+      const data = profileFromData(profile.id, profile.data());
+      if (data.leaderboardVisible && !data.suspended && data.isBot !== true) visible.add(profile.id);
+    }
+  }
+  return rows.filter((row) => visible.has(row.id)).slice(0, max);
 }
 
 /** Friends = everyone I've played (users/{uid}/opponents) plus me, with fresh ratings. */
@@ -164,7 +177,7 @@ export async function fetchFriendsLeaderboard(uid: string): Promise<UserProfile[
     profiles.push(...snap.docs.map((d) => profileFromData(d.id, d.data())));
   }
   profiles.sort((a, b) => b.rating - a.rating || b.stats.wins - a.stats.wins);
-  return profiles;
+  return profiles.filter((profile) => profile.leaderboardVisible && !profile.suspended && profile.isBot !== true);
 }
 
 export async function fetchOpponents(uid: string): Promise<Opponent[]> {
