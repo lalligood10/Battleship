@@ -1,4 +1,5 @@
 /** Read-only Firestore access (listeners + queries). Writes always go through Cloud Functions (api.ts). */
+import type { ChatMessage } from './types';
 import {
   collection,
   doc,
@@ -13,11 +14,12 @@ import {
   type DocumentSnapshot,
   type Unsubscribe,
 } from 'firebase/firestore';
+import { GAME_CONFIG } from '@shared/config';
 import { weekId } from '@shared/scoring';
 import { isReactionId } from '@shared/reactions';
 import { db } from './firebase';
 import { profileFromData } from '../state/SessionProvider';
-import type { Game, Opponent, PrivateBoard, Reaction, UserProfile, WeeklyWins } from './types';
+import type { Challenge, Game, Opponent, PrivateBoard, Reaction, UserProfile, WeeklyWins } from './types';
 
 export function gameFromSnapshot(snap: DocumentSnapshot<DocumentData>): Game | null {
   const d = snap.data();
@@ -101,6 +103,33 @@ export function listenReactions(gameId: string, onData: (r: Reaction[]) => void,
   );
 }
 
+export function listenChatMessages(
+  gameId: string,
+  onData: (messages: ChatMessage[]) => void,
+  onError: (e: unknown) => void,
+): Unsubscribe {
+  const q = query(collection(db(), 'games', gameId, 'messages'), orderBy('at', 'desc'), limit(100));
+  return onSnapshot(
+    q,
+    (snap) =>
+      onData(
+        snap.docs
+          .map((message) => {
+            const data = message.data();
+            return {
+              id: message.id,
+              uid: String(data.uid ?? ''),
+              username: String(data.username ?? ''),
+              text: String(data.text ?? ''),
+              at: (data.at as ChatMessage['at'] | undefined) ?? null,
+            };
+          })
+          .reverse(),
+      ),
+    onError,
+  );
+}
+
 export function listenActiveGames(uid: string, onData: (games: Game[]) => void, onError: (e: unknown) => void): Unsubscribe {
   const q = query(
     collection(db(), 'games'),
@@ -129,9 +158,12 @@ export async function fetchHistory(uid: string, max = 50): Promise<Game[]> {
 }
 
 export async function fetchGlobalLeaderboard(max = 100): Promise<UserProfile[]> {
-  const q = query(collection(db(), 'users'), orderBy('rating', 'desc'), orderBy('stats.wins', 'desc'), limit(max));
+  const q = query(collection(db(), 'users'), orderBy('rating', 'desc'), orderBy('stats.wins', 'desc'), limit(max + 100));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => profileFromData(d.id, d.data())).filter((p) => p.isBot !== true);
+  return snap.docs
+    .map((d) => profileFromData(d.id, d.data()))
+    .filter((p) => p.isBot !== true && p.leaderboardVisible && !p.suspended)
+    .slice(0, max);
 }
 
 export async function fetchWeeklyLeaderboard(max = 100): Promise<WeeklyWins[]> {
@@ -139,10 +171,10 @@ export async function fetchWeeklyLeaderboard(max = 100): Promise<WeeklyWins[]> {
     collection(db(), 'weeklyWins', weekId(new Date()), 'players'),
     orderBy('wins', 'desc'),
     orderBy('rating', 'desc'),
-    limit(max),
+    limit(max + 100),
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => {
+  const rows = snap.docs.map((d) => {
     const data = d.data();
     return {
       id: d.id,
@@ -151,6 +183,16 @@ export async function fetchWeeklyLeaderboard(max = 100): Promise<WeeklyWins[]> {
       rating: Number(data.rating ?? 0),
     };
   });
+  const visible = new Set<string>();
+  for (let i = 0; i < rows.length; i += 10) {
+    const ids = rows.slice(i, i + 10).map((row) => row.id);
+    const profiles = await getDocs(query(collection(db(), 'users'), where(documentId(), 'in', ids)));
+    for (const profile of profiles.docs) {
+      const data = profileFromData(profile.id, profile.data());
+      if (data.leaderboardVisible && !data.suspended && data.isBot !== true) visible.add(profile.id);
+    }
+  }
+  return rows.filter((row) => visible.has(row.id)).slice(0, max);
 }
 
 /** Friends = everyone I've played (users/{uid}/opponents) plus me, with fresh ratings. */
@@ -164,7 +206,7 @@ export async function fetchFriendsLeaderboard(uid: string): Promise<UserProfile[
     profiles.push(...snap.docs.map((d) => profileFromData(d.id, d.data())));
   }
   profiles.sort((a, b) => b.rating - a.rating || b.stats.wins - a.stats.wins);
-  return profiles;
+  return profiles.filter((profile) => profile.leaderboardVisible && !profile.suspended && profile.isBot !== true);
 }
 
 export async function fetchOpponents(uid: string): Promise<Opponent[]> {
@@ -174,4 +216,103 @@ export async function fetchOpponents(uid: string): Promise<Opponent[]> {
     username: String(d.data().username ?? ''),
     gamesPlayed: Number(d.data().gamesPlayed ?? 0),
   }));
+}
+
+export function challengeFromSnapshot(snap: DocumentSnapshot<DocumentData>): Challenge | null {
+  const d = snap.data();
+  if (!d) return null;
+  return {
+    id: snap.id,
+    fromUid: String(d.fromUid ?? ''),
+    toUid: String(d.toUid ?? ''),
+    fromUsername: String(d.fromUsername ?? ''),
+    toUsername: String(d.toUsername ?? ''),
+    status: d.status as Challenge['status'],
+    sourceGameId: (d.sourceGameId as string | null | undefined) ?? null,
+    gameId: (d.gameId as string | null | undefined) ?? null,
+    createdAt: (d.createdAt as Challenge['createdAt'] | undefined) ?? null,
+    respondedAt: (d.respondedAt as Challenge['respondedAt'] | undefined) ?? null,
+  };
+}
+
+/** Pending challenges that haven't passed their TTL yet (cleanup only runs daily). */
+function listenPendingChallenges(
+  field: 'fromUid' | 'toUid',
+  uid: string,
+  onData: (challenges: Challenge[]) => void,
+  onError: (e: unknown) => void,
+): Unsubscribe {
+  const q = query(
+    collection(db(), 'challenges'),
+    where(field, '==', uid),
+    where('status', '==', 'pending'),
+    orderBy('createdAt', 'desc'),
+    limit(20),
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const cutoff = Date.now() - GAME_CONFIG.CHALLENGE_TTL_MS;
+      onData(
+        snap.docs
+          .map(challengeFromSnapshot)
+          .filter((c): c is Challenge => c !== null && (c.createdAt?.toMillis() ?? Date.now()) >= cutoff),
+      );
+    },
+    onError,
+  );
+}
+
+export function listenIncomingChallenges(
+  uid: string,
+  onData: (challenges: Challenge[]) => void,
+  onError: (e: unknown) => void,
+): Unsubscribe {
+  return listenPendingChallenges('toUid', uid, onData, onError);
+}
+
+export function listenOutgoingChallenges(
+  uid: string,
+  onData: (challenges: Challenge[]) => void,
+  onError: (e: unknown) => void,
+): Unsubscribe {
+  return listenPendingChallenges('fromUid', uid, onData, onError);
+}
+
+export interface RematchState {
+  /** My latest rematch request for this game, if any. */
+  outgoing: Challenge | null;
+  /** The opponent's latest rematch request for this game, if any. */
+  incoming: Challenge | null;
+}
+
+/** Rematch challenges between `uid` and `opponentUid` for the finished game `sourceGameId`, both directions. */
+export function listenRematch(
+  uid: string,
+  opponentUid: string,
+  sourceGameId: string,
+  onData: (state: RematchState) => void,
+  onError: (e: unknown) => void,
+): Unsubscribe {
+  const state: RematchState = { outgoing: null, incoming: null };
+  const listen = (fromUid: string, toUid: string, key: keyof RematchState) =>
+    onSnapshot(
+      query(
+        collection(db(), 'challenges'),
+        where('fromUid', '==', fromUid),
+        where('toUid', '==', toUid),
+        where('sourceGameId', '==', sourceGameId),
+      ),
+      (snap) => {
+        const latest = snap.docs
+          .map(challengeFromSnapshot)
+          .filter((c): c is Challenge => c !== null)
+          .sort((a, b) => (b.createdAt?.toMillis() ?? Infinity) - (a.createdAt?.toMillis() ?? Infinity))[0];
+        state[key] = latest ?? null;
+        onData({ ...state });
+      },
+      onError,
+    );
+  const unsubs = [listen(uid, opponentUid, 'outgoing'), listen(opponentUid, uid, 'incoming')];
+  return () => unsubs.forEach((u) => u());
 }

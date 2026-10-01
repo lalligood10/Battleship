@@ -6,7 +6,10 @@ import {
   type Firestore,
 } from 'firebase-admin/firestore';
 import type {
+  ChallengeDoc,
   GameCodeDoc,
+  ChatMessageDoc,
+  ChatStateDoc,
   GameDoc,
   OpponentDoc,
   PrivateBoardDoc,
@@ -36,10 +39,16 @@ export const refs = {
   games: () => typed<CollectionReference<GameDoc>>(db.collection('games')),
   privateBoard: (gameId: string, uid: string) =>
     typed<DocumentReference<PrivateBoardDoc>>(db.doc(`games/${gameId}/private/${uid}`)),
+  chatMessages: (gameId: string) =>
+    typed<CollectionReference<ChatMessageDoc>>(db.collection(`games/${gameId}/messages`)),
+  chatState: (gameId: string, uid: string) =>
+    typed<DocumentReference<ChatStateDoc>>(db.doc(`games/${gameId}/chatState/${uid}`)),
   reactions: (gameId: string) => typed<CollectionReference<ReactionDoc>>(db.collection(`games/${gameId}/reactions`)),
   gameCode: (code: string) => typed<DocumentReference<GameCodeDoc>>(db.doc(`gameCodes/${code}`)),
   weeklyWins: (weekId: string, uid: string) =>
     typed<DocumentReference<WeeklyWinsDoc>>(db.doc(`weeklyWins/${weekId}/players/${uid}`)),
   quickMatch: (uid: string) => typed<DocumentReference<QuickMatchTicketDoc>>(db.doc(`quickMatch/${uid}`)),
   quickMatchQueue: () => typed<CollectionReference<QuickMatchTicketDoc>>(db.collection('quickMatch')),
+  challenge: (id: string) => typed<DocumentReference<ChallengeDoc>>(db.doc(`challenges/${id}`)),
+  challenges: () => typed<CollectionReference<ChallengeDoc>>(db.collection('challenges')),
 };

@@ -46,6 +46,15 @@ export function containsProfanity(name: string): boolean {
   return BLOCKED_WORDS.some((w) => normalised.includes(w));
 }
 
+/** Conservative free-text check that avoids substring false positives such as "assignment". */
+export function containsChatProfanity(text: string): boolean {
+  return text
+    .split(/[^A-Za-z0-9_@$]+/)
+    .filter(Boolean)
+    .map(normalise)
+    .some((word) => BLOCKED_WORDS.includes(word));
+}
+
 export type UsernameValidation = { ok: true; username: string; lower: string } | { ok: false; reason: string };
 
 /** Validates format + profanity. Uniqueness is checked separately against Firestore. */

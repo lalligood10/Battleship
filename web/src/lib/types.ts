@@ -23,6 +23,8 @@ export interface UserProfile {
   usernameLower: string;
   rating: number;
   stats: PlayerStats;
+  leaderboardVisible: boolean;
+  suspended: boolean;
   isBot?: boolean;
   botStats?: PlayerStats;
   createdAt: Timestamp | null;
@@ -76,6 +78,21 @@ export interface Game {
   lastMoveAt: Timestamp | null;
 }
 
+export type ChallengeStatus = 'pending' | 'accepted' | 'declined' | 'cancelled' | 'expired';
+
+export interface Challenge {
+  id: string;
+  fromUid: string;
+  toUid: string;
+  fromUsername: string;
+  toUsername: string;
+  status: ChallengeStatus;
+  sourceGameId: string | null;
+  gameId: string | null;
+  createdAt: Timestamp | null;
+  respondedAt: Timestamp | null;
+}
+
 export interface PrivateBoard {
   fleet: ShipPlacement[];
   hitCells: string[];
@@ -85,6 +102,14 @@ export interface Reaction {
   id: string;
   uid: string;
   reactionId: ReactionId;
+  at: Timestamp | null;
+}
+
+export interface ChatMessage {
+  id: string;
+  uid: string;
+  username: string;
+  text: string;
   at: Timestamp | null;
 }
 

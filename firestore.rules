@@ -60,6 +60,16 @@ service cloud.firestore {
         allow read: if signedIn() && request.auth.uid in get(/databases/$(database)/documents/games/$(gameId)).data.playerUids;
         allow write: if false;
       }
+
+      // In-game chat is written through a rate-limited Function and read only by both players.
+      match /messages/{id} {
+        allow read: if signedIn() && request.auth.uid in get(/databases/$(database)/documents/games/$(gameId)).data.playerUids;
+        allow write: if false;
+      }
+
+      match /chatState/{uid} {
+        allow read, write: if false;
+      }
     }
 
     // Join-code lookup happens inside the joinGame Function so codes can't be enumerated.
@@ -77,6 +87,14 @@ service cloud.firestore {
     match /quickMatch/{uid} {
       allow read, delete: if isSelf(uid);
       allow create, update: if false;
+    }
+
+    // Direct challenges: visible to the two players involved. Created/answered via Functions only.
+    // List queries must filter on fromUid == me or toUid == me.
+    match /challenges/{challengeId} {
+      allow read: if signedIn()
+        && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+      allow write: if false;
     }
 
     match /{document=**} {

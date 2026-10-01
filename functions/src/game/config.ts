@@ -23,6 +23,9 @@ export const GAME_CONFIG = {
   /** Quick-match tickets older than this are ignored/cleaned (ms). */
   QUICK_MATCH_TICKET_TTL_MS: 10 * 60 * 1000,
 
+  /** Pending direct challenges expire after this long (ms). Default 48 hours. */
+  CHALLENGE_TTL_MS: 48 * 60 * 60 * 1000,
+
   /**
    * Quick Match rating band: a waiting ticket accepts opponents within
    * min(BASE + STEP * floor(ageSec / INTERVAL_SEC), MAX) rating points, and anyone at all once it

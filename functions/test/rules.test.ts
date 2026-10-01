@@ -59,11 +59,28 @@ beforeEach(async () => {
       reactionId: 'nice_shot',
       at: new Date(),
     });
+    await setDoc(doc(db, 'games', GAME, 'messages', 'm1'), {
+      uid: ALICE,
+      username: 'Alice',
+      text: 'Good luck!',
+      at: new Date(),
+    });
     await setDoc(doc(db, 'games', GAME, 'private', ALICE), { fleet: [{ type: 'carrier' }], hitCells: [] });
     await setDoc(doc(db, 'games', GAME, 'private', BOB), { fleet: [{ type: 'carrier' }], hitCells: [] });
     await setDoc(doc(db, 'gameCodes', 'ABC234'), { gameId: GAME });
     await setDoc(doc(db, 'weeklyWins', '2026-W39', 'players', ALICE), { username: 'Alice', wins: 1 });
     await setDoc(doc(db, 'quickMatch', ALICE), { username: 'Alice', gameId: null });
+    await setDoc(doc(db, 'challenges', 'ch-1'), {
+      fromUid: ALICE,
+      toUid: BOB,
+      fromUsername: 'Alice',
+      toUsername: 'Bob',
+      status: 'pending',
+      sourceGameId: null,
+      gameId: null,
+      createdAt: new Date(),
+      respondedAt: null,
+    });
   });
 });
 
@@ -185,6 +202,31 @@ describe('reactions', () => {
   });
 });
 
+describe('chat messages', () => {
+  it('game players can read messages; outsiders and anonymous users cannot', async () => {
+    await assertSucceeds(getDoc(doc(as(ALICE), 'games', GAME, 'messages', 'm1')));
+    await assertSucceeds(getDocs(collection(as(BOB), 'games', GAME, 'messages')));
+    await assertFails(getDoc(doc(as(EVE), 'games', GAME, 'messages', 'm1')));
+    await assertFails(getDocs(collection(anon(), 'games', GAME, 'messages')));
+  });
+
+  it('clients cannot create, update, or delete messages', async () => {
+    await assertFails(setDoc(doc(as(ALICE), 'games', GAME, 'messages', 'm2'), {
+      uid: ALICE,
+      username: 'Alice',
+      text: 'Injected',
+      at: new Date(),
+    }));
+    await assertFails(updateDoc(doc(as(ALICE), 'games', GAME, 'messages', 'm1'), { text: 'Changed' }));
+    await assertFails(deleteDoc(doc(as(ALICE), 'games', GAME, 'messages', 'm1')));
+  });
+
+  it('clients cannot read or write chat rate-limit state', async () => {
+    await assertFails(getDoc(doc(as(ALICE), 'games', GAME, 'chatState', ALICE)));
+    await assertFails(setDoc(doc(as(ALICE), 'games', GAME, 'chatState', ALICE), { lastAt: 0 }));
+  });
+});
+
 describe('users and leaderboards', () => {
   it('signed-in users can read profiles and leaderboards; anonymous cannot', async () => {
     await assertSucceeds(getDoc(doc(as(BOB), 'users', ALICE)));
@@ -222,5 +264,30 @@ describe('quick match', () => {
     await assertFails(setDoc(doc(as(BOB), 'quickMatch', BOB), { username: 'Bob' }));
     await assertFails(getDocs(collection(as(BOB), 'quickMatch')));
     await assertSucceeds(deleteDoc(doc(as(ALICE), 'quickMatch', ALICE)));
+  });
+});
+
+describe('challenges', () => {
+  it('only the challenger and invitee can read a challenge', async () => {
+    await assertSucceeds(getDoc(doc(as(ALICE), 'challenges', 'ch-1')));
+    await assertSucceeds(getDoc(doc(as(BOB), 'challenges', 'ch-1')));
+    await assertFails(getDoc(doc(as(EVE), 'challenges', 'ch-1')));
+    await assertFails(getDoc(doc(anon(), 'challenges', 'ch-1')));
+  });
+
+  it('list queries must be scoped to my own uid', async () => {
+    await assertSucceeds(
+      getDocs(query(collection(as(BOB), 'challenges'), where('toUid', '==', BOB), where('status', '==', 'pending'))),
+    );
+    await assertSucceeds(getDocs(query(collection(as(ALICE), 'challenges'), where('fromUid', '==', ALICE))));
+    await assertFails(getDocs(query(collection(as(EVE), 'challenges'), where('toUid', '==', BOB))));
+    await assertFails(getDocs(collection(as(ALICE), 'challenges')));
+  });
+
+  it('nobody can write a challenge from a client', async () => {
+    await assertFails(updateDoc(doc(as(BOB), 'challenges', 'ch-1'), { status: 'accepted' }));
+    await assertFails(updateDoc(doc(as(ALICE), 'challenges', 'ch-1'), { status: 'cancelled' }));
+    await assertFails(setDoc(doc(as(ALICE), 'challenges', 'ch-2'), { fromUid: ALICE, toUid: BOB, status: 'pending' }));
+    await assertFails(deleteDoc(doc(as(ALICE), 'challenges', 'ch-1')));
   });
 });
