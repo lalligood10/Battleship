@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Alert, Empty, Spinner, TopBar } from '../components/ui';
+import { GameChat } from '../components/GameChat';
 import { errorMessage } from '../lib/errors';
 import { listenGame, listenPrivateBoard } from '../lib/firestore';
 import type { Game, PrivateBoard } from '../lib/types';
@@ -74,8 +75,20 @@ export function GamePage() {
     case 'placing':
       return <PlacementView game={game} uid={uid} board={board} />;
     case 'active':
-      return <ActiveGameView game={game} uid={uid} board={board} />;
+      return (
+        <>
+          <ActiveGameView game={game} uid={uid} board={board} />
+          <GameChat key={game.id} game={game} uid={uid} />
+        </>
+      );
     case 'finished':
-      return searchParams.get('replay') === '1' ? <ReplayView game={game} uid={uid} board={board} /> : <ResultsView game={game} uid={uid} board={board} />;
+      return searchParams.get('replay') === '1' ? (
+        <ReplayView game={game} uid={uid} board={board} />
+      ) : (
+        <>
+          <ResultsView game={game} uid={uid} board={board} />
+          {game.isBotGame && <GameChat key={game.id} game={game} uid={uid} />}
+        </>
+      );
   }
 }

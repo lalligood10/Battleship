@@ -1,12 +1,31 @@
-import { Timestamp } from 'firebase-admin/firestore';
+import { FieldPath, Timestamp } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
-import { EMPTY_STATS, SCORING_CONFIG } from '../game/scoring';
+import { EMPTY_STATS, SCORING_CONFIG, weekId } from '../game/scoring';
 import { db, refs } from '../lib/firestore';
 import { validateUsername } from '../lib/username';
 import type { UserDoc } from '../types';
 
 export interface SetUsernameResult {
   username: string;
+}
+
+async function propagateUsername(uid: string, username: string): Promise<void> {
+  const [games, weekly, ticket] = await Promise.all([
+    refs.games().where('playerUids', 'array-contains', uid).get(),
+    refs.weeklyWins(weekId(new Date()), uid).get(),
+    refs.quickMatch(uid).get(),
+  ]);
+  const writes: Array<(batch: FirebaseFirestore.WriteBatch) => void> = games.docs.map(
+    (game) => (batch) => batch.update(game.ref, new FieldPath('players', uid, 'username'), username),
+  );
+  if (weekly.exists) writes.push((batch) => batch.update(weekly.ref, { username }));
+  if (ticket.exists) writes.push((batch) => batch.update(ticket.ref, { username }));
+
+  for (let offset = 0; offset < writes.length; offset += 400) {
+    const batch = db.batch();
+    for (const write of writes.slice(offset, offset + 400)) write(batch);
+    await batch.commit();
+  }
 }
 
 /**
@@ -35,6 +54,8 @@ export async function setUsername(uid: string, data: unknown): Promise<SetUserna
         usernameLower: lower,
         rating: SCORING_CONFIG.INITIAL_RATING,
         stats: EMPTY_STATS,
+        leaderboardVisible: true,
+        suspended: false,
         createdAt: now,
         updatedAt: now,
         lastGameAt: null,
@@ -44,6 +65,7 @@ export async function setUsername(uid: string, data: unknown): Promise<SetUserna
     tx.set(refs.username(lower), { uid });
   });
 
+  await propagateUsername(uid, username);
   return { username };
 }
 

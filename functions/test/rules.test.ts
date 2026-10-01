@@ -59,6 +59,12 @@ beforeEach(async () => {
       reactionId: 'nice_shot',
       at: new Date(),
     });
+    await setDoc(doc(db, 'games', GAME, 'messages', 'm1'), {
+      uid: ALICE,
+      username: 'Alice',
+      text: 'Good luck!',
+      at: new Date(),
+    });
     await setDoc(doc(db, 'games', GAME, 'private', ALICE), { fleet: [{ type: 'carrier' }], hitCells: [] });
     await setDoc(doc(db, 'games', GAME, 'private', BOB), { fleet: [{ type: 'carrier' }], hitCells: [] });
     await setDoc(doc(db, 'gameCodes', 'ABC234'), { gameId: GAME });
@@ -193,6 +199,31 @@ describe('reactions', () => {
     }));
     await assertFails(updateDoc(doc(as(ALICE), 'games', GAME, 'reactions', 'r1'), { reactionId: 'gg' }));
     await assertFails(deleteDoc(doc(as(ALICE), 'games', GAME, 'reactions', 'r1')));
+  });
+});
+
+describe('chat messages', () => {
+  it('game players can read messages; outsiders and anonymous users cannot', async () => {
+    await assertSucceeds(getDoc(doc(as(ALICE), 'games', GAME, 'messages', 'm1')));
+    await assertSucceeds(getDocs(collection(as(BOB), 'games', GAME, 'messages')));
+    await assertFails(getDoc(doc(as(EVE), 'games', GAME, 'messages', 'm1')));
+    await assertFails(getDocs(collection(anon(), 'games', GAME, 'messages')));
+  });
+
+  it('clients cannot create, update, or delete messages', async () => {
+    await assertFails(setDoc(doc(as(ALICE), 'games', GAME, 'messages', 'm2'), {
+      uid: ALICE,
+      username: 'Alice',
+      text: 'Injected',
+      at: new Date(),
+    }));
+    await assertFails(updateDoc(doc(as(ALICE), 'games', GAME, 'messages', 'm1'), { text: 'Changed' }));
+    await assertFails(deleteDoc(doc(as(ALICE), 'games', GAME, 'messages', 'm1')));
+  });
+
+  it('clients cannot read or write chat rate-limit state', async () => {
+    await assertFails(getDoc(doc(as(ALICE), 'games', GAME, 'chatState', ALICE)));
+    await assertFails(setDoc(doc(as(ALICE), 'games', GAME, 'chatState', ALICE), { lastAt: 0 }));
   });
 });
 

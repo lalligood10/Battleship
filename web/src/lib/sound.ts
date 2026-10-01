@@ -1,5 +1,7 @@
 /** Tiny synthesised sound effects (no audio assets to license). Respects a persisted mute toggle. */
 const KEY = 'broadside.muted';
+const SPEECH_KEY = 'broadside.commentary.speech';
+const SPEECH_VOLUME_KEY = 'broadside.commentary.volume';
 let ctx: AudioContext | undefined;
 
 export function isMuted(): boolean {
@@ -7,6 +9,33 @@ export function isMuted(): boolean {
 }
 export function setMuted(muted: boolean) {
   localStorage.setItem(KEY, String(muted));
+}
+
+export function isSpeechEnabled(): boolean {
+  return localStorage.getItem(SPEECH_KEY) === 'true';
+}
+export function setSpeechEnabled(enabled: boolean) {
+  localStorage.setItem(SPEECH_KEY, String(enabled));
+  if (!enabled && typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
+}
+export function speechVolume(): number {
+  const stored = Number(localStorage.getItem(SPEECH_VOLUME_KEY));
+  return Number.isFinite(stored) && stored >= 0 && stored <= 1 ? stored : 0.8;
+}
+export function setSpeechVolume(volume: number) {
+  localStorage.setItem(SPEECH_VOLUME_KEY, String(Math.max(0, Math.min(1, volume))));
+}
+export function speakCommentary(text: string) {
+  if (!isSpeechEnabled() || typeof speechSynthesis === 'undefined' || typeof SpeechSynthesisUtterance === 'undefined') return;
+  try {
+    speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.volume = speechVolume();
+    utterance.rate = 0.95;
+    speechSynthesis.speak(utterance);
+  } catch {
+    // Speech is best-effort; never let it break the game.
+  }
 }
 
 function tone(freq: number, durationMs: number, type: OscillatorType, startDelayMs = 0, gain = 0.15) {

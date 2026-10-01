@@ -7,11 +7,13 @@ import { setGlobalOptions } from 'firebase-functions/v2';
 import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import * as admin from './handlers/admin';
 import * as bots from './handlers/bots';
 import * as challenges from './handlers/challenges';
 import * as games from './handlers/games';
 import * as quickMatch from './handlers/quickMatch';
 import * as users from './handlers/users';
+import { refs } from './lib/firestore';
 import { cleanupStale } from './triggers/cleanup';
 import { deliver, notificationForChallenge, notificationsForChange } from './triggers/notifications';
 import type { ChallengeDoc, GameDoc } from './types';
@@ -29,28 +31,69 @@ function authed<T>(handler: Handler<T>) {
   });
 }
 
+function active<T>(handler: Handler<T>) {
+  return authed(async (uid, data) => {
+    const profile = (await refs.user(uid).get()).data();
+    if (!profile) throw new HttpsError('failed-precondition', 'Choose a username before playing');
+    if (profile.suspended) throw new HttpsError('permission-denied', 'This account has been suspended');
+    return handler(uid, data);
+  });
+}
+
 // Accounts
 export const setUsername = authed(users.setUsername);
 export const checkUsername = authed(users.checkUsername);
 
+// Owner administration
+export const adminStatus = onCall({ enforceAppCheck: false }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Sign in to continue');
+  return admin.adminStatus({
+    uid,
+    email: request.auth?.token.email as string | undefined,
+    emailVerified: request.auth?.token.email_verified === true,
+  });
+});
+export const adminListUsers = onCall({ enforceAppCheck: false }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Sign in to continue');
+  return admin.listUsers({
+    uid,
+    email: request.auth?.token.email as string | undefined,
+    emailVerified: request.auth?.token.email_verified === true,
+  });
+});
+export const adminUpdateUser = onCall({ enforceAppCheck: false }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Sign in to continue');
+  return admin.updateUser(
+    {
+      uid,
+      email: request.auth?.token.email as string | undefined,
+      emailVerified: request.auth?.token.email_verified === true,
+    },
+    request.data,
+  );
+});
+
 // Game lifecycle (M1)
-export const createGame = authed(games.createGame);
-export const joinGame = authed(games.joinGame);
-export const requestRematch = authed(games.requestRematch);
-export const cancelGame = authed(games.cancelGame);
-export const placeShips = authed(games.placeShips);
-export const fireShot = authed(games.fireShot);
-export const resign = authed(games.resign);
+export const createGame = active(games.createGame);
+export const joinGame = active(games.joinGame);
+export const requestRematch = active(games.requestRematch);
+export const cancelGame = active(games.cancelGame);
+export const placeShips = active(games.placeShips);
+export const fireShot = active(games.fireShot);
+export const resign = active(games.resign);
 
 // Play vs Computer
-export const createBotGame = authed(bots.createBotGame);
+export const createBotGame = active(bots.createBotGame);
 
 // Abandonment (M3)
-export const claimTimeoutWin = authed(games.claimTimeoutWin);
+export const claimTimeoutWin = active(games.claimTimeoutWin);
 
 // Quick Match (M4)
-export const joinQuickMatch = authed(quickMatch.joinQuickMatch);
-export const cancelQuickMatch = authed(quickMatch.cancelQuickMatch);
+export const joinQuickMatch = active(quickMatch.joinQuickMatch);
+export const cancelQuickMatch = active(quickMatch.cancelQuickMatch);
 
 // Direct challenges (F1)
 export const createChallenge = authed(challenges.createChallenge);
@@ -64,7 +107,8 @@ export const onChallengeCreated = onDocumentCreated('challenges/{challengeId}', 
 });
 
 // Quick-chat reactions (F5)
-export const sendReaction = authed(games.sendReaction);
+export const sendReaction = active(games.sendReaction);
+export const sendChatMessage = active(games.sendChatMessage);
 
 // Push notifications on every game change (M3)
 export const onGameWritten = onDocumentWritten('games/{gameId}', async (event) => {
