@@ -25,6 +25,8 @@ export async function ensureBotProfile(tx: Transaction, difficulty: BotDifficult
     usernameLower: profile.usernameLower,
     rating: profile.rating,
     stats: EMPTY_STATS,
+    leaderboardVisible: false,
+    suspended: false,
     isBot: true,
     botStats: EMPTY_STATS,
     createdAt: now,

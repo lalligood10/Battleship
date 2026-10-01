@@ -37,6 +37,8 @@ export function profileFromData(id: string, data: Record<string, unknown>): User
     usernameLower: String(data.usernameLower ?? ''),
     rating: Number(data.rating ?? 0),
     stats: data.stats as UserProfile['stats'],
+    leaderboardVisible: data.leaderboardVisible !== false,
+    suspended: data.suspended === true,
     isBot: data.isBot === true,
     botStats: (data.botStats as UserProfile['botStats']) ?? undefined,
     createdAt: (data.createdAt as UserProfile['createdAt']) ?? null,

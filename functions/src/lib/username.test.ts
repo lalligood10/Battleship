@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { containsProfanity, validateUsername } from './username';
+import { containsChatProfanity, containsProfanity, validateUsername } from './username';
 
 describe('validateUsername', () => {
   it('accepts normal names and lower-cases for uniqueness', () => {
@@ -34,5 +34,10 @@ describe('validateUsername', () => {
 
   it('still catches profanity next to an allowed word', () => {
     expect(containsProfanity('classfucker')).toBe(true);
+  });
+
+  it('checks chat tokens without rejecting innocent substring matches', () => {
+    expect(containsChatProfanity('what the sh1t')).toBe(true);
+    expect(containsChatProfanity('class assignment passed')).toBe(false);
   });
 });
