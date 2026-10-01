@@ -19,6 +19,7 @@ import {
   sendReaction,
 } from '../src/handlers/games';
 import { createBotGame } from '../src/handlers/bots';
+import { cancelChallenge, createChallenge, respondChallenge } from '../src/handlers/challenges';
 import { cancelQuickMatch, joinQuickMatch } from '../src/handlers/quickMatch';
 import { checkUsername, setUsername } from '../src/handlers/users';
 import { refs } from '../src/lib/firestore';
@@ -744,10 +745,185 @@ describe('cleanup', () => {
     await joinQuickMatch(ALICE);
     await refs.quickMatch(ALICE).update({ createdAt: Timestamp.fromMillis(Date.now() - 60 * 60 * 1000) });
 
-    expect(await cleanupStale()).toEqual({ cancelledGames: 1, removedTickets: 1 });
+    expect(await cleanupStale()).toEqual({ cancelledGames: 1, removedTickets: 1, expiredChallenges: 0 });
     expect((await refs.game(old.gameId).get()).data()!.status).toBe('cancelled');
     expect((await refs.gameCode(old.code).get()).exists).toBe(false);
     expect((await refs.game(fresh.gameId).get()).data()!.status).toBe('waiting');
     expect((await refs.quickMatch(ALICE).get()).exists).toBe(false);
+  });
+});
+
+describe('challenges', () => {
+  /** Alice and Bob have played before (the Friends relationship challenges require). */
+  async function pastOpponents() {
+    await setupPlayers();
+    const lastPlayedAt = Timestamp.now();
+    await refs.opponent(ALICE, BOB).set({ username: 'Bob', gamesPlayed: 1, lastPlayedAt });
+    await refs.opponent(BOB, ALICE).set({ username: 'Alice', gamesPlayed: 1, lastPlayedAt });
+  }
+
+  it('create -> accept starts a placing game with both players', async () => {
+    await pastOpponents();
+    const { challengeId, gameId: immediate } = await createChallenge(ALICE, { opponentUid: BOB });
+    expect(immediate).toBeNull();
+    expect((await refs.challenge(challengeId).get()).data()).toMatchObject({
+      fromUid: ALICE,
+      toUid: BOB,
+      fromUsername: 'Alice',
+      toUsername: 'Bob',
+      status: 'pending',
+      sourceGameId: null,
+      gameId: null,
+      respondedAt: null,
+    });
+
+    const { gameId } = await respondChallenge(BOB, { challengeId, accept: true });
+    expect(gameId).toEqual(expect.any(String));
+    const game = (await refs.game(gameId!).get()).data()!;
+    expect(game).toMatchObject({ status: 'placing', hostUid: ALICE, playerUids: [ALICE, BOB], isQuickMatch: false, isBotGame: false });
+    expect(game.players[BOB]).toMatchObject({ username: 'Bob', ready: false });
+    expect((await refs.gameCode(game.code).get()).data()!.gameId).toBe(gameId);
+    expect((await refs.challenge(challengeId).get()).data()).toMatchObject({ status: 'accepted', gameId });
+
+    // Already answered.
+    await expectHttpsError(respondChallenge(BOB, { challengeId, accept: true }), 'failed-precondition');
+  });
+
+  it('decline and cancel close the challenge without a game', async () => {
+    await pastOpponents();
+    const first = await createChallenge(ALICE, { opponentUid: BOB });
+    expect(await respondChallenge(BOB, { challengeId: first.challengeId, accept: false })).toEqual({ gameId: null });
+    expect((await refs.challenge(first.challengeId).get()).data()).toMatchObject({ status: 'declined', gameId: null });
+
+    const second = await createChallenge(ALICE, { opponentUid: BOB });
+    await expectHttpsError(cancelChallenge(BOB, { challengeId: second.challengeId }), 'permission-denied');
+    await cancelChallenge(ALICE, { challengeId: second.challengeId });
+    expect((await refs.challenge(second.challengeId).get()).data()!.status).toBe('cancelled');
+    await expectHttpsError(respondChallenge(BOB, { challengeId: second.challengeId, accept: true }), 'failed-precondition');
+    expect((await refs.games().get()).size).toBe(0);
+  });
+
+  it('a reverse pending challenge is auto-accepted', async () => {
+    await pastOpponents();
+    const first = await createChallenge(ALICE, { opponentUid: BOB });
+    const second = await createChallenge(BOB, { opponentUid: ALICE });
+    expect(second.challengeId).toBe(first.challengeId);
+    expect(second.gameId).toEqual(expect.any(String));
+    const game = (await refs.game(second.gameId!).get()).data()!;
+    expect(game).toMatchObject({ status: 'placing', hostUid: ALICE, playerUids: [ALICE, BOB] });
+    expect((await refs.challenges().get()).size).toBe(1);
+  });
+
+  it('rejects a duplicate pending challenge to the same player', async () => {
+    await pastOpponents();
+    await createChallenge(ALICE, { opponentUid: BOB });
+    await expectHttpsError(createChallenge(ALICE, { opponentUid: BOB }), 'already-exists');
+    expect((await refs.challenges().get()).size).toBe(1);
+  });
+
+  it('only the invitee can respond', async () => {
+    await pastOpponents();
+    await setUsername(CAROL, { username: 'Carol' });
+    const { challengeId } = await createChallenge(ALICE, { opponentUid: BOB });
+    await expectHttpsError(respondChallenge(CAROL, { challengeId, accept: true }), 'permission-denied');
+    await expectHttpsError(respondChallenge(ALICE, { challengeId, accept: true }), 'permission-denied');
+    await expectHttpsError(respondChallenge(BOB, { challengeId, accept: 'yes' }), 'invalid-argument');
+    await expectHttpsError(respondChallenge(BOB, { challengeId: 'nope', accept: true }), 'not-found');
+    expect((await refs.challenge(challengeId).get()).data()!.status).toBe('pending');
+  });
+
+  it('rejects self, bot, unknown and never-played opponents', async () => {
+    await pastOpponents();
+    await setUsername(CAROL, { username: 'Carol' });
+    await expectHttpsError(createChallenge(ALICE, { opponentUid: ALICE }), 'invalid-argument', 'yourself');
+    await createBotGame(ALICE, { difficulty: 'medium' }); // creates the bot profile
+    await expectHttpsError(createChallenge(ALICE, { opponentUid: 'bot-officer' }), 'invalid-argument');
+    await refs.opponent(ALICE, CAROL).set({ username: 'Carol', gamesPlayed: 1, lastPlayedAt: Timestamp.now() });
+    await refs.user(CAROL).update({ isBot: true });
+    await expectHttpsError(createChallenge(ALICE, { opponentUid: CAROL }), 'invalid-argument');
+    await refs.user(CAROL).update({ isBot: false });
+    await refs.opponent(ALICE, CAROL).delete();
+    await expectHttpsError(createChallenge(ALICE, { opponentUid: CAROL }), 'failed-precondition', 'already played');
+    await expectHttpsError(createChallenge(ALICE, { opponentUid: 'uid-nobody' }), 'not-found');
+    await expectHttpsError(createChallenge(ALICE, {}), 'invalid-argument');
+    expect((await refs.challenges().get()).size).toBe(0);
+  });
+
+  it('expired challenges cannot be accepted and are expired by cleanupStale', async () => {
+    await pastOpponents();
+    const old = await createChallenge(ALICE, { opponentUid: BOB });
+    await refs.challenge(old.challengeId).update({ createdAt: Timestamp.fromMillis(Date.now() - 49 * 3600 * 1000) });
+    await expectHttpsError(respondChallenge(BOB, { challengeId: old.challengeId, accept: true }), 'failed-precondition', 'expired');
+
+    expect(await cleanupStale()).toEqual({ cancelledGames: 0, removedTickets: 0, expiredChallenges: 1 });
+    expect((await refs.challenge(old.challengeId).get()).data()).toMatchObject({ status: 'expired', gameId: null });
+
+    // A fresh one is untouched, and a new challenge is allowed now the old one expired.
+    const fresh = await createChallenge(ALICE, { opponentUid: BOB });
+    expect(await cleanupStale()).toEqual({ cancelledGames: 0, removedTickets: 0, expiredChallenges: 0 });
+    expect((await refs.challenge(fresh.challengeId).get()).data()!.status).toBe('pending');
+  });
+
+  it('a stale reverse challenge is expired instead of auto-accepted', async () => {
+    await pastOpponents();
+    const old = await createChallenge(ALICE, { opponentUid: BOB });
+    await refs.challenge(old.challengeId).update({ createdAt: Timestamp.fromMillis(Date.now() - 49 * 3600 * 1000) });
+    const res = await createChallenge(BOB, { opponentUid: ALICE });
+    expect(res.gameId).toBeNull();
+    expect(res.challengeId).not.toBe(old.challengeId);
+    expect((await refs.challenge(old.challengeId).get()).data()!.status).toBe('expired');
+    expect((await refs.games().get()).size).toBe(0);
+  });
+
+  describe('rematch', () => {
+    async function finishedGame() {
+      await setupPlayers();
+      const { gameId } = await startedGame();
+      await resign(ALICE, { gameId });
+      return gameId;
+    }
+
+    it('both players asking for a rematch of the same game produces exactly one game', async () => {
+      const sourceGameId = await finishedGame();
+      const mine = await createChallenge(ALICE, { opponentUid: BOB, sourceGameId });
+      expect(mine.gameId).toBeNull();
+      expect((await refs.challenge(mine.challengeId).get()).data()).toMatchObject({ sourceGameId, status: 'pending' });
+      // Tapping again before Bob answers is a no-op rather than an error.
+      expect(await createChallenge(ALICE, { opponentUid: BOB, sourceGameId })).toEqual(mine);
+
+      const theirs = await createChallenge(BOB, { opponentUid: ALICE, sourceGameId });
+      expect(theirs.challengeId).toBe(mine.challengeId);
+      expect(theirs.gameId).toEqual(expect.any(String));
+      const game = (await refs.game(theirs.gameId!).get()).data()!;
+      expect(game).toMatchObject({ status: 'placing', playerUids: [ALICE, BOB] });
+
+      // A late tap from either side points at the same game instead of opening another challenge.
+      expect(await createChallenge(ALICE, { opponentUid: BOB, sourceGameId })).toEqual(theirs);
+      expect(await createChallenge(BOB, { opponentUid: ALICE, sourceGameId })).toEqual(theirs);
+      expect((await refs.challenges().get()).size).toBe(1);
+      expect((await refs.games().where('status', '==', 'placing').get()).size).toBe(1);
+    });
+
+    it('rejects a rematch of an unfinished game or one the pair did not both play', async () => {
+      await setupPlayers();
+      await setUsername(CAROL, { username: 'Carol' });
+      const lastPlayedAt = Timestamp.now();
+      await refs.opponent(ALICE, BOB).set({ username: 'Bob', gamesPlayed: 1, lastPlayedAt });
+      await refs.opponent(ALICE, CAROL).set({ username: 'Carol', gamesPlayed: 1, lastPlayedAt });
+      await refs.opponent(CAROL, BOB).set({ username: 'Bob', gamesPlayed: 1, lastPlayedAt });
+
+      const { gameId: active } = await startedGame();
+      await expectHttpsError(
+        createChallenge(ALICE, { opponentUid: BOB, sourceGameId: active }),
+        'failed-precondition',
+        'not finished',
+      );
+      await resign(ALICE, { gameId: active });
+      await expectHttpsError(createChallenge(ALICE, { opponentUid: CAROL, sourceGameId: active }), 'permission-denied');
+      await expectHttpsError(createChallenge(CAROL, { opponentUid: BOB, sourceGameId: active }), 'permission-denied');
+      await expectHttpsError(createChallenge(ALICE, { opponentUid: BOB, sourceGameId: 'missing' }), 'permission-denied');
+      await expectHttpsError(createChallenge(ALICE, { opponentUid: BOB, sourceGameId: 42 }), 'invalid-argument');
+      expect((await refs.challenges().get()).size).toBe(0);
+    });
   });
 });

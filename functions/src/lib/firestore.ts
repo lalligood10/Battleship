@@ -6,6 +6,7 @@ import {
   type Firestore,
 } from 'firebase-admin/firestore';
 import type {
+  ChallengeDoc,
   GameCodeDoc,
   GameDoc,
   OpponentDoc,
@@ -42,4 +43,6 @@ export const refs = {
     typed<DocumentReference<WeeklyWinsDoc>>(db.doc(`weeklyWins/${weekId}/players/${uid}`)),
   quickMatch: (uid: string) => typed<DocumentReference<QuickMatchTicketDoc>>(db.doc(`quickMatch/${uid}`)),
   quickMatchQueue: () => typed<CollectionReference<QuickMatchTicketDoc>>(db.collection('quickMatch')),
+  challenge: (id: string) => typed<DocumentReference<ChallengeDoc>>(db.doc(`challenges/${id}`)),
+  challenges: () => typed<CollectionReference<ChallengeDoc>>(db.collection('challenges')),
 };

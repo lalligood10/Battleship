@@ -14,6 +14,8 @@
  *   gameCodes/{code}                     join-code lookup -> { gameId } (Functions only)
  *   weeklyWins/{weekId}/players/{uid}    wins in a calendar week (readable by signed-in users)
  *   quickMatch/{uid}                     waiting ticket for Quick Match (Functions only)
+ *   challenges/{challengeId}             direct challenge between two past opponents (readable by
+ *                                        fromUid/toUid only; Functions only write)
  */
 import type { Timestamp } from 'firebase-admin/firestore';
 import type { ShipPlacement, Shot } from './game/engine';
@@ -152,4 +154,20 @@ export interface QuickMatchTicketDoc {
   createdAt: Timestamp;
   /** Filled in by the Function once an opponent is found. */
   gameId: string | null;
+}
+
+export type ChallengeStatus = 'pending' | 'accepted' | 'declined' | 'cancelled' | 'expired';
+
+export interface ChallengeDoc {
+  fromUid: string;
+  toUid: string;
+  fromUsername: string;
+  toUsername: string;
+  status: ChallengeStatus;
+  /** Finished game this challenge is a rematch of, if any. */
+  sourceGameId: string | null;
+  /** Set once the challenge is accepted and the game created. */
+  gameId: string | null;
+  createdAt: Timestamp;
+  respondedAt: Timestamp | null;
 }

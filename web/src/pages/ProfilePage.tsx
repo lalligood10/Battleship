@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { accuracyPercentage, winPercentage } from '@shared/scoring';
+import { ChallengeButton } from '../components/ChallengeButton';
 import { Alert, Empty, Spinner, TopBar } from '../components/ui';
 import { errorMessage } from '../lib/errors';
 import { fetchHistory } from '../lib/firestore';
 import { disablePush, enablePush, pushAvailable, pushState, type PushState } from '../lib/push';
 import { hasReplay } from '../game/replay';
-import { opponentUid, type Game } from '../lib/types';
+import { isBotGame, opponentUid, type Game } from '../lib/types';
 import { useSession } from '../state/SessionProvider';
 import { useTheme, type ThemePreference } from '../state/theme';
 
@@ -95,6 +96,7 @@ export function ProfilePage() {
                       Replay
                     </Link>
                   )}
+                  {opp && !isBotGame(g) && <ChallengeButton opponentUid={opp} opponentName={name} />}
                 </div>
               );
             })}
