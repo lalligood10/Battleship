@@ -16,6 +16,7 @@ import {
   placeShips,
   requestRematch,
   resign,
+  sendChatMessage,
   sendReaction,
 } from '../src/handlers/games';
 import { createBotGame } from '../src/handlers/bots';
@@ -504,6 +505,50 @@ describe('reactions', () => {
     const { gameId } = await startedGame();
     await resign(ALICE, { gameId });
     await sendReaction(BOB, { gameId, reactionId: 'well_played' });
+  });
+});
+
+describe('chat', () => {
+  it('lets active human-game members exchange trimmed messages', async () => {
+    await setupPlayers();
+    const { gameId } = await startedGame();
+
+    await sendChatMessage(ALICE, { gameId, text: '  Good luck, Bob!  ' });
+
+    const messages = await refs.chatMessages(gameId).get();
+    expect(messages.docs).toHaveLength(1);
+    expect(messages.docs[0]!.data()).toMatchObject({
+      uid: ALICE,
+      username: 'Alice',
+      text: 'Good luck, Bob!',
+      at: expect.any(Timestamp),
+    });
+  });
+
+  it('rejects outsiders, bot games, invalid text, and rapid messages', async () => {
+    await setupPlayers();
+    await setUsername(CAROL, { username: 'Carol' });
+    const { gameId } = await startedGame();
+
+    await expectHttpsError(sendChatMessage(CAROL, { gameId, text: 'Hello' }), 'permission-denied');
+    await expectHttpsError(sendChatMessage(ALICE, { gameId, text: ' ' }), 'invalid-argument');
+    await expectHttpsError(sendChatMessage(ALICE, { gameId, text: 'x'.repeat(241) }), 'invalid-argument');
+    await expectHttpsError(sendChatMessage(ALICE, { gameId, text: 'sh1t' }), 'invalid-argument');
+    await sendChatMessage(ALICE, { gameId, text: 'First' });
+    await expectHttpsError(sendChatMessage(ALICE, { gameId, text: 'Second' }), 'resource-exhausted');
+
+    const bot = await createBotGame(ALICE, { difficulty: 'easy' });
+    await expectHttpsError(sendChatMessage(ALICE, { gameId: bot.gameId, text: 'Hello bot' }), 'failed-precondition');
+  });
+
+  it('rejects chat before or after active play', async () => {
+    await setupPlayers();
+    const waiting = await createGame(ALICE);
+    await expectHttpsError(sendChatMessage(ALICE, { gameId: waiting.gameId, text: 'Hello' }), 'failed-precondition');
+
+    const { gameId } = await startedGame();
+    await resign(ALICE, { gameId });
+    await expectHttpsError(sendChatMessage(BOB, { gameId, text: 'GG' }), 'failed-precondition');
   });
 });
 

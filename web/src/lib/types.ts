@@ -90,6 +90,14 @@ export interface Reaction {
   at: Timestamp | null;
 }
 
+export interface ChatMessage {
+  id: string;
+  uid: string;
+  username: string;
+  text: string;
+  at: Timestamp | null;
+}
+
 export interface WeeklyWins {
   id: string;
   username: string;

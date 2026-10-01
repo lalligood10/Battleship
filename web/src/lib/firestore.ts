@@ -17,7 +17,7 @@ import { weekId } from '@shared/scoring';
 import { isReactionId } from '@shared/reactions';
 import { db } from './firebase';
 import { profileFromData } from '../state/SessionProvider';
-import type { Game, Opponent, PrivateBoard, Reaction, UserProfile, WeeklyWins } from './types';
+import type { ChatMessage, Game, Opponent, PrivateBoard, Reaction, UserProfile, WeeklyWins } from './types';
 
 export function gameFromSnapshot(snap: DocumentSnapshot<DocumentData>): Game | null {
   const d = snap.data();
@@ -96,6 +96,33 @@ export function listenReactions(gameId: string, onData: (r: Reaction[]) => void,
             };
           })
           .filter((reaction): reaction is Reaction => isReactionId(reaction.reactionId)),
+      ),
+    onError,
+  );
+}
+
+export function listenChatMessages(
+  gameId: string,
+  onData: (messages: ChatMessage[]) => void,
+  onError: (e: unknown) => void,
+): Unsubscribe {
+  const q = query(collection(db(), 'games', gameId, 'messages'), orderBy('at', 'desc'), limit(100));
+  return onSnapshot(
+    q,
+    (snap) =>
+      onData(
+        snap.docs
+          .map((message) => {
+            const data = message.data();
+            return {
+              id: message.id,
+              uid: String(data.uid ?? ''),
+              username: String(data.username ?? ''),
+              text: String(data.text ?? ''),
+              at: (data.at as ChatMessage['at'] | undefined) ?? null,
+            };
+          })
+          .reverse(),
       ),
     onError,
   );

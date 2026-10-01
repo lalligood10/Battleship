@@ -93,3 +93,6 @@ export const cancelQuickMatch = () => call<unknown>('cancelQuickMatch', {});
 
 export const sendReaction = (gameId: string, reactionId: ReactionId) =>
   call<unknown, { gameId: string; reactionId: ReactionId }>('sendReaction', { gameId, reactionId });
+
+export const sendChatMessage = (gameId: string, text: string) =>
+  call<unknown, { gameId: string; text: string }>('sendChatMessage', { gameId, text });

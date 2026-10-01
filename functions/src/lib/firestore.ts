@@ -7,6 +7,7 @@ import {
 } from 'firebase-admin/firestore';
 import type {
   GameCodeDoc,
+  ChatMessageDoc,
   GameDoc,
   OpponentDoc,
   PrivateBoardDoc,
@@ -36,6 +37,8 @@ export const refs = {
   games: () => typed<CollectionReference<GameDoc>>(db.collection('games')),
   privateBoard: (gameId: string, uid: string) =>
     typed<DocumentReference<PrivateBoardDoc>>(db.doc(`games/${gameId}/private/${uid}`)),
+  chatMessages: (gameId: string) =>
+    typed<CollectionReference<ChatMessageDoc>>(db.collection(`games/${gameId}/messages`)),
   reactions: (gameId: string) => typed<CollectionReference<ReactionDoc>>(db.collection(`games/${gameId}/reactions`)),
   gameCode: (code: string) => typed<DocumentReference<GameCodeDoc>>(db.doc(`gameCodes/${code}`)),
   weeklyWins: (weekId: string, uid: string) =>

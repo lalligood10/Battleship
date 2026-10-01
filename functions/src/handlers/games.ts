@@ -18,6 +18,7 @@ import {
 } from '../game/engine';
 import type { ShipType } from '../game/config';
 import { isBotUid } from '../game/bots';
+import { containsChatProfanity } from '../lib/username';
 import { chooseShot } from '../game/ai';
 import { isReactionId, REACTION_COOLDOWN_MS } from '../game/reactions';
 import { finishGame } from '../lib/finishGame';
@@ -490,6 +491,43 @@ export async function fireShot(uid: string, data: unknown): Promise<FireShotResu
     tx.update(refs.game(gameId), gameUpdate);
 
     return { result: outcome.result, sunkShip: outcome.sunkShip, gameOver: false, winnerUid: null };
+  });
+}
+
+// ---------- sendChatMessage ----------
+
+const CHAT_MAX_LENGTH = 240;
+const CHAT_COOLDOWN_MS = 1_000;
+
+export async function sendChatMessage(uid: string, data: unknown): Promise<void> {
+  const input = (data ?? {}) as { gameId?: unknown; text?: unknown };
+  const gameId = requireString(input.gameId, 'gameId');
+  if (typeof input.text !== 'string') throw new HttpsError('invalid-argument', 'Message is required');
+  const text = input.text.trim();
+  if (!text) throw new HttpsError('invalid-argument', 'Message is required');
+  if (text.length > CHAT_MAX_LENGTH) {
+    throw new HttpsError('invalid-argument', `Messages must be ${CHAT_MAX_LENGTH} characters or fewer`);
+  }
+  if (containsChatProfanity(text)) throw new HttpsError('invalid-argument', 'That message is not allowed');
+
+  await db.runTransaction(async (tx) => {
+    const gameRef = refs.game(gameId);
+    const game = (await tx.get(gameRef)).data();
+    if (!game) throw new HttpsError('not-found', 'Game not found');
+    requireMember(game, uid);
+    if (game.status !== 'active') throw new HttpsError('failed-precondition', 'Chat is available during active games');
+    if (game.isBotGame) throw new HttpsError('failed-precondition', 'Computer games use automated commentary');
+
+    const lastAt = game.chatLastAt?.[uid] ?? 0;
+    const now = Timestamp.now();
+    if (now.toMillis() - lastAt < CHAT_COOLDOWN_MS) {
+      throw new HttpsError('resource-exhausted', 'Wait a moment before sending another message');
+    }
+
+    const username = game.players[uid]?.username;
+    if (!username) throw new HttpsError('failed-precondition', 'Player profile is missing');
+    tx.create(refs.chatMessages(gameId).doc(), { uid, username, text, at: now });
+    tx.update(gameRef, { [`chatLastAt.${uid}`]: now.toMillis() });
   });
 }
 

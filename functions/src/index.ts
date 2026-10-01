@@ -96,6 +96,7 @@ export const cancelQuickMatch = active(quickMatch.cancelQuickMatch);
 
 // Quick-chat reactions (F5)
 export const sendReaction = active(games.sendReaction);
+export const sendChatMessage = active(games.sendChatMessage);
 
 // Push notifications on every game change (M3)
 export const onGameWritten = onDocumentWritten('games/{gameId}', async (event) => {

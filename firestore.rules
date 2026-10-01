@@ -60,6 +60,12 @@ service cloud.firestore {
         allow read: if signedIn() && request.auth.uid in get(/databases/$(database)/documents/games/$(gameId)).data.playerUids;
         allow write: if false;
       }
+
+      // In-game chat is written through a rate-limited Function and read only by both players.
+      match /messages/{id} {
+        allow read: if signedIn() && request.auth.uid in get(/databases/$(database)/documents/games/$(gameId)).data.playerUids;
+        allow write: if false;
+      }
     }
 
     // Join-code lookup happens inside the joinGame Function so codes can't be enumerated.
