@@ -53,32 +53,40 @@ export function WaitingView({ game, uid }: { game: Game; uid: string }) {
       <TopBar title="Invite a friend" back="/" />
       {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
 
-      <section className="card stack center">
-        <p className="muted">Your join code</p>
-        <button
-          type="button"
-          className="mono"
-          style={{ fontSize: 44, fontWeight: 800, letterSpacing: '0.25em', background: 'none', border: 0, color: 'inherit', cursor: 'pointer' }}
-          onClick={() => copy(game.code, 'Code')}
-          aria-label={`Join code ${game.code.split('').join(' ')}. Tap to copy.`}
-        >
-          {game.code}
-        </button>
-        <p className="muted small">Tap the code to copy it, or share the link below.</p>
-        <div className="stack">
-          <button className="btn btn--primary btn--block" onClick={share}>
-            Share invite link
+      {!game.invitedUid && (
+        <section className="card stack center">
+          <p className="muted">Your join code</p>
+          <button
+            type="button"
+            className="mono"
+            style={{ fontSize: 44, fontWeight: 800, letterSpacing: '0.25em', background: 'none', border: 0, color: 'inherit', cursor: 'pointer' }}
+            onClick={() => copy(game.code, 'Code')}
+            aria-label={`Join code ${game.code.split('').join(' ')}. Tap to copy.`}
+          >
+            {game.code}
           </button>
-          <button className="btn btn--secondary btn--block" onClick={() => copy(link, 'Link')}>
-            Copy link
-          </button>
-        </div>
-        <p className="small mono muted" style={{ wordBreak: 'break-all' }}>
-          {link}
-        </p>
-      </section>
+          <p className="muted small">Tap the code to copy it, or share the link below.</p>
+          <div className="stack">
+            <button className="btn btn--primary btn--block" onClick={share}>
+              Share invite link
+            </button>
+            <button className="btn btn--secondary btn--block" onClick={() => copy(link, 'Link')}>
+              Copy link
+            </button>
+          </div>
+          <p className="small mono muted" style={{ wordBreak: 'break-all' }}>
+            {link}
+          </p>
+        </section>
+      )}
 
-      <Spinner label="Waiting for your friend to join… this page updates automatically." />
+      <Spinner
+        label={
+          game.invitedUid
+            ? `Waiting for ${game.players[game.invitedUid]?.username ?? 'your opponent'} to accept your rematch… this page updates automatically.`
+            : 'Waiting for your friend to join… this page updates automatically.'
+        }
+      />
 
       <p className="muted small center">
         You can leave this screen — the game stays in "Your games" on the home screen until someone joins.

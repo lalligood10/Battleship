@@ -81,22 +81,31 @@ struct WaitingForOpponentView: View {
     var body: some View {
         VStack(spacing: 24) {
             Spacer()
-            Text("Send this code to a friend").font(.title3).foregroundStyle(.secondary)
-            Text(game.code)
-                .font(.system(size: 48, weight: .heavy, design: .monospaced))
-                .kerning(6)
-                .padding()
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .contextMenu { Button("Copy") { UIPasteboard.general.string = game.code } }
+            if let invitedUid = game.invitedUid {
+                Text("Waiting for \(game.players[invitedUid]?.username ?? "your opponent") to accept your rematch.")
+                    .font(.title3)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Send this code to a friend").font(.title3).foregroundStyle(.secondary)
+                Text(game.code)
+                    .font(.system(size: 48, weight: .heavy, design: .monospaced))
+                    .kerning(6)
+                    .padding()
+                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .contextMenu { Button("Copy") { UIPasteboard.general.string = game.code } }
 
-            ShareLink(item: shareURL, message: Text("Play me at Broadside! Join code \(game.code)")) {
-                Label("Share invite link", systemImage: "square.and.arrow.up")
+                ShareLink(item: shareURL, message: Text("Play me at Broadside! Join code \(game.code)")) {
+                    Label("Share invite link", systemImage: "square.and.arrow.up")
+                }
+                .buttonStyle(PrimaryButtonStyle())
             }
-            .buttonStyle(PrimaryButtonStyle())
 
             HStack(spacing: 8) {
                 ProgressView()
-                Text("Waiting for them to join… this screen updates automatically.").font(.footnote).foregroundStyle(.secondary)
+                Text(game.invitedUid == nil ? "Waiting for them to join… this screen updates automatically." : "This screen updates automatically.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             Spacer()
 

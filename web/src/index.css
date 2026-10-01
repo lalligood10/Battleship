@@ -433,6 +433,7 @@ label.field {
   animation: toast-in 0.25s ease;
   max-width: calc(100vw - 32px);
   text-align: center;
+  pointer-events: none;
 }
 .reaction-bar {
   display: flex;
@@ -623,7 +624,8 @@ label.field {
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.cell:nth-child(odd) {
+.board > [role='row']:nth-child(even) > .cell:nth-child(even),
+.board > [role='row']:nth-child(odd) > .cell:nth-child(odd) {
   background: var(--water-2);
 }
 .cell--ship {
@@ -636,6 +638,11 @@ label.field {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
   z-index: 1;
+}
+.cell:focus-visible {
+  outline: 3px solid var(--text);
+  outline-offset: -3px;
+  z-index: 2;
 }
 .cell--miss::after {
   content: '';

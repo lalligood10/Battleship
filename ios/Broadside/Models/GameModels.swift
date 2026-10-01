@@ -84,6 +84,11 @@ struct RatingChange: Codable, Hashable {
     var delta: Int
 }
 
+struct RematchInfo: Codable, Hashable {
+    let gameId: String
+    let requestedBy: String
+}
+
 struct Game: Codable, Identifiable, Hashable {
     var id: String = ""
     var code: String
@@ -98,6 +103,9 @@ struct Game: Codable, Identifiable, Hashable {
     var endReason: EndReason?
     var ratingChanges: [String: RatingChange]?
     var revealedFleets: [String: [ShipPlacement]]?
+    var rematch: RematchInfo?
+    var rematchOf: String?
+    var invitedUid: String?
     var isQuickMatch: Bool
     var abandonTimeoutMs: Double
     var createdAt: Date?
@@ -109,7 +117,8 @@ struct Game: Codable, Identifiable, Hashable {
     // `id` is the Firestore document ID, filled in after decoding – never part of the document body.
     enum CodingKeys: String, CodingKey {
         case code, status, hostUid, playerUids, players, shots, currentTurnUid, turnNumber, winnerUid, endReason
-        case ratingChanges, revealedFleets, isQuickMatch, abandonTimeoutMs, createdAt, updatedAt, startedAt, finishedAt, lastMoveAt
+        case ratingChanges, revealedFleets, rematch, rematchOf, invitedUid, isQuickMatch, abandonTimeoutMs
+        case createdAt, updatedAt, startedAt, finishedAt, lastMoveAt
     }
 
     // MARK: Convenience
