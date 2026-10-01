@@ -10,9 +10,9 @@ struct PlayerStats: Codable, Hashable {
     var longestStreak: Int = 0
 
     /// 0...1
-    var winRate: Double { gamesPlayed == 0 ? 0 : Double(wins) / Double(gamesPlayed) }
+    var winRate: Double { gamesPlayed <= 0 ? 0 : min(1, max(0, Double(wins) / Double(gamesPlayed))) }
     /// 0...1
-    var accuracy: Double { shotsFired == 0 ? 0 : Double(hits) / Double(shotsFired) }
+    var accuracy: Double { shotsFired <= 0 ? 0 : min(1, max(0, Double(hits) / Double(shotsFired))) }
 }
 
 struct UserProfile: Codable, Identifiable, Hashable {

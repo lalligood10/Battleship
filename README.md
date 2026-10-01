@@ -1,5 +1,54 @@
 # Broadside
 
+## For reviewers
+
+**Live:** https://broadside-dev.web.app. You need an account: sign in with Google, or create an
+email/password account (no email verification).
+
+**Play against the AI in 3 steps**
+1. Open the live link and choose **Create account** (or **Continue with Google**), then pick a
+   username.
+2. On Home, tap **Play vs Computer** and pick a difficulty: *Easy — Cadet Bot*, *Medium — Officer
+   Bot* or *Hard — Admiral Bot*.
+3. Place your fleet by dragging ships, or tap a ship and then a square. Use **Rotate** or
+   **Shuffle** if you like, then tap **Lock in fleet**. On each turn, tap a square in the
+   computer's waters and press **Fire**. The computer fires back right away. Sink all five of its
+   ships to win.
+
+**Architecture**
+- **The server decides every move.** The browser never works out whether a shot hit. It calls the
+  `fireShot` Cloud Function, which checks inside a Firestore transaction that you're a player, the
+  game is active, it's your turn, the cell is on the board and you haven't fired there before
+  (`functions/src/handlers/games.ts`).
+- **Ship positions stay hidden.** Each fleet is stored in `games/{id}/private/{uid}`, which
+  `firestore.rules` lets only its owner read. The shared game document holds only shot results,
+  and both fleets are revealed only once the game has finished. Clients can't write game data,
+  ratings or stats.
+- **The computer opponent runs on the server.** Its reply is resolved in the same `fireShot`
+  transaction as your shot. The AI (`functions/src/game/ai.ts`) sees only its own shot history:
+  *easy* fires at random, *medium* hunts along a line after a hit, and *hard* adds parity search
+  and skips cells that no remaining ship could fit.
+- **One rules engine.** `functions/src/game/engine.ts` (placement, hit/miss/sunk, win) is pure
+  TypeScript. The React app imports that same file through the `@shared` Vite alias, so the
+  browser and the server can't disagree about the rules.
+- **Stack.** React 19 + TypeScript + Vite on Firebase Hosting (`web/`), and Firebase Auth,
+  Firestore and Cloud Functions (`functions/`). The game updates live through Firestore
+  listeners. Games against the computer don't change your rating; Elo applies only to
+  human-vs-human games. The SwiftUI iOS app in `ios/` shares the same backend but is on hold.
+
+**Run the tests locally** (Node 22; Java 21 for the emulator tests)
+```
+npm run setup                                   # install web + functions dependencies
+npm test                                        # unit tests: functions (rules engine, AI, scoring) + web
+npm --prefix functions run test:emulator        # handler + security-rules tests against the Firestore emulator
+(cd functions && npm run lint && npm run typecheck)
+(cd web && npm run lint && npm run typecheck && npm run build)
+```
+
+**Bugs found and fixed:** [docs/BUGS.md](docs/BUGS.md)
+
+---
+
 Broadside is a web game you open in any browser — on your phone or your computer — where you and
 a friend each hide a fleet of five ships on a 10×10 grid and take turns firing at each other's
 waters. Games are played over the internet, turn by turn: you don't both need to be online at
@@ -127,8 +176,9 @@ Once the `FIREBASE_SERVICE_ACCOUNT_BROADSIDE_DEV` secret exists (§4), GitHub de
 for you: merging a change under `functions/` or to the Firestore rules runs the **Deploy Cloud
 Functions and Firestore rules** workflow. You can also run it by hand from the *Actions* tab →
 that workflow → *Run workflow*. The service account needs the *Cloud Functions Admin*, *Service
-Account User*, *Firebase Rules Admin* and *Artifact Registry Administrator* roles; if the run
-fails with a permission error, add them in the Google Cloud console → IAM.
+Account User*, *Firebase Rules Admin*, *Cloud Datastore Index Admin*, *Cloud Scheduler Admin* and
+*Artifact Registry Administrator* roles. If the run fails with a permission error, add them in the
+Google Cloud console → IAM.
 
 To deploy from your own machine instead — the same three commands every time the server code
 changes, from the repo folder:
