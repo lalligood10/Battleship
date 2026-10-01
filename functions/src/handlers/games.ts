@@ -512,13 +512,15 @@ export async function sendChatMessage(uid: string, data: unknown): Promise<void>
 
   await db.runTransaction(async (tx) => {
     const gameRef = refs.game(gameId);
-    const game = (await tx.get(gameRef)).data();
+    const chatStateRef = refs.chatState(gameId, uid);
+    const [gameSnap, chatStateSnap] = await Promise.all([tx.get(gameRef), tx.get(chatStateRef)]);
+    const game = gameSnap.data();
     if (!game) throw new HttpsError('not-found', 'Game not found');
     requireMember(game, uid);
     if (game.status !== 'active') throw new HttpsError('failed-precondition', 'Chat is available during active games');
     if (game.isBotGame) throw new HttpsError('failed-precondition', 'Computer games use automated commentary');
 
-    const lastAt = game.chatLastAt?.[uid] ?? 0;
+    const lastAt = chatStateSnap.data()?.lastAt ?? 0;
     const now = Timestamp.now();
     if (now.toMillis() - lastAt < CHAT_COOLDOWN_MS) {
       throw new HttpsError('resource-exhausted', 'Wait a moment before sending another message');
@@ -527,7 +529,7 @@ export async function sendChatMessage(uid: string, data: unknown): Promise<void>
     const username = game.players[uid]?.username;
     if (!username) throw new HttpsError('failed-precondition', 'Player profile is missing');
     tx.create(refs.chatMessages(gameId).doc(), { uid, username, text, at: now });
-    tx.update(gameRef, { [`chatLastAt.${uid}`]: now.toMillis() });
+    tx.set(chatStateRef, { lastAt: now.toMillis() });
   });
 }
 

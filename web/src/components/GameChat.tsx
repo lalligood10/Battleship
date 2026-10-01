@@ -55,8 +55,12 @@ export function GameChat({ game, uid }: { game: Game; uid: string }) {
   useEffect(() => {
     const next = commentary.slice(spokenCount.current);
     spokenCount.current = commentary.length;
-    if (next.length) speakCommentary(next.map((line) => line.text).join(' '));
-  }, [commentary]);
+    const timers = next.map((line) => {
+      const isIncomingShot = opponent ? line.id.startsWith(`${opponent}-`) : false;
+      return window.setTimeout(() => speakCommentary(line.text), isIncomingShot ? 1000 : 0);
+    });
+    return () => timers.forEach(window.clearTimeout);
+  }, [commentary, opponent]);
 
   useEffect(() => {
     if (!open) return;

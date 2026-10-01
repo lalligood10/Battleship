@@ -12,6 +12,7 @@
  *                                        clients cannot write, only Functions)
  *   games/{gameId}/reactions/{autoId}    quick-chat reactions { uid, reactionId, at } (both players read; Functions write)
  *   games/{gameId}/messages/{autoId}     active-game chat { uid, username, text, at } (both players read; Functions write)
+ *   games/{gameId}/chatState/{uid}       server-only chat rate-limit state
  *   gameCodes/{code}                     join-code lookup -> { gameId } (Functions only)
  *   weeklyWins/{weekId}/players/{uid}    wins in a calendar week (readable by signed-in users)
  *   quickMatch/{uid}                     waiting ticket for Quick Match (Functions only)
@@ -129,8 +130,6 @@ export interface GameDoc {
   finishedAt: Timestamp | null;
   /** Last time the turn changed. Drives the abandonment timeout. */
   lastMoveAt: Timestamp | null;
-  /** Server-managed chat rate-limit timestamps by player uid. */
-  chatLastAt?: Record<string, number>;
 }
 
 export interface PrivateBoardDoc {
@@ -151,6 +150,10 @@ export interface ChatMessageDoc {
   username: string;
   text: string;
   at: Timestamp;
+}
+
+export interface ChatStateDoc {
+  lastAt: number;
 }
 
 export interface GameCodeDoc {

@@ -512,10 +512,13 @@ describe('chat', () => {
   it('lets active human-game members exchange trimmed messages', async () => {
     await setupPlayers();
     const { gameId } = await startedGame();
+    const gameBefore = (await refs.game(gameId).get()).data();
 
     await sendChatMessage(ALICE, { gameId, text: '  Good luck, Bob!  ' });
 
     const messages = await refs.chatMessages(gameId).get();
+    expect((await refs.game(gameId).get()).data()).toEqual(gameBefore);
+    expect((await refs.chatState(gameId, ALICE).get()).data()?.lastAt).toEqual(expect.any(Number));
     expect(messages.docs).toHaveLength(1);
     expect(messages.docs[0]!.data()).toMatchObject({
       uid: ALICE,

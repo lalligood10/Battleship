@@ -209,6 +209,11 @@ describe('chat messages', () => {
     await assertFails(updateDoc(doc(as(ALICE), 'games', GAME, 'messages', 'm1'), { text: 'Changed' }));
     await assertFails(deleteDoc(doc(as(ALICE), 'games', GAME, 'messages', 'm1')));
   });
+
+  it('clients cannot read or write chat rate-limit state', async () => {
+    await assertFails(getDoc(doc(as(ALICE), 'games', GAME, 'chatState', ALICE)));
+    await assertFails(setDoc(doc(as(ALICE), 'games', GAME, 'chatState', ALICE), { lastAt: 0 }));
+  });
 });
 
 describe('users and leaderboards', () => {

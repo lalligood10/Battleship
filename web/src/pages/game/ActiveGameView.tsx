@@ -10,7 +10,6 @@ import { isBotGame, isMyTurn, opponentUid, shotsBy, type Game, type PrivateBoard
 import { StrikeOverlay, type StrikePhase } from '../../components/art/StrikeOverlay';
 import { fxDurationMs, strikeFxKind } from '../../game/fx';
 import { AbandonControls } from './AbandonControls';
-import { GameChat } from '../../components/GameChat';
 
 export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; board: PrivateBoard | null }) {
   const opp = opponentUid(game, uid) ?? '';
@@ -227,7 +226,6 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
         )}
       </section>
 
-      <GameChat key={game.id} game={game} uid={uid} />
       <AbandonControls game={game} uid={uid} />
       <Toast message={toast} onDone={() => setToast(null)} />
     </div>

@@ -8,6 +8,7 @@ import {
 import type {
   GameCodeDoc,
   ChatMessageDoc,
+  ChatStateDoc,
   GameDoc,
   OpponentDoc,
   PrivateBoardDoc,
@@ -39,6 +40,8 @@ export const refs = {
     typed<DocumentReference<PrivateBoardDoc>>(db.doc(`games/${gameId}/private/${uid}`)),
   chatMessages: (gameId: string) =>
     typed<CollectionReference<ChatMessageDoc>>(db.collection(`games/${gameId}/messages`)),
+  chatState: (gameId: string, uid: string) =>
+    typed<DocumentReference<ChatStateDoc>>(db.doc(`games/${gameId}/chatState/${uid}`)),
   reactions: (gameId: string) => typed<CollectionReference<ReactionDoc>>(db.collection(`games/${gameId}/reactions`)),
   gameCode: (code: string) => typed<DocumentReference<GameCodeDoc>>(db.doc(`gameCodes/${code}`)),
   weeklyWins: (weekId: string, uid: string) =>

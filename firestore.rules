@@ -66,6 +66,10 @@ service cloud.firestore {
         allow read: if signedIn() && request.auth.uid in get(/databases/$(database)/documents/games/$(gameId)).data.playerUids;
         allow write: if false;
       }
+
+      match /chatState/{uid} {
+        allow read, write: if false;
+      }
     }
 
     // Join-code lookup happens inside the joinGame Function so codes can't be enumerated.
