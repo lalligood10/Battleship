@@ -1,4 +1,5 @@
 /** Read-only Firestore access (listeners + queries). Writes always go through Cloud Functions (api.ts). */
+import type { ChatMessage } from './types';
 import {
   collection,
   doc,
@@ -13,7 +14,6 @@ import {
   type DocumentSnapshot,
   type Unsubscribe,
 } from 'firebase/firestore';
-import type { ChatMessage } from './types';
 import { weekId } from '@shared/scoring';
 import { isReactionId } from '@shared/reactions';
 import { db } from './firebase';
