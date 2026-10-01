@@ -36,6 +36,7 @@ export const checkUsername = authed(users.checkUsername);
 // Game lifecycle (M1)
 export const createGame = authed(games.createGame);
 export const joinGame = authed(games.joinGame);
+export const requestRematch = authed(games.requestRematch);
 export const cancelGame = authed(games.cancelGame);
 export const placeShips = authed(games.placeShips);
 export const fireShot = authed(games.fireShot);

@@ -65,6 +65,9 @@ export interface Game {
   isQuickMatch: boolean;
   isBotGame: boolean;
   botDifficulty: BotDifficulty | null;
+  rematch?: { gameId: string; requestedBy: string } | null;
+  rematchOf?: string | null;
+  invitedUid?: string | null;
   abandonTimeoutMs: number;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
@@ -124,6 +127,11 @@ export function isBotGame(game: Game): boolean {
   return game.isBotGame === true;
 }
 
+export function rematchState(game: Game, uid: string): 'none' | 'requested-by-me' | 'requested-by-them' {
+  if (!game.rematch) return 'none';
+  return game.rematch.requestedBy === uid ? 'requested-by-me' : 'requested-by-them';
+}
+
 export function isMyTurn(game: Game, uid: string): boolean {
   return game.status === 'active' && game.currentTurnUid === uid;
 }
@@ -148,7 +156,10 @@ export function opponentAvatar(game: Game, uid: string): string {
 
 /** One-line status shown under each game row on the home screen. */
 export function gameRowStatus(game: Game, uid: string): string {
-  if (game.status === 'waiting') return `Waiting for a friend · code ${game.code}`;
+  if (game.status === 'waiting') {
+    if (game.invitedUid) return `Rematch · waiting for ${game.players[game.invitedUid]?.username ?? 'your opponent'}`;
+    return `Waiting for a friend · code ${game.code}`;
+  }
   const attention = needsMyAction(game, uid);
   if (game.status === 'placing') {
     return attention ? 'Place your ships' : 'Waiting for opponent to place ships';

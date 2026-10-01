@@ -11,7 +11,7 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where, deleteDoc } from 'firebase/firestore';
-import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { FIRESTORE_HOST, PROJECT_ID } from './setup';
 
 const ALICE = 'uid-alice';
@@ -139,6 +139,32 @@ describe('games', () => {
     await assertFails(updateDoc(doc(as(ALICE), 'games', GAME), { currentTurnUid: BOB }));
     await assertFails(updateDoc(doc(as(ALICE), 'games', GAME), { status: 'finished', winnerUid: ALICE }));
     await assertFails(setDoc(doc(as(ALICE), 'games', 'new-game'), { playerUids: [ALICE] }));
+  });
+
+  it('keeps rematch metadata on the readable finished game and hides the waiting game from its invitee', async () => {
+    const rematchId = 'rematch-1';
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await updateDoc(doc(db, 'games', GAME), {
+        status: 'finished',
+        rematch: { gameId: rematchId, requestedBy: ALICE },
+      });
+      await setDoc(doc(db, 'games', rematchId), {
+        status: 'waiting',
+        hostUid: ALICE,
+        playerUids: [ALICE],
+        invitedUid: BOB,
+        rematchOf: GAME,
+      });
+    });
+
+    await assertFails(updateDoc(doc(as(ALICE), 'games', GAME), { rematch: { gameId: 'attacker', requestedBy: ALICE } }));
+    await assertFails(getDoc(doc(as(BOB), 'games', rematchId)));
+    await assertSucceeds(getDoc(doc(as(BOB), 'games', GAME)));
+    expect((await getDoc(doc(as(BOB), 'games', GAME))).data()?.rematch).toEqual({
+      gameId: rematchId,
+      requestedBy: ALICE,
+    });
   });
 
   it('join codes cannot be enumerated from a client', async () => {

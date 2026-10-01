@@ -14,6 +14,7 @@ import {
   fireShot,
   joinGame,
   placeShips,
+  requestRematch,
   resign,
   sendReaction,
 } from '../src/handlers/games';
@@ -480,6 +481,123 @@ describe('reactions', () => {
   });
 });
 
+describe('rematch', () => {
+  it('creates a waiting invite, is idempotent, restricts code joins, and accepts without copying game state', async () => {
+    await setupPlayers();
+    await setUsername(CAROL, { username: 'Carol' });
+    const original = await startedGame();
+    await resign(original.first, { gameId: original.gameId });
+
+    const created = await requestRematch(ALICE, { gameId: original.gameId });
+    expect(created.status).toBe('waiting');
+    const waiting = (await refs.game(created.gameId).get()).data()!;
+    expect(waiting).toMatchObject({
+      status: 'waiting',
+      hostUid: ALICE,
+      playerUids: [ALICE],
+      invitedUid: BOB,
+      rematchOf: original.gameId,
+      shots: { [ALICE]: [] },
+      revealedFleets: null,
+    });
+    expect(waiting.players[BOB]).toMatchObject({ username: 'Bob', ready: false, shotsFired: 0, hits: 0 });
+    expect((await refs.game(original.gameId).get()).data()!.rematch).toEqual({
+      gameId: created.gameId,
+      requestedBy: ALICE,
+    });
+    expect((await refs.privateBoard(created.gameId, ALICE).get()).exists).toBe(false);
+    expect((await refs.privateBoard(created.gameId, BOB).get()).exists).toBe(false);
+    expect(await requestRematch(ALICE, { gameId: original.gameId })).toEqual(created);
+    await expectHttpsError(joinGame(CAROL, { code: waiting.code }), 'permission-denied');
+
+    expect(await requestRematch(BOB, { gameId: original.gameId })).toEqual({
+      gameId: created.gameId,
+      status: 'placing',
+    });
+    const accepted = (await refs.game(created.gameId).get()).data()!;
+    expect(accepted).toMatchObject({
+      status: 'placing',
+      playerUids: [ALICE, BOB],
+      shots: { [ALICE]: [], [BOB]: [] },
+      revealedFleets: null,
+    });
+    expect((await refs.privateBoard(created.gameId, ALICE).get()).exists).toBe(false);
+    expect((await refs.privateBoard(created.gameId, BOB).get()).exists).toBe(false);
+  });
+
+  it('rejects non-members and games that have not finished', async () => {
+    await setupPlayers();
+    await setUsername(CAROL, { username: 'Carol' });
+    const active = await startedGame();
+    await expectHttpsError(requestRematch(CAROL, { gameId: active.gameId }), 'permission-denied');
+    await expectHttpsError(requestRematch(ALICE, { gameId: active.gameId }), 'failed-precondition');
+
+    const waiting = await createGame(ALICE);
+    await expectHttpsError(requestRematch(ALICE, { gameId: waiting.gameId }), 'failed-precondition');
+  });
+
+  it('allows a fresh request after the linked rematch is cancelled', async () => {
+    await setupPlayers();
+    const original = await startedGame();
+    await resign(original.first, { gameId: original.gameId });
+    const first = await requestRematch(ALICE, { gameId: original.gameId });
+    await cancelGame(ALICE, { gameId: first.gameId });
+
+    expect((await refs.game(original.gameId).get()).data()!.rematch).toBeNull();
+    const second = await requestRematch(ALICE, { gameId: original.gameId });
+    expect(second.status).toBe('waiting');
+    expect(second.gameId).not.toBe(first.gameId);
+    expect((await refs.game(first.gameId).get()).data()!.status).toBe('cancelled');
+    expect((await refs.game(original.gameId).get()).data()!.rematch).toEqual({
+      gameId: second.gameId,
+      requestedBy: ALICE,
+    });
+  });
+
+  it('allows a rematch from a Quick Match game', async () => {
+    await setupPlayers();
+    await joinQuickMatch(ALICE);
+    const paired = await joinQuickMatch(BOB);
+    const gameId = paired.gameId!;
+    await placeShips(ALICE, { gameId, ships: FLEET });
+    await placeShips(BOB, { gameId, ships: FLEET });
+    await resign(ALICE, { gameId });
+
+    const rematch = await requestRematch(BOB, { gameId });
+    const game = (await refs.game(rematch.gameId).get()).data()!;
+    expect(game).toMatchObject({ status: 'waiting', hostUid: BOB, invitedUid: ALICE, rematchOf: gameId });
+  });
+
+  it('applies Elo once when the human rematch finishes', async () => {
+    await setupPlayers();
+    const original = await startedGame();
+    await resign(original.first, { gameId: original.gameId });
+    const before = {
+      alice: (await refs.user(ALICE).get()).data()!,
+      bob: (await refs.user(BOB).get()).data()!,
+    };
+    const invite = await requestRematch(ALICE, { gameId: original.gameId });
+    await requestRematch(BOB, { gameId: original.gameId });
+    await placeShips(ALICE, { gameId: invite.gameId, ships: FLEET });
+    await placeShips(BOB, { gameId: invite.gameId, ships: FLEET });
+    await resign(ALICE, { gameId: invite.gameId });
+
+    const finished = (await refs.game(invite.gameId).get()).data()!;
+    const alice = (await refs.user(ALICE).get()).data()!;
+    const bob = (await refs.user(BOB).get()).data()!;
+    expect(finished.status).toBe('finished');
+    expect(finished.ratingChanges).not.toBeNull();
+    expect(alice.rating).toBe(finished.ratingChanges![ALICE]!.after);
+    expect(bob.rating).toBe(finished.ratingChanges![BOB]!.after);
+    expect(alice.stats.gamesPlayed).toBe(before.alice.stats.gamesPlayed + 1);
+    expect(bob.stats.gamesPlayed).toBe(before.bob.stats.gamesPlayed + 1);
+
+    await expectHttpsError(resign(ALICE, { gameId: invite.gameId }), 'failed-precondition');
+    expect((await refs.user(ALICE).get()).data()!.rating).toBe(alice.rating);
+    expect((await refs.user(BOB).get()).data()!.rating).toBe(bob.rating);
+  });
+});
+
 describe('vs computer', () => {
   const BOT = 'bot-officer';
 
@@ -511,6 +629,33 @@ describe('vs computer', () => {
     const board = (await refs.privateBoard(gameId, BOT).get()).data()!;
     expect(board.fleet).toHaveLength(5);
     expect(board.hitCells).toEqual([]);
+  });
+
+  it('creates an unrated rematch against the same bot difficulty', async () => {
+    const originalId = await botGame('hard');
+    const original = (await refs.game(originalId).get()).data()!;
+    const botUid = original.playerUids.find((uid) => uid !== ALICE)!;
+    await placeShips(ALICE, { gameId: originalId, ships: FLEET });
+    await resign(ALICE, { gameId: originalId });
+
+    const result = await requestRematch(ALICE, { gameId: originalId });
+    const rematch = (await refs.game(result.gameId).get()).data()!;
+    const rematchBotUid = rematch.playerUids.find((uid) => uid !== ALICE)!;
+    expect(result.status).toBe('placing');
+    expect(rematch).toMatchObject({
+      status: 'placing',
+      isBotGame: true,
+      botDifficulty: 'hard',
+      playerUids: [ALICE, botUid],
+      ratingChanges: null,
+      shots: { [ALICE]: [], [botUid]: [] },
+    });
+    expect(rematchBotUid).toBe(botUid);
+    expect(rematch.players[botUid]!.ready).toBe(true);
+    expect(rematch.invitedUid).toBeUndefined();
+    expect(rematch.rematchOf).toBeUndefined();
+    expect((await refs.privateBoard(result.gameId, ALICE).get()).exists).toBe(false);
+    expect((await refs.privateBoard(result.gameId, rematchBotUid).get()).exists).toBe(true);
   });
 
   it('gives the human the first turn and replies to every shot in the same transaction', async () => {

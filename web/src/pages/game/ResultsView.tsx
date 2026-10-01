@@ -3,13 +3,12 @@ import { Jet } from '../../components/art/Jet';
 import { Ship } from '../../components/art/Ship';
 import { useNavigate } from 'react-router-dom';
 import { Board } from '../../components/Board';
-import { Icon, TopBar } from '../../components/ui';
+import { Alert, Icon, TopBar } from '../../components/ui';
 import { buildMarks, markAt } from '../../game/marks';
-import * as api from '../../lib/api';
+import { requestRematch } from '../../lib/api';
 import { errorMessage } from '../../lib/errors';
-import { listenRematch, type RematchState } from '../../lib/firestore';
 import { play } from '../../lib/sound';
-import { isBotGame, opponentUid, shotsBy, type Game, type PrivateBoard } from '../../lib/types';
+import { isBotGame, opponentUid, rematchState, shotsBy, type Game, type PrivateBoard } from '../../lib/types';
 import { Reactions } from '../../components/Reactions';
 
 export function ResultsView({ game, uid, board }: { game: Game; uid: string; board: PrivateBoard | null }) {
@@ -23,6 +22,8 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
   const accuracy = me && me.shotsFired > 0 ? `${Math.round((me.hits / me.shotsFired) * 100)}%` : '–';
 
   const [fxDone, setFxDone] = useState(false);
+  const [rematchBusy, setRematchBusy] = useState(false);
+  const [rematchError, setRematchError] = useState<string | null>(null);
   useEffect(() => {
     const t = setTimeout(() => setFxDone(true), 2700);
     return () => clearTimeout(t);
@@ -40,6 +41,27 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
     () => buildMarks(shotsBy(game, opp), game.revealedFleets?.[uid] ?? board?.fleet ?? [], true),
     [game, opp, uid, board],
   );
+
+  const rematch = rematchState(game, uid);
+  const rematchLabel = botGame
+    ? 'Play again'
+    : rematch === 'requested-by-me'
+      ? 'Rematch sent · open'
+      : rematch === 'requested-by-them'
+        ? 'Accept rematch'
+        : 'Rematch';
+
+  const playRematch = async () => {
+    setRematchBusy(true);
+    setRematchError(null);
+    try {
+      const { gameId } = await requestRematch(game.id);
+      navigate(`/game/${gameId}`);
+    } catch (err) {
+      setRematchError(errorMessage(err));
+      setRematchBusy(false);
+    }
+  };
 
   let reason = '';
   switch (game.endReason) {
@@ -120,168 +142,17 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
       </section>
 
       <Reactions game={game} uid={uid} />
-      {botGame ? (
-        <BotRematch game={game} />
-      ) : (
-        opp && <HumanRematch game={game} uid={uid} opponentUid={opp} opponentName={opponentName} />
+      {game.status === 'finished' && (
+        <>
+          {rematchError && <Alert onDismiss={() => setRematchError(null)}>{rematchError}</Alert>}
+          <button className="btn btn--secondary btn--block" onClick={playRematch} disabled={rematchBusy}>
+            {rematchBusy ? <span className="spinner" /> : rematchLabel}
+          </button>
+        </>
       )}
-      <button className="btn btn--secondary btn--block" onClick={() => navigate('/')}>
+      <button className="btn btn--primary btn--block" onClick={() => navigate('/')}>
         Back to home
       </button>
     </div>
-  );
-}
-
-function BotRematch({ game }: { game: Game }) {
-  const navigate = useNavigate();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const rematch = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const { gameId } = await api.createBotGame(game.botDifficulty ?? 'medium');
-      navigate(`/game/${gameId}`);
-    } catch (err) {
-      setError(errorMessage(err));
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="stack" style={{ gap: 6 }}>
-      <button className="btn btn--primary btn--block" disabled={busy} onClick={() => void rematch()}>
-        {busy ? <span className="spinner" /> : 'Rematch'}
-      </button>
-      {error && <RematchError message={error} />}
-    </div>
-  );
-}
-
-/**
- * Rematch against a human: a direct challenge tagged with this game's id. If the opponent already
- * asked, createChallenge accepts theirs and returns the new game.
- */
-function HumanRematch({
-  game,
-  uid,
-  opponentUid,
-  opponentName,
-}: {
-  game: Game;
-  uid: string;
-  opponentUid: string;
-  opponentName: string;
-}) {
-  const navigate = useNavigate();
-  const [state, setState] = useState<RematchState>({ outgoing: null, incoming: null });
-  // Only follow a rematch that starts while this screen is open, so old results stay viewable.
-  const [follow, setFollow] = useState<boolean | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(
-    () =>
-      listenRematch(
-        uid,
-        opponentUid,
-        game.id,
-        (next) => {
-          setState(next);
-          setFollow((prev) => prev ?? !startedGameId(next));
-        },
-        (e) => setError(errorMessage(e)),
-      ),
-    [uid, opponentUid, game.id],
-  );
-
-  const started = startedGameId(state);
-  useEffect(() => {
-    if (started && follow) navigate(`/game/${started}`);
-  }, [started, follow, navigate]);
-
-  const run = async (fn: () => Promise<string | null | void>) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const gameId = await fn();
-      if (gameId) navigate(`/game/${gameId}`);
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const rematch = () => run(async () => (await api.createChallenge(opponentUid, game.id)).gameId);
-
-  const { outgoing, incoming } = state;
-  let note: string | null = null;
-  let actions;
-  if (started) {
-    actions = follow ? (
-      <button className="btn btn--primary btn--block" disabled>
-        <span className="spinner" /> Starting rematch…
-      </button>
-    ) : (
-      <button className="btn btn--primary btn--block" onClick={() => navigate(`/game/${started}`)}>
-        Open rematch
-      </button>
-    );
-  } else if (incoming?.status === 'pending') {
-    note = `${opponentName} wants a rematch!`;
-    actions = (
-      <div className="row" style={{ gap: 8 }}>
-        <button className="btn btn--primary" style={{ flex: 1 }} disabled={busy} onClick={() => void rematch()}>
-          {busy ? <span className="spinner" /> : 'Accept rematch'}
-        </button>
-        <button
-          className="btn btn--ghost"
-          disabled={busy}
-          onClick={() => void run(async () => void (await api.respondChallenge(incoming.id, false)))}
-        >
-          Decline
-        </button>
-      </div>
-    );
-  } else if (outgoing?.status === 'pending') {
-    note = `Rematch sent. Waiting for ${opponentName}…`;
-    actions = (
-      <button
-        className="btn btn--secondary btn--block"
-        disabled={busy}
-        onClick={() => void run(async () => void (await api.cancelChallenge(outgoing.id)))}
-      >
-        {busy ? <span className="spinner" /> : 'Cancel rematch'}
-      </button>
-    );
-  } else {
-    if (outgoing?.status === 'declined') note = `${opponentName} declined the rematch.`;
-    actions = (
-      <button className="btn btn--primary btn--block" disabled={busy} onClick={() => void rematch()}>
-        {busy ? <span className="spinner" /> : 'Rematch'}
-      </button>
-    );
-  }
-
-  return (
-    <div className="stack" style={{ gap: 6 }} aria-live="polite">
-      {note && <p className="muted center small">{note}</p>}
-      {actions}
-      {error && <RematchError message={error} />}
-    </div>
-  );
-}
-
-function startedGameId({ outgoing, incoming }: RematchState): string | null {
-  const accepted = [outgoing, incoming].find((c) => c?.status === 'accepted' && c.gameId);
-  return accepted?.gameId ?? null;
-}
-
-function RematchError({ message }: { message: string }) {
-  return (
-    <p className="small center" role="alert" style={{ color: 'var(--danger)' }}>
-      {message}
-    </p>
   );
 }

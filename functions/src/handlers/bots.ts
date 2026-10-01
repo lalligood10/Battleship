@@ -40,29 +40,31 @@ export interface CreateBotGameResult {
   gameId: string;
 }
 
+export async function createBotGameTx(tx: Transaction, uid: string, difficulty: BotDifficulty): Promise<string> {
+  const bot = BOT_PROFILES[difficulty];
+
+  // Reads first (transactions forbid reads after writes): user, join code, then the bot profile.
+  const host = await requireUser(uid, tx);
+  const code = await reserveJoinCode(tx);
+  const botUser = await ensureBotProfile(tx, difficulty);
+
+  const now = Timestamp.now();
+  const gameRef = refs.games().doc();
+  const base = newGameDoc(uid, host, code, now, { isQuickMatch: false });
+  const doc = { ...base, ...joinUpdate(base, bot.uid, botUser, now) };
+  doc.players[bot.uid] = { ...doc.players[bot.uid]!, ready: true };
+  doc.isBotGame = true;
+  doc.botDifficulty = difficulty;
+
+  tx.set(gameRef, doc);
+  tx.set(refs.gameCode(code), { gameId: gameRef.id, createdAt: now });
+  const board: PrivateBoardDoc = { fleet: randomFleet(), hitCells: [], updatedAt: now };
+  tx.set(refs.privateBoard(gameRef.id, bot.uid), board);
+  return gameRef.id;
+}
+
 export async function createBotGame(uid: string, data: unknown): Promise<CreateBotGameResult> {
   const difficulty = parseDifficulty((data as { difficulty?: unknown } | undefined)?.difficulty);
   if (!difficulty) throw new HttpsError('invalid-argument', 'Choose a difficulty: easy, medium or hard');
-  const bot = BOT_PROFILES[difficulty];
-
-  return db.runTransaction(async (tx) => {
-    // Reads first (transactions forbid reads after writes): user, join code, then the bot profile.
-    const host = await requireUser(uid, tx);
-    const code = await reserveJoinCode(tx);
-    const botUser = await ensureBotProfile(tx, difficulty);
-
-    const now = Timestamp.now();
-    const gameRef = refs.games().doc();
-    const base = newGameDoc(uid, host, code, now, { isQuickMatch: false });
-    const doc = { ...base, ...joinUpdate(base, bot.uid, botUser, now) };
-    doc.players[bot.uid] = { ...doc.players[bot.uid]!, ready: true };
-    doc.isBotGame = true;
-    doc.botDifficulty = difficulty;
-
-    tx.set(gameRef, doc);
-    tx.set(refs.gameCode(code), { gameId: gameRef.id, createdAt: now });
-    const board: PrivateBoardDoc = { fleet: randomFleet(), hitCells: [], updatedAt: now };
-    tx.set(refs.privateBoard(gameRef.id, bot.uid), board);
-    return { gameId: gameRef.id };
-  });
+  return db.runTransaction(async (tx) => ({ gameId: await createBotGameTx(tx, uid, difficulty) }));
 }

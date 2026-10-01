@@ -24,6 +24,7 @@ import { finishGame } from '../lib/finishGame';
 import { db, refs } from '../lib/firestore';
 import { generateJoinCode, normaliseJoinCode } from '../lib/joinCode';
 import type { GameDoc, GamePlayer, PrivateBoardDoc, UserDoc } from '../types';
+import { createBotGameTx } from './bots';
 
 // ---------- shared helpers ----------
 
@@ -60,7 +61,7 @@ export function newGameDoc(
   host: UserDoc,
   code: string,
   now: Timestamp,
-  opts: { isQuickMatch: boolean },
+  opts: { isQuickMatch: boolean; rematchOf?: string; invitedUid?: string },
 ): GameDoc {
   return {
     code,
@@ -78,6 +79,8 @@ export function newGameDoc(
     isQuickMatch: opts.isQuickMatch,
     isBotGame: false,
     botDifficulty: null,
+    ...(opts.rematchOf ? { rematchOf: opts.rematchOf } : {}),
+    ...(opts.invitedUid ? { invitedUid: opts.invitedUid } : {}),
     abandonTimeoutMs: GAME_CONFIG.ABANDON_TIMEOUT_MS,
     createdAt: now,
     updatedAt: now,
@@ -150,6 +153,9 @@ export async function joinGame(uid: string, data: unknown): Promise<JoinGameResu
     // Rejoin / host opening their own link: just hand back the id.
     if (game.playerUids.includes(uid)) return { gameId: codeDoc.gameId };
 
+    if (game.invitedUid && game.invitedUid !== uid) {
+      throw new HttpsError('permission-denied', 'Only the invited player can join this game');
+    }
     if (game.status !== 'waiting') throw new HttpsError('failed-precondition', 'That game already has two players');
     if (game.playerUids.length >= 2) throw new HttpsError('failed-precondition', 'That game is full');
 
@@ -158,20 +164,95 @@ export async function joinGame(uid: string, data: unknown): Promise<JoinGameResu
   });
 }
 
+// ---------- requestRematch ----------
+
+export interface RequestRematchResult {
+  gameId: string;
+  status: GameDoc['status'];
+}
+
+export async function requestRematch(uid: string, data: unknown): Promise<RequestRematchResult> {
+  const gameId = requireString((data as { gameId?: unknown } | undefined)?.gameId, 'gameId');
+
+  return db.runTransaction(async (tx) => {
+    const gameRef = refs.game(gameId);
+    const game = (await tx.get(gameRef)).data();
+    if (!game) throw new HttpsError('not-found', 'Game not found');
+    requireMember(game, uid);
+    if (game.status !== 'finished') throw new HttpsError('failed-precondition', 'The game is not finished');
+
+    if (game.rematch) {
+      const existingRef = refs.game(game.rematch.gameId);
+      const existing = (await tx.get(existingRef)).data();
+      if (existing && existing.status !== 'cancelled') {
+        if (game.rematch.requestedBy === uid || existing.playerUids.includes(uid)) {
+          return { gameId: game.rematch.gameId, status: existing.status };
+        }
+        if (existing.status !== 'waiting' || existing.invitedUid !== uid) {
+          throw new HttpsError('failed-precondition', 'Rematch expired');
+        }
+        const user = await requireUser(uid, tx);
+        tx.update(existingRef, joinUpdate(existing, uid, user, Timestamp.now()));
+        return { gameId: game.rematch.gameId, status: 'placing' };
+      }
+    }
+
+    if (game.isBotGame) {
+      if (!game.botDifficulty) throw new HttpsError('failed-precondition', 'Bot difficulty is missing');
+      const newGameId = await createBotGameTx(tx, uid, game.botDifficulty);
+      tx.update(gameRef, { rematch: { gameId: newGameId, requestedBy: uid } });
+      return { gameId: newGameId, status: 'placing' };
+    }
+
+    const invitedUid = opponentOf(game, uid);
+    const host = await requireUser(uid, tx);
+    const code = await reserveJoinCode(tx);
+    const now = Timestamp.now();
+    const rematchRef = refs.games().doc();
+    const rematch = newGameDoc(uid, host, code, now, {
+      isQuickMatch: false,
+      rematchOf: gameId,
+      invitedUid,
+    });
+    const invitedPlayer = game.players[invitedUid];
+    if (invitedPlayer) {
+      rematch.players[invitedUid] = {
+        username: invitedPlayer.username,
+        rating: invitedPlayer.rating,
+        ready: false,
+        sunkShips: [],
+        shotsFired: 0,
+        hits: 0,
+      };
+    }
+
+    tx.set(rematchRef, rematch);
+    tx.set(refs.gameCode(code), { gameId: rematchRef.id, createdAt: now });
+    tx.update(gameRef, { rematch: { gameId: rematchRef.id, requestedBy: uid } });
+    return { gameId: rematchRef.id, status: 'waiting' };
+  });
+}
+
 // ---------- cancelGame (host, before anyone joins) ----------
 
 export async function cancelGame(uid: string, data: unknown): Promise<void> {
   const gameId = requireString((data as { gameId?: unknown } | undefined)?.gameId, 'gameId');
   await db.runTransaction(async (tx) => {
-    const game = (await tx.get(refs.game(gameId))).data();
+    const gameRef = refs.game(gameId);
+    const game = (await tx.get(gameRef)).data();
     if (!game) throw new HttpsError('not-found', 'Game not found');
     if (game.hostUid !== uid) throw new HttpsError('permission-denied', 'Only the host can cancel');
     if (game.status !== 'waiting') {
       throw new HttpsError('failed-precondition', 'Someone already joined — use resign instead');
     }
+    const rematchOfRef = game.rematchOf ? refs.game(game.rematchOf) : null;
+    const rematchOf = rematchOfRef ? (await tx.get(rematchOfRef)).data() : undefined;
     const now = Timestamp.now();
-    tx.update(refs.game(gameId), { status: 'cancelled', finishedAt: now, updatedAt: now });
+    tx.update(gameRef, { status: 'cancelled', finishedAt: now, updatedAt: now });
     tx.delete(refs.gameCode(game.code));
+    if (rematchOfRef && rematchOf?.rematch?.gameId === gameId) {
+      tx.update(rematchOfRef, { rematch: null });
+    }
   });
 }
 
