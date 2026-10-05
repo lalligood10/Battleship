@@ -7,6 +7,7 @@ import { adminStatus, checkUsername, setUsername } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { fetchHistory } from '../lib/firestore';
 import { disablePush, enablePush, pushAvailable, pushState, type PushState } from '../lib/push';
+import { hasReplay } from '../game/replay';
 import { isBotGame, opponentUid, type Game } from '../lib/types';
 import { useSession } from '../state/SessionProvider';
 import { useTheme, type ThemePreference } from '../state/theme';
@@ -90,15 +91,15 @@ export function ProfilePage() {
           <div className="list">
             {history.map((g) => {
               const opp = opponentUid(g, uid);
+              const name = opp ? g.players[opp]?.username ?? 'Opponent' : 'Opponent';
               const won = g.winnerUid === uid;
               const delta = g.ratingChanges?.[uid]?.delta;
-              const oppName = opp ? g.players[opp]?.username ?? 'Opponent' : 'Opponent';
               return (
-                <div key={g.id} className="list-item">
-                  <Link to={`/game/${g.id}`} className="row grow" style={{ color: 'inherit', textDecoration: 'none' }}>
+                <div key={g.id} className="row" style={{ gap: 8 }}>
+                  <Link to={`/game/${g.id}`} className="list-item grow">
                     <span className={`badge ${won ? 'badge--win' : 'badge--loss'}`}>{won ? 'W' : 'L'}</span>
                     <span className="grow">
-                      <div style={{ fontWeight: 700 }}>vs {oppName}</div>
+                      <div style={{ fontWeight: 700 }}>vs {name}</div>
                       <div className="muted" style={{ fontSize: 13 }}>
                         {g.endReason === 'resign' ? 'By resignation' : g.endReason === 'timeout' ? 'By timeout' : 'Fleet destroyed'}
                         {g.finishedAt ? ` · ${g.finishedAt.toDate().toLocaleDateString()}` : ''}
@@ -106,7 +107,12 @@ export function ProfilePage() {
                     </span>
                     {delta !== undefined && <b className={delta >= 0 ? 'delta-up' : 'delta-down'}>{delta >= 0 ? `+${delta}` : delta}</b>}
                   </Link>
-                  {opp && !isBotGame(g) && <ChallengeButton opponentUid={opp} opponentName={oppName} />}
+                  {hasReplay(g) && (
+                    <Link to={`/game/${g.id}?replay=1`} className="btn btn--ghost btn--sm" aria-label={`Watch replay vs ${name}`}>
+                      Replay
+                    </Link>
+                  )}
+                  {opp && !isBotGame(g) && <ChallengeButton opponentUid={opp} opponentName={name} />}
                 </div>
               );
             })}

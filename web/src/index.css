@@ -192,6 +192,15 @@ button {
 .row--between {
   justify-content: space-between;
 }
+.replay-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.replay-scrubber {
+  width: 100%;
+}
 .stack {
   display: flex;
   flex-direction: column;

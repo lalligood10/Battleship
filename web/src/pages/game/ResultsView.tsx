@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Board } from '../../components/Board';
 import { Alert, Icon, TopBar } from '../../components/ui';
 import { buildMarks, markAt } from '../../game/marks';
+import { hasReplay } from '../../game/replay';
 import { requestRematch } from '../../lib/api';
 import { errorMessage } from '../../lib/errors';
 import { play } from '../../lib/sound';
@@ -142,6 +143,11 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
       </section>
 
       <Reactions game={game} uid={uid} />
+      {hasReplay(game) && (
+        <button className="btn btn--secondary btn--block" onClick={() => navigate(`/game/${game.id}?replay=1`)}>
+          Watch replay
+        </button>
+      )}
       {game.status === 'finished' && (
         <>
           {rematchError && <Alert onDismiss={() => setRematchError(null)}>{rematchError}</Alert>}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Alert, Empty, Spinner, TopBar } from '../components/ui';
 import { GameChat } from '../components/GameChat';
 import { errorMessage } from '../lib/errors';
@@ -9,10 +9,12 @@ import { useUid } from '../state/SessionProvider';
 import { ActiveGameView } from './game/ActiveGameView';
 import { PlacementView } from './game/PlacementView';
 import { ResultsView } from './game/ResultsView';
+import { ReplayView } from './game/ReplayView';
 import { WaitingView } from './game/WaitingView';
 
 export function GamePage() {
   const { gameId = '' } = useParams();
+  const [searchParams] = useSearchParams();
   const uid = useUid();
   const navigate = useNavigate();
   const [game, setGame] = useState<Game | null | undefined>(undefined);
@@ -80,7 +82,9 @@ export function GamePage() {
         </>
       );
     case 'finished':
-      return (
+      return searchParams.get('replay') === '1' ? (
+        <ReplayView game={game} uid={uid} board={board} />
+      ) : (
         <>
           <ResultsView game={game} uid={uid} board={board} />
           {game.isBotGame && <GameChat key={game.id} game={game} uid={uid} />}
