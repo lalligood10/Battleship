@@ -19,7 +19,9 @@ export function setSpeechEnabled(enabled: boolean) {
   if (!enabled && typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
 }
 export function speechVolume(): number {
-  const stored = Number(localStorage.getItem(SPEECH_VOLUME_KEY));
+  const value = localStorage.getItem(SPEECH_VOLUME_KEY);
+  if (value === null) return 0.8;
+  const stored = Number(value);
   return Number.isFinite(stored) && stored >= 0 && stored <= 1 ? stored : 0.8;
 }
 export function setSpeechVolume(volume: number) {
