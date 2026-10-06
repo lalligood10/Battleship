@@ -8,6 +8,7 @@ import type { ShipPlacement, Shot } from '@shared/engine';
 import type { PlayerStats } from '@shared/scoring';
 import type { BotDifficulty } from '@shared/bots';
 import type { ReactionId } from '@shared/reactions';
+import type { GameMode } from '@shared/core/schema';
 
 export type { Coordinate, ShipPlacement, Shot, ShotResult } from '@shared/engine';
 export type { ShipType } from '@shared/config';
@@ -54,6 +55,7 @@ export interface Game {
   id: string;
   code: string;
   status: GameStatus;
+  mode?: GameMode;
   hostUid: string;
   playerUids: string[];
   players: Record<string, GamePlayer>;

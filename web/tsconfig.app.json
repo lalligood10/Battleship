@@ -28,5 +28,5 @@
     "noUncheckedIndexedAccess": true
   },
   "include": ["src", "../functions/src/game"],
-  "exclude": ["../functions/src/game/*.test.ts"]
+  "exclude": ["../functions/src/game/**/*.test.ts"]
 }

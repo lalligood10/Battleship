@@ -4,9 +4,11 @@
  * treats it like any other player; its fleet lives in the usual private board doc.
  */
 import { Timestamp, type Transaction } from 'firebase-admin/firestore';
+import { randomBytes } from 'node:crypto';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { BOT_PROFILES, parseDifficulty, type BotDifficulty } from '../game/bots';
 import { randomFleet } from '../game/engine';
+import { deriveRng } from '../game/core/rng';
 import { EMPTY_STATS } from '../game/scoring';
 import { db, refs } from '../lib/firestore';
 import type { PrivateBoardDoc, UserDoc } from '../types';
@@ -60,7 +62,8 @@ export async function createBotGameTx(tx: Transaction, uid: string, difficulty: 
 
   tx.set(gameRef, doc);
   tx.set(refs.gameCode(code), { gameId: gameRef.id, createdAt: now });
-  const board: PrivateBoardDoc = { fleet: randomFleet(), hitCells: [], updatedAt: now };
+  const rngSeed = randomBytes(4).readUInt32BE(0);
+  const board: PrivateBoardDoc = { fleet: randomFleet(deriveRng(rngSeed, 'fleet')), hitCells: [], rngSeed, updatedAt: now };
   tx.set(refs.privateBoard(gameRef.id, bot.uid), board);
   return gameRef.id;
 }
