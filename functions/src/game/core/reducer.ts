@@ -1,4 +1,5 @@
 import { cellKey, isFleetDestroyed, isOnBoard, resolveShot, shotsToKeySet, validateFleet } from '../engine';
+import { isBotUid } from '../bots';
 import type { Shot } from '../engine';
 import { createEventBus, type CoreEvent } from './events';
 import { deriveRng } from './rng';
@@ -98,7 +99,16 @@ export function reduce(state: CoreState, action: CoreAction): CoreResult {
     const [first, second] = next.playerIds;
     if (next.boards[first]!.fleet && next.boards[second]!.fleet) {
       next.phase = 'playing';
-      next.currentTurn = deriveRng(next.seed, 'starting-player')() < 0.5 ? first : second;
+      const firstIsBot = isBotUid(first);
+      const secondIsBot = isBotUid(second);
+      next.currentTurn =
+        firstIsBot !== secondIsBot
+          ? firstIsBot
+            ? second
+            : first
+          : deriveRng(next.seed, 'starting-player')() < 0.5
+            ? first
+            : second;
       next.turnNumber = 1;
     }
     return { ok: true, state: next, events: [] };

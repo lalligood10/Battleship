@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BOT_PROFILES } from '../bots';
 import { createCoreState, reduce } from './reducer';
 import { createEventBus, type CoreEvent } from './events';
 import type { CoreState } from './schema';
@@ -58,6 +59,25 @@ describe('core reducer', () => {
     expect(second.ok && second.state.turnNumber).toBe(1);
     if (!second.ok) throw new Error(second.error.message);
     expect(['one', 'two']).toContain(second.state.currentTurn);
+  });
+
+  it('always starts with the human when exactly one player is a bot', () => {
+    const botUid = BOT_PROFILES.easy.uid;
+    const playerOrders: [string, string][] = [
+      ['human', botUid],
+      [botUid, 'human'],
+    ];
+    for (const seed of [0, 1, 2, 42, 12345, 0xffffffff]) {
+      for (const playerIds of playerOrders) {
+        let state = createCoreState({ playerIds, seed });
+        for (const player of playerIds) {
+          const result = reduce(state, { type: 'placeFleet', player, fleet });
+          if (!result.ok) throw new Error(result.error.message);
+          state = result.state;
+        }
+        expect(state.currentTurn).toBe('human');
+      }
+    }
   });
 
   it.each([
