@@ -40,7 +40,7 @@
 - **Callables:** `getDailyChallenge()` returns a `DailyView`. `fireDailyShot({ dateKey, row, col })` returns a `DailyView`. It rejects stale `dateKey`s, repeated cells and completed runs. The client only ever sees its own resolved shots.
 - **Scores:** written to `dailyScores/{dateKey}/players/{uid}` when a run clears. Guests can play, but they are left off the daily scoreboard until they upgrade, consistent with the other leaderboards.
 - A guest, or a signed-in player without a `users/{uid}` profile, still receives the daily completion and `daily-clear` achievement but no score row. Guests are told they aren't ranked.
-- The daily top-10 uses a collection-group index on `players`, ordered by `shots` ascending and `completedAtMs` ascending.
+- The daily top-10 uses a collection-scoped index on `dailyScores/{dateKey}/players`, ordered by `shots` ascending and `completedAtMs` ascending.
 - If `fireDailyShot` rejects a stale-day shot after 00:00 UTC or a duplicate cell fired from another tab, the page shows the error and reloads today's board.
 - The daily page reuses the shot sound, not the live-game strike or sink visual effects.
 
@@ -57,7 +57,7 @@
 | Check | Result |
 |---|---|
 | Functions lint and typecheck | Passed |
-| Functions unit tests | Passed; the retained terminal output ended before Vitest printed its file/test totals |
+| Functions unit tests | **25 files, 290 tests passed** |
 | Functions emulator tests | **14 files, 227 tests passed** |
 | Achievement simulation (`ACHIEVEMENT_SIM_GAMES=200`) | **1 file, 3 tests passed** |
 | Web lint and typecheck | Passed; lint emitted existing warnings |
