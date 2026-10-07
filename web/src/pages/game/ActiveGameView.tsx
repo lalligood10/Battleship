@@ -211,11 +211,9 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
         setError(errorMessage(err));
       } finally {
         setBusy(false);
-        if (abilityId === 'destroyer-relocate') {
-          setOwnFocus({ cell: coordinate, id: Date.now() });
-        } else {
-          setEnemyFocus({ cell: coordinate, id: Date.now() });
-        }
+        const cell = focusReturnTarget(focusContext(document.activeElement), [coordinate]);
+        if (cell && abilityId === 'destroyer-relocate') setOwnFocus({ cell, id: Date.now() });
+        else if (cell) setEnemyFocus({ cell, id: Date.now() });
       }
     },
     [abilitiesMode, abilityDisabled, horizontal, game, uid, board, myShots, director],

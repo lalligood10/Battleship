@@ -101,7 +101,7 @@ function PlacementEditor({ game }: { game: Game }) {
     const ship = shipAt(fleet, c);
     if (ship) {
       setSelected(ship.type);
-      const result = rotateSelected({ fleet, selected: ship.type, carrying });
+      const result = rotateSelected({ fleet, selected: ship.type, carrying: null });
       applyResult(result);
       return;
     }
