@@ -72,10 +72,17 @@ describe('Toast', () => {
     expect(html).toContain('role="status"');
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain('aria-atomic="true"');
+    expect(html).toContain('class="toast-region"');
+    expect(html).toContain('class="toast"');
   });
 
-  it('renders nothing without a message', () => {
-    expect(renderToStaticMarkup(createElement(Toast, { message: null, onDone: () => undefined }))).toBe('');
+  it('keeps an empty status region mounted without a message', () => {
+    const html = renderToStaticMarkup(createElement(Toast, { message: null, onDone: () => undefined }));
+    expect(html).toContain('role="status"');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('aria-atomic="true"');
+    expect(html).toContain('class="toast-region"');
+    expect(html).not.toContain('class="toast"');
   });
 });
 

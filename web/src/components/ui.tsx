@@ -48,10 +48,9 @@ export function Toast({ message, onDone, ms = 2200 }: { message: string | null; 
     const t = setTimeout(onDone, ms);
     return () => clearTimeout(t);
   }, [message, ms, onDone]);
-  if (!message) return null;
   return (
-    <div className="toast" role="status" aria-live="polite" aria-atomic="true">
-      {message}
+    <div role="status" aria-live="polite" aria-atomic="true" className="toast-region">
+      {message && <div className="toast">{message}</div>}
     </div>
   );
 }
