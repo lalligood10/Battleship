@@ -231,6 +231,10 @@
   position: relative;
   overflow: hidden;
 }
+.result-hero--lose > .fx {
+  position: static;
+  order: 1;
+}
 .result-jet {
   position: absolute;
   top: 30%;
@@ -259,11 +263,9 @@
   }
 }
 .result-ship {
-  position: absolute;
-  left: 50%;
-  bottom: 10%;
+  position: static;
   width: 90px;
-  margin-left: -45px;
+  margin: 0 auto;
   color: var(--ship);
   animation: list-sink 1.8s ease-in forwards;
 }
