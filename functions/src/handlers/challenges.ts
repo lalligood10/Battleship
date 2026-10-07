@@ -103,6 +103,7 @@ export async function createChallenge(uid: string, data: unknown): Promise<Creat
       sourceGameId ? tx.get(refs.game(sourceGameId)) : null,
       sourceGameId ? acceptedRematch(tx, sourceGameId) : null,
     ]);
+    if (me.isGuest) throw new HttpsError('failed-precondition', 'Create an account to send challenges');
     const opponent = opponentSnap.data();
     if (!opponent) throw new HttpsError('not-found', 'Player not found');
     if (opponent.isBot) throw new HttpsError('invalid-argument', 'Use Play vs Computer to play a bot');

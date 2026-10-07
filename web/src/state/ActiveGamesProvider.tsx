@@ -9,6 +9,7 @@ import { errorMessage } from '../lib/errors';
 import { listenActiveGames, listenIncomingChallenges, listenOutgoingChallenges } from '../lib/firestore';
 import { needsMyAction, type Challenge, type Game } from '../lib/types';
 import { Toast } from '../components/ui';
+import { freshTurnGames } from './resume';
 
 interface ActiveGamesValue {
   games: Game[];
@@ -41,15 +42,11 @@ export function ActiveGamesProvider({ uid, children }: { uid: string; children: 
         setLoaded(true);
         setError(null);
         // Announce games that just became my turn (skip the very first snapshot so we don't toast on load).
-        const nowMine = new Set(list.filter((g) => needsMyAction(g, uid)).map((g) => g.id));
-        const prev = previousTurns.current;
-        if (prev) {
-          const fresh = list.filter((g) => nowMine.has(g.id) && !prev.has(g.id) && g.status === 'active');
-          const first = fresh[0];
-          if (first && !location.pathname.startsWith(`/game/${first.id}`)) {
-            const opponent = Object.entries(first.players).find(([id]) => id !== uid)?.[1]?.username ?? 'Opponent';
-            setToast(`Your turn against ${opponent}`);
-          }
+        const { nowMine, fresh } = freshTurnGames(previousTurns.current, list, uid);
+        const first = fresh[0];
+        if (first && !location.pathname.startsWith(`/game/${first.id}`)) {
+          const opponent = Object.entries(first.players).find(([id]) => id !== uid)?.[1]?.username ?? 'Opponent';
+          setToast(`Your turn against ${opponent}`);
         }
         previousTurns.current = nowMine;
       },

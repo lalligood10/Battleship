@@ -28,6 +28,7 @@ export async function joinQuickMatch(uid: string, data?: unknown, now = Timestam
     const [meSnap, myTicketSnap] = await Promise.all([tx.get(refs.user(uid)), tx.get(refs.quickMatch(uid))]);
     const me = meSnap.data();
     if (!me) throw new HttpsError('failed-precondition', 'Choose a username before playing');
+    if (me.isGuest) throw new HttpsError('failed-precondition', 'Create an account to use Quick Match');
 
     const nowMs = now.toMillis();
     const freshAfterMs = nowMs - GAME_CONFIG.QUICK_MATCH_TICKET_TTL_MS;
