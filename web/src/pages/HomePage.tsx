@@ -1,10 +1,11 @@
-import { deleteDoc, doc, onSnapshot } from 'firebase/firestore';
+import { deleteDoc, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Alert, Empty, Modal, Spinner } from '../components/ui';
 import { HomeBanner } from '../components/art/HomeBanner';
 import { GameModePicker } from '../components/GameModePicker';
 import { ModeBadge } from '../components/ModeBadge';
+import { TurnTimerPicker } from '../components/TurnTimerPicker';
 import * as api from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { db } from '../lib/firebase';
@@ -23,6 +24,7 @@ import { useSession, useUid } from '../state/SessionProvider';
 import { GAME_CONFIG } from '@shared/config';
 import { GAME_MODE_OPTIONS, type GameMode } from '@shared/core/schema';
 import { useGameMode } from '../state/gameMode';
+import { quickMatchResume } from '../state/resume';
 
 export function HomePage() {
   const uid = useUid();
@@ -30,18 +32,49 @@ export function HomePage() {
   const navigate = useNavigate();
   const { games, loaded, error: listError, incomingChallenges, outgoingChallenges } = useActiveGames();
   const [code, setCode] = useState('');
+  const [turnTimerMs, setTurnTimerMs] = useState<number | null>(null);
   const [busy, setBusy] = useState<'create' | 'join' | 'quick' | 'bot' | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [quickMatching, setQuickMatching] = useState(false);
+  const [quickMatching, setQuickMatching] = useState<GameMode | null>(null);
   const [pickingComputer, setPickingComputer] = useState(false);
   const [mode, setMode] = useGameMode();
   const modeLabel = GAME_MODE_OPTIONS.find((option) => option.mode === mode)?.label ?? 'Classic';
+  const isGuest = profile?.isGuest === true;
+
+  useEffect(() => {
+    if (isGuest) return;
+    let cancelled = false;
+    const ticketRef = doc(db(), 'quickMatch', uid);
+    void getDoc(ticketRef)
+      .then((snap) => {
+        if (cancelled || !snap.exists()) return;
+        const data = snap.data();
+        const resume = quickMatchResume(
+          {
+            mode: data.mode,
+            gameId: data.gameId,
+            createdAtMs: data.createdAt?.toMillis?.() ?? null,
+          },
+          Date.now(),
+        );
+        if (resume.kind === 'matched') {
+          void deleteDoc(ticketRef).catch(() => undefined);
+          navigate(`/game/${resume.gameId}`);
+        } else if (resume.kind === 'searching') {
+          setQuickMatching(resume.mode);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [isGuest, navigate, uid]);
 
   const create = async () => {
     setBusy('create');
     setError(null);
     try {
-      const { gameId } = await api.createGame(mode);
+      const { gameId } = await api.createGame(mode, turnTimerMs);
       navigate(`/game/${gameId}`);
     } catch (err) {
       setError(errorMessage(err));
@@ -70,7 +103,7 @@ export function HomePage() {
     try {
       const { gameId } = await api.joinQuickMatch(mode);
       if (gameId) navigate(`/game/${gameId}`);
-      else setQuickMatching(true);
+      else setQuickMatching(mode);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -116,9 +149,12 @@ export function HomePage() {
             Instant game · Easy, Medium or Hard · unrated
           </p>
         </div>
-        <button className="btn btn--secondary btn--block" onClick={create} disabled={busy !== null}>
-          {busy === 'create' ? <span className="spinner" /> : 'Start a game with a friend'}
-        </button>
+        <div className="stack">
+          <TurnTimerPicker value={turnTimerMs} onChange={setTurnTimerMs} />
+          <button className="btn btn--secondary btn--block" onClick={create} disabled={busy !== null}>
+            {busy === 'create' ? <span className="spinner" /> : 'Start a game with a friend'}
+          </button>
+        </div>
         <form className="row" onSubmit={join}>
           <input
             className="input input--code grow"
@@ -139,9 +175,15 @@ export function HomePage() {
             {busy === 'join' ? <span className="spinner" /> : 'Join'}
           </button>
         </form>
-        <button className="btn btn--ghost btn--sm" onClick={quickMatch} disabled={busy !== null}>
-          {busy === 'quick' ? <span className="spinner" /> : `Quick Match · ${modeLabel}`}
-        </button>
+        {isGuest ? (
+          <Link to="/profile" className="muted small center">
+            Create an account to use Quick Match
+          </Link>
+        ) : (
+          <button className="btn btn--ghost btn--sm" onClick={quickMatch} disabled={busy !== null}>
+            {busy === 'quick' ? <span className="spinner" /> : `Quick Match · ${modeLabel}`}
+          </button>
+        )}
       </section>
 
       {(incomingChallenges.length > 0 || outgoingChallenges.length > 0) && (
@@ -181,12 +223,12 @@ export function HomePage() {
         )}
       </section>
 
-      {quickMatching && (
+      {quickMatching !== null && (
         <QuickMatchModal
           uid={uid}
-          mode={mode}
-          modeLabel={modeLabel}
-          onClose={() => setQuickMatching(false)}
+          mode={quickMatching}
+          modeLabel={GAME_MODE_OPTIONS.find((option) => option.mode === quickMatching)?.label ?? 'Classic'}
+          onClose={() => setQuickMatching(null)}
           onPlayComputer={() => setPickingComputer(true)}
         />
       )}

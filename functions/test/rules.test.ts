@@ -88,6 +88,8 @@ beforeEach(async () => {
 
 const as = (uid: string) => env.authenticatedContext(uid).firestore();
 const anon = () => env.unauthenticatedContext().firestore();
+const anonymousAuth = (uid: string) =>
+  env.authenticatedContext(uid, { firebase: { sign_in_provider: 'anonymous' } }).firestore();
 
 describe('hidden boards (anti-cheat)', () => {
   it('a player can read their own private board', async () => {
@@ -97,6 +99,13 @@ describe('hidden boards (anti-cheat)', () => {
   it('a player can NOT read the opponent private board', async () => {
     await assertFails(getDoc(doc(as(ALICE), 'games', GAME, 'private', BOB)));
     await assertFails(getDoc(doc(as(BOB), 'games', GAME, 'private', ALICE)));
+  });
+
+  it('an anonymous-auth player can read their game and private board but not the opponent board', async () => {
+    const db = anonymousAuth(ALICE);
+    await assertSucceeds(getDoc(doc(db, 'games', GAME)));
+    await assertSucceeds(getDoc(doc(db, 'games', GAME, 'private', ALICE)));
+    await assertFails(getDoc(doc(db, 'games', GAME, 'private', BOB)));
   });
 
   it('nobody can write a private board from a client', async () => {

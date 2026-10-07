@@ -4,18 +4,26 @@
  * they can be unit tested without the Functions runtime.
  */
 import { setGlobalOptions } from 'firebase-functions/v2';
-import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from './handlers/admin';
 import * as bots from './handlers/bots';
 import * as challenges from './handlers/challenges';
 import * as games from './handlers/games';
+import * as guests from './handlers/guests';
 import * as quickMatch from './handlers/quickMatch';
+import * as timers from './handlers/timers';
 import * as users from './handlers/users';
 import { refs } from './lib/firestore';
 import { cleanupStale } from './triggers/cleanup';
-import { deliver, notificationForChallenge, notificationsForChange } from './triggers/notifications';
+import { sendTurnReminders } from './triggers/reminders';
+import {
+  deliver,
+  notificationForChallenge,
+  notificationsForChallengeUpdate,
+  notificationsForChange,
+} from './triggers/notifications';
 import type { ChallengeDoc, GameDoc } from './types';
 
 setGlobalOptions({ region: 'us-central1', maxInstances: 10 });
@@ -86,6 +94,8 @@ export const fireShot = active(games.fireShot);
 export const fireSalvo = active(games.fireSalvo);
 export const useAbility = active(games.useAbility);
 export const resign = active(games.resign);
+export const claimTurnTimeout = active(timers.claimTurnTimeout);
+export const completeGuestUpgrade = authed(guests.completeGuestUpgrade);
 
 // Play vs Computer
 export const createBotGame = active(bots.createBotGame);
@@ -108,6 +118,13 @@ export const onChallengeCreated = onDocumentCreated('challenges/{challengeId}', 
   if (notification) await deliver([notification]);
 });
 
+export const onChallengeUpdated = onDocumentUpdated('challenges/{challengeId}', async (event) => {
+  const before = event.data?.before.data() as ChallengeDoc | undefined;
+  const after = event.data?.after.data() as ChallengeDoc | undefined;
+  if (!after) return;
+  await deliver(notificationsForChallengeUpdate(event.params.challengeId, before, after));
+});
+
 // Quick-chat reactions (F5)
 export const sendReaction = active(games.sendReaction);
 export const sendChatMessage = active(games.sendChatMessage);
@@ -123,4 +140,11 @@ export const onGameWritten = onDocumentWritten('games/{gameId}', async (event) =
 // Daily housekeeping (M3)
 export const cleanupStaleGames = onSchedule('every 24 hours', async () => {
   await cleanupStale();
+});
+
+export const sweepExpiredTurns = onSchedule('every 5 minutes', async () => {
+  await timers.sweepTurnTimeouts();
+});
+export const turnReminders = onSchedule('every 60 minutes', async () => {
+  await sendTurnReminders();
 });

@@ -7,9 +7,48 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
 import { logger } from 'firebase-functions/v2';
 import { isBotUid } from '../game/bots';
-import { coordinateLabel } from '../game/engine';
+import { gameModeOption, type GameMode } from '../game/core/schema';
+import type { AbilityResult } from '../game/core/modes/types';
+import { coordinateLabel, type Shot } from '../game/engine';
 import { refs } from '../lib/firestore';
 import type { ChallengeDoc, GameDoc } from '../types';
+
+/** Appends " · <mode label>" to push titles for Salvo/Abilities games; Classic stays bare. */
+export function withMode(title: string, mode: GameMode | undefined): string {
+  if (mode === 'salvo' || mode === 'abilities') return `${title} · ${gameModeOption(mode).label}`;
+  return title;
+}
+
+const cap = (name: string) => (name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1));
+const hitsWord = (n: number) => `${n} hit${n === 1 ? '' : 's'}`;
+const missesWord = (n: number) => `${n} miss${n === 1 ? '' : 'es'}`;
+const sunkIn = (shots: Shot[]) => [...new Set(shots.map((s) => s.sunkShip).filter((s): s is NonNullable<typeof s> => s != null))];
+
+function abilityBody(result: AbilityResult, oppName: string, newShots: Shot[]): string {
+  switch (result.abilityId) {
+    case 'carrier-airstrike': {
+      const hits = result.cells.filter((c) => c.result !== 'miss').length;
+      const misses = result.cells.length - hits;
+      let body = `${oppName} launched an airstrike: ${hitsWord(hits)}, ${missesWord(misses)}.`;
+      const sunk = sunkIn(newShots);
+      if (sunk.length > 0) body += ` Sank your ${sunk.map(cap).join(' and ')}.`;
+      return body;
+    }
+    case 'submarine-sonar':
+      return `${oppName} scanned near ${coordinateLabel(result.center.row, result.center.col)}.`;
+    case 'destroyer-relocate':
+      return `${oppName} moved a ship.`;
+  }
+}
+
+function volleyBody(oppName: string, newShots: Shot[]): string {
+  const hits = newShots.filter((s) => s.result !== 'miss').length;
+  if (hits === 0) return `${oppName} fired ${newShots.length} shots: all missed.`;
+  let body = `${oppName} fired ${newShots.length} shots: ${hitsWord(hits)}`;
+  const sunk = sunkIn(newShots);
+  if (sunk.length > 0) body += `, sank your ${sunk.map(cap).join(' and ')}`;
+  return `${body}.`;
+}
 
 export interface Notification {
   uid: string;
@@ -36,6 +75,37 @@ export function notificationForChallenge(challengeId: string, challenge: Challen
   };
 }
 
+export function notificationsForChallengeUpdate(
+  challengeId: string,
+  before: ChallengeDoc | undefined,
+  after: ChallengeDoc,
+): Notification[] {
+  if (before?.status !== 'pending' || isBotUid(after.fromUid)) return [];
+  if (after.status === 'accepted') {
+    const label = gameModeOption(after.mode ?? 'classic').label;
+    return [
+      {
+        uid: after.fromUid,
+        challengeId,
+        ...(after.gameId ? { gameId: after.gameId } : {}),
+        title: `${after.toUsername} accepted your ${label} challenge`,
+        body: 'Place your fleet to begin.',
+      },
+    ];
+  }
+  if (after.status === 'declined') {
+    return [
+      {
+        uid: after.fromUid,
+        challengeId,
+        title: `${after.toUsername} declined your challenge`,
+        body: 'Try Quick Match or challenge someone else.',
+      },
+    ];
+  }
+  return [];
+}
+
 function computeNotifications(gameId: string, before: GameDoc | undefined, after: GameDoc): Notification[] {
   const out: Notification[] = [];
   const name = (uid: string) => after.players[uid]?.username ?? 'Your opponent';
@@ -51,7 +121,7 @@ function computeNotifications(gameId: string, before: GameDoc | undefined, after
       out.push({
         uid: recipient,
         gameId,
-        title: `${name(after.rematch.requestedBy)} wants a rematch`,
+        title: withMode(`${name(after.rematch.requestedBy)} wants a rematch`, after.mode),
         body: 'Tap to accept.',
       });
     }
@@ -61,7 +131,12 @@ function computeNotifications(gameId: string, before: GameDoc | undefined, after
   if (before?.status === 'waiting' && after.status === 'placing') {
     const joiner = after.playerUids.find((u) => u !== after.hostUid);
     if (joiner) {
-      out.push({ uid: after.hostUid, gameId, title: `${name(joiner)} joined your game`, body: 'Place your fleet to begin.' });
+      out.push({
+        uid: after.hostUid,
+        gameId,
+        title: withMode(`${name(joiner)} joined your game`, after.mode),
+        body: 'Place your fleet to begin.',
+      });
     }
     return out;
   }
@@ -74,7 +149,12 @@ function computeNotifications(gameId: string, before: GameDoc | undefined, after
       if (!wasReady && isReady) {
         const other = after.playerUids.find((u) => u !== uid);
         if (other && after.players[other]?.ready !== true) {
-          out.push({ uid: other, gameId, title: `${name(uid)} is ready`, body: 'Place your ships to start the battle.' });
+          out.push({
+            uid: other,
+            gameId,
+            title: withMode(`${name(uid)} is ready`, after.mode),
+            body: 'Place your ships to start the battle.',
+          });
         }
       }
     }
@@ -85,17 +165,36 @@ function computeNotifications(gameId: string, before: GameDoc | undefined, after
     const me = after.currentTurnUid;
     const opp = after.playerUids.find((u) => u !== me);
     if (before?.status === 'placing') {
-      out.push({ uid: me, gameId, title: 'Battle stations!', body: `Both fleets are placed — you fire first against ${opp ? name(opp) : 'your opponent'}.` });
+      out.push({
+        uid: me,
+        gameId,
+        title: withMode('Battle stations!', after.mode),
+        body: `Both fleets are placed — you fire first against ${opp ? name(opp) : 'your opponent'}.`,
+      });
     } else if (opp) {
-      const lastShot = (after.shots[opp] ?? []).at(-1);
-      const where = lastShot ? coordinateLabel(lastShot.row, lastShot.col) : '';
-      const outcome =
-        lastShot?.result === 'sunk'
-          ? `sank your ${lastShot.sunkShip}`
-          : lastShot?.result === 'hit'
-            ? 'hit'
-            : 'missed';
-      out.push({ uid: me, gameId, title: 'Your turn', body: `${name(opp)} fired at ${where} and ${outcome}.` });
+      const oppName = name(opp);
+      const newShots = (after.shots[opp] ?? []).slice((before?.shots[opp] ?? []).length);
+      const newAbilities = (after.abilityLog ?? [])
+        .slice((before?.abilityLog ?? []).length)
+        .filter((e) => e.player === opp);
+      const title = withMode('Your turn', after.mode);
+      let body: string;
+      const lastAbility = newAbilities.at(-1);
+      if (lastAbility) {
+        body = abilityBody(lastAbility.result, oppName, newShots);
+      } else if (newShots.length > 1) {
+        body = volleyBody(oppName, newShots);
+      } else if (newShots.length === 1) {
+        const lastShot = newShots[0]!;
+        const outcome =
+          lastShot.result === 'sunk' ? `sank your ${lastShot.sunkShip}` : lastShot.result === 'hit' ? 'hit' : 'missed';
+        body = `${oppName} fired at ${coordinateLabel(lastShot.row, lastShot.col)} and ${outcome}.`;
+      } else if ((after.timeoutStreak?.[opp] ?? 0) > (before?.timeoutStreak?.[opp] ?? 0)) {
+        body = `${oppName} ran out of time.`;
+      } else {
+        body = `It's your move against ${oppName}.`;
+      }
+      out.push({ uid: me, gameId, title, body });
     }
     return out;
   }
@@ -106,13 +205,26 @@ function computeNotifications(gameId: string, before: GameDoc | undefined, after
     if (!loser) return out;
     switch (after.endReason) {
       case 'all_sunk':
-        out.push({ uid: loser, gameId, title: 'Fleet destroyed', body: `${name(winner)} sank your last ship.` });
+        out.push({
+          uid: loser,
+          gameId,
+          title: withMode('Fleet destroyed', after.mode),
+          body: `${name(winner)} sank your last ship.`,
+        });
         break;
       case 'resign':
-        out.push({ uid: winner, gameId, title: 'Victory', body: `${name(loser)} resigned.` });
+        out.push({ uid: winner, gameId, title: withMode('Victory', after.mode), body: `${name(loser)} resigned.` });
         break;
       case 'timeout':
-        out.push({ uid: loser, gameId, title: 'Game forfeited', body: `${name(winner)} claimed the win after you were inactive.` });
+        out.push({
+          uid: loser,
+          gameId,
+          title: withMode('Game forfeited', after.mode),
+          body:
+            after.turnTimerMs !== null && after.turnTimerMs !== undefined
+              ? 'You ran out of time on three turns in a row.'
+              : `${name(winner)} claimed the win after you were inactive.`,
+        });
         break;
       default:
         break;
@@ -130,7 +242,7 @@ export async function deliver(notifications: Notification[]): Promise<void> {
     const response = await getMessaging().sendEachForMulticast({
       tokens,
       notification: { title: n.title, body: n.body },
-      data: n.gameId ? { gameId: n.gameId } : n.challengeId ? { challengeId: n.challengeId } : {},
+      data: { ...(n.gameId ? { gameId: n.gameId } : {}), ...(n.challengeId ? { challengeId: n.challengeId } : {}) },
       apns: { payload: { aps: { sound: 'default', badge: 1, 'thread-id': n.gameId ?? 'challenges' } } },
     });
 

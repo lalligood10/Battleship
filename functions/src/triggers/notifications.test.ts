@@ -1,7 +1,11 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { describe, expect, it } from 'vitest';
 import type { ChallengeDoc, GameDoc, GamePlayer } from '../types';
-import { notificationForChallenge, notificationsForChange } from './notifications';
+import {
+  notificationForChallenge,
+  notificationsForChallengeUpdate,
+  notificationsForChange,
+} from './notifications';
 
 const now = Timestamp.fromMillis(1_700_000_000_000);
 const player = (username: string, ready = false): GamePlayer => ({
@@ -45,6 +49,67 @@ const joined: GameDoc = {
   shots: { host: [], guest: [] },
 };
 
+describe('notificationsForChallengeUpdate', () => {
+  const pending: ChallengeDoc = {
+    fromUid: 'host',
+    toUid: 'guest',
+    fromUsername: 'Ann',
+    toUsername: 'Bob',
+    status: 'pending',
+    sourceGameId: null,
+    gameId: null,
+    createdAt: now,
+    respondedAt: null,
+  };
+
+  it('tells the challenger when their invite is accepted', () => {
+    const after: ChallengeDoc = { ...pending, status: 'accepted', gameId: 'g9', respondedAt: now };
+    expect(notificationsForChallengeUpdate('c1', pending, after)).toEqual([
+      {
+        uid: 'host',
+        challengeId: 'c1',
+        gameId: 'g9',
+        title: 'Bob accepted your Classic challenge',
+        body: 'Place your fleet to begin.',
+      },
+    ]);
+  });
+
+  it('names the mode in the accept title and tolerates a missing gameId', () => {
+    const after: ChallengeDoc = { ...pending, mode: 'salvo', status: 'accepted', respondedAt: now };
+    expect(notificationsForChallengeUpdate('c1', pending, after)).toEqual([
+      expect.objectContaining({ uid: 'host', challengeId: 'c1', title: 'Bob accepted your Salvo challenge' }),
+    ]);
+  });
+
+  it('tells the challenger when their invite is declined', () => {
+    const after: ChallengeDoc = { ...pending, status: 'declined', respondedAt: now };
+    expect(notificationsForChallengeUpdate('c1', pending, after)).toEqual([
+      {
+        uid: 'host',
+        challengeId: 'c1',
+        title: 'Bob declined your challenge',
+        body: 'Try Quick Match or challenge someone else.',
+      },
+    ]);
+  });
+
+  it('ignores everything that did not come from a pending challenge', () => {
+    const accepted: ChallengeDoc = { ...pending, status: 'accepted', gameId: 'g9' };
+    expect(notificationsForChallengeUpdate('c1', undefined, accepted)).toEqual([]);
+    expect(notificationsForChallengeUpdate('c1', accepted, { ...accepted, respondedAt: now })).toEqual([]);
+    expect(notificationsForChallengeUpdate('c1', pending, { ...pending, status: 'cancelled' })).toEqual([]);
+    expect(notificationsForChallengeUpdate('c1', pending, { ...pending, status: 'expired' })).toEqual([]);
+  });
+
+  it('never notifies a bot challenger', () => {
+    const fromBot: ChallengeDoc = { ...pending, fromUid: 'bot-officer' };
+    const after: ChallengeDoc = { ...fromBot, status: 'accepted', gameId: 'g9' };
+    expect(notificationsForChallengeUpdate('c1', fromBot, after)).toEqual([]);
+    expect(notificationsForChallengeUpdate('c1', fromBot, { ...fromBot, status: 'declined' })).toEqual([]);
+  });
+});
+
 describe('notificationsForChange', () => {
   it('tells the host when someone joins', () => {
     const out = notificationsForChange('g1', base, joined);
@@ -83,6 +148,135 @@ describe('notificationsForChange', () => {
     ]);
   });
 
+  it('summarises a salvo volley and appends the mode to the title', () => {
+    const before: GameDoc = { ...joined, status: 'active', mode: 'salvo', currentTurnUid: 'host' };
+    const after: GameDoc = {
+      ...before,
+      currentTurnUid: 'guest',
+      shots: {
+        host: [
+          { row: 0, col: 0, result: 'hit', at: 1 },
+          { row: 0, col: 1, result: 'miss', at: 1 },
+          { row: 4, col: 0, result: 'sunk', sunkShip: 'cruiser', at: 1 },
+          { row: 4, col: 1, result: 'hit', at: 1 },
+        ],
+        guest: [],
+      },
+    };
+    expect(notificationsForChange('g1', before, after)).toEqual([
+      {
+        uid: 'guest',
+        gameId: 'g1',
+        title: 'Your turn · Salvo',
+        body: 'Ann fired 4 shots: 3 hits, sank your Cruiser.',
+      },
+    ]);
+  });
+
+  it('says all missed for a whiffed volley', () => {
+    const before: GameDoc = { ...joined, status: 'active', mode: 'salvo', currentTurnUid: 'host' };
+    const after: GameDoc = {
+      ...before,
+      currentTurnUid: 'guest',
+      shots: {
+        host: [
+          { row: 0, col: 0, result: 'miss', at: 1 },
+          { row: 1, col: 0, result: 'miss', at: 1 },
+          { row: 2, col: 0, result: 'miss', at: 1 },
+        ],
+        guest: [],
+      },
+    };
+    expect(notificationsForChange('g1', before, after)).toEqual([
+      expect.objectContaining({ body: 'Ann fired 3 shots: all missed.' }),
+    ]);
+  });
+
+  it('describes an airstrike without leaking ship positions', () => {
+    const before: GameDoc = { ...joined, status: 'active', mode: 'abilities', currentTurnUid: 'host' };
+    const after: GameDoc = {
+      ...before,
+      currentTurnUid: 'guest',
+      shots: {
+        host: [
+          { row: 8, col: 0, result: 'sunk', sunkShip: 'destroyer', at: 1 },
+          { row: 8, col: 1, result: 'sunk', sunkShip: 'destroyer', at: 1 },
+          { row: 3, col: 3, result: 'miss', at: 1 },
+        ],
+        guest: [],
+      },
+      abilityLog: [
+        {
+          player: 'host',
+          turnNumber: 1,
+          result: {
+            abilityId: 'carrier-airstrike',
+            cells: [
+              { row: 8, col: 0, result: 'sunk' },
+              { row: 8, col: 1, result: 'sunk' },
+              { row: 3, col: 3, result: 'miss' },
+            ],
+          },
+        },
+      ],
+    };
+    expect(notificationsForChange('g1', before, after)).toEqual([
+      {
+        uid: 'guest',
+        gameId: 'g1',
+        title: 'Your turn · Abilities',
+        body: 'Ann launched an airstrike: 2 hits, 1 miss. Sank your Destroyer.',
+      },
+    ]);
+  });
+
+  it('describes sonar and relocate without revealing results', () => {
+    const before: GameDoc = { ...joined, status: 'active', mode: 'abilities', currentTurnUid: 'host' };
+    const sonar: GameDoc = {
+      ...before,
+      currentTurnUid: 'guest',
+      abilityLog: [
+        { player: 'host', turnNumber: 1, result: { abilityId: 'submarine-sonar', center: { row: 4, col: 4 }, shipPresent: true } },
+      ],
+    };
+    expect(notificationsForChange('g1', before, sonar)).toEqual([
+      expect.objectContaining({ body: 'Ann scanned near E5.' }),
+    ]);
+
+    const relocate: GameDoc = {
+      ...before,
+      currentTurnUid: 'guest',
+      abilityLog: [{ player: 'host', turnNumber: 1, result: { abilityId: 'destroyer-relocate' } }],
+    };
+    expect(notificationsForChange('g1', before, relocate)).toEqual([
+      expect.objectContaining({ body: 'Ann moved a ship.' }),
+    ]);
+  });
+
+  it('reports a skipped turn when the timeout streak grows', () => {
+    const before: GameDoc = { ...joined, status: 'active', currentTurnUid: 'host', timeoutStreak: {} };
+    const after: GameDoc = { ...before, currentTurnUid: 'guest', turnNumber: 2, timeoutStreak: { host: 1 } };
+    expect(notificationsForChange('g1', before, after)).toEqual([
+      { uid: 'guest', gameId: 'g1', title: 'Your turn', body: 'Ann ran out of time.' },
+    ]);
+  });
+
+  it('falls back to a generic nudge when the turn changed without shots', () => {
+    const before: GameDoc = { ...joined, status: 'active', currentTurnUid: 'host' };
+    const after: GameDoc = { ...before, currentTurnUid: 'guest', turnNumber: 2 };
+    expect(notificationsForChange('g1', before, after)).toEqual([
+      { uid: 'guest', gameId: 'g1', title: 'Your turn', body: "It's your move against Ann." },
+    ]);
+  });
+
+  it('appends the mode suffix to game-over titles but not classic', () => {
+    const active: GameDoc = { ...joined, status: 'active', mode: 'salvo', currentTurnUid: 'host' };
+    const sunk: GameDoc = { ...active, status: 'finished', winnerUid: 'host', endReason: 'all_sunk', currentTurnUid: null };
+    expect(notificationsForChange('g1', active, sunk)).toEqual([
+      expect.objectContaining({ title: 'Fleet destroyed · Salvo' }),
+    ]);
+  });
+
   it('does not notify when nothing relevant changed', () => {
     const active: GameDoc = { ...joined, status: 'active', currentTurnUid: 'host' };
     expect(notificationsForChange('g1', active, { ...active, updatedAt: now })).toEqual([]);
@@ -97,7 +291,33 @@ describe('notificationsForChange', () => {
     expect(notificationsForChange('g1', active, resigned)).toEqual([expect.objectContaining({ uid: 'host', title: 'Victory' })]);
 
     const timeout: GameDoc = { ...sunk, endReason: 'timeout' };
-    expect(notificationsForChange('g1', active, timeout)).toEqual([expect.objectContaining({ uid: 'guest', title: 'Game forfeited' })]);
+    expect(notificationsForChange('g1', active, timeout)).toEqual([
+      expect.objectContaining({
+        uid: 'guest',
+        title: 'Game forfeited',
+        body: 'Ann claimed the win after you were inactive.',
+      }),
+    ]);
+  });
+
+  it('uses turn-timer copy for consecutive timeout forfeits', () => {
+    const active: GameDoc = { ...joined, status: 'active', currentTurnUid: 'host' };
+    const timeout: GameDoc = {
+      ...active,
+      status: 'finished',
+      winnerUid: 'host',
+      endReason: 'timeout',
+      currentTurnUid: null,
+      turnTimerMs: 60_000,
+    };
+
+    expect(notificationsForChange('g1', active, timeout)).toEqual([
+      expect.objectContaining({
+        uid: 'guest',
+        title: 'Game forfeited',
+        body: 'You ran out of time on three turns in a row.',
+      }),
+    ]);
   });
 
   it('notifies only the non-requester once when a rematch is requested', () => {

@@ -37,6 +37,7 @@ export interface UserDoc {
   suspended?: boolean;
   /** True for server-controlled bot profiles. */
   isBot?: boolean;
+  isGuest?: boolean;
   /** Bot games are unrated: humans track them here instead of `stats`/rating. */
   botStats?: PlayerStats;
   createdAt: Timestamp;
@@ -87,6 +88,7 @@ export interface GamePlayer {
   username: string;
   /** Rating when the game started (for display). */
   rating: number;
+  isGuest?: boolean;
   /** True once this player's fleet has been placed. The fleet itself lives in private/{uid}. */
   ready: boolean;
   /** Types of THIS player's ships that the opponent has sunk. */
@@ -107,6 +109,11 @@ export interface GameDoc {
   mode?: GameMode;
   /** Public ability uses in Abilities games. */
   abilityLog?: AbilityLogEntry[];
+  isRated?: boolean;
+  turnTimerMs?: number | null;
+  turnDeadline?: Timestamp | null;
+  timeoutStreak?: Record<string, number>;
+  remindedTurn?: number | null;
   hostUid: string;
   /** Exactly the uids allowed to read this document (used by security rules). */
   playerUids: string[];
@@ -186,6 +193,7 @@ export interface ChallengeDoc {
   fromUsername: string;
   toUsername: string;
   mode?: GameMode;
+  turnTimerMs?: number | null;
   status: ChallengeStatus;
   /** Finished game this challenge is a rematch of, if any. */
   sourceGameId: string | null;

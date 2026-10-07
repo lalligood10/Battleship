@@ -25,6 +25,7 @@ import type { Challenge, Game, Opponent, PrivateBoard, Reaction, UserProfile, We
 export function gameFromSnapshot(snap: DocumentSnapshot<DocumentData>): Game | null {
   const d = snap.data();
   if (!d) return null;
+  const players = (d.players as Game['players'] | undefined) ?? {};
   return {
     id: snap.id,
     code: String(d.code ?? ''),
@@ -32,9 +33,16 @@ export function gameFromSnapshot(snap: DocumentSnapshot<DocumentData>): Game | n
     mode: (d.mode as Game['mode'] | undefined) ?? 'classic',
     hostUid: String(d.hostUid ?? ''),
     playerUids: (d.playerUids as string[] | undefined) ?? [],
-    players: (d.players as Game['players'] | undefined) ?? {},
+    players: Object.fromEntries(
+      Object.entries(players).map(([uid, player]) => [uid, { ...player, isGuest: player.isGuest === true }]),
+    ),
     shots: (d.shots as Game['shots'] | undefined) ?? {},
     abilityLog: (d.abilityLog as Game['abilityLog'] | undefined) ?? [],
+    isRated: typeof d.isRated === 'boolean' ? d.isRated : undefined,
+    turnTimerMs: (d.turnTimerMs as Game['turnTimerMs'] | undefined) ?? null,
+    turnDeadline: (d.turnDeadline as Game['turnDeadline'] | undefined) ?? null,
+    timeoutStreak: (d.timeoutStreak as Game['timeoutStreak'] | undefined) ?? {},
+    remindedTurn: (d.remindedTurn as Game['remindedTurn'] | undefined) ?? null,
     currentTurnUid: (d.currentTurnUid as string | null | undefined) ?? null,
     turnNumber: Number(d.turnNumber ?? 0),
     winnerUid: (d.winnerUid as string | null | undefined) ?? null,
@@ -47,7 +55,7 @@ export function gameFromSnapshot(snap: DocumentSnapshot<DocumentData>): Game | n
     rematch: (d.rematch as Game['rematch'] | undefined) ?? null,
     rematchOf: (d.rematchOf as string | null | undefined) ?? null,
     invitedUid: (d.invitedUid as string | null | undefined) ?? null,
-    abandonTimeoutMs: Number(d.abandonTimeoutMs ?? 0),
+    abandonTimeoutMs: Number(d.abandonTimeoutMs ?? GAME_CONFIG.ABANDON_TIMEOUT_MS),
     createdAt: (d.createdAt as Game['createdAt'] | undefined) ?? null,
     updatedAt: (d.updatedAt as Game['updatedAt'] | undefined) ?? null,
     startedAt: (d.startedAt as Game['startedAt'] | undefined) ?? null,
@@ -231,6 +239,7 @@ export function challengeFromSnapshot(snap: DocumentSnapshot<DocumentData>): Cha
     fromUsername: String(d.fromUsername ?? ''),
     toUsername: String(d.toUsername ?? ''),
     mode: parseGameModeInput(d.mode) ?? 'classic',
+    turnTimerMs: (d.turnTimerMs as Challenge['turnTimerMs'] | undefined) ?? null,
     status: d.status as Challenge['status'],
     sourceGameId: (d.sourceGameId as string | null | undefined) ?? null,
     gameId: (d.gameId as string | null | undefined) ?? null,

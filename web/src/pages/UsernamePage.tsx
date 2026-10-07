@@ -3,11 +3,12 @@ import { Alert } from '../components/ui';
 import { checkUsername, setUsername } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { useSession } from '../state/SessionProvider';
+import { GUEST_SIGN_OUT_WARNING } from '../state/guest';
 
 type Check = { kind: 'idle' } | { kind: 'checking' } | { kind: 'ok' } | { kind: 'bad'; reason: string };
 
 export function UsernamePage() {
-  const { signOut } = useSession();
+  const { state, signOut } = useSession();
   const [name, setName] = useState('');
   const [check, setCheck] = useState<Check>({ kind: 'idle' });
   const [busy, setBusy] = useState(false);
@@ -51,6 +52,9 @@ export function UsernamePage() {
       <form className="card stack" onSubmit={submit}>
         <h1 className="title">Pick a username</h1>
         <p className="muted">This is how friends and the leaderboard will see you. 3–16 letters, numbers or _.</p>
+        {state.kind === 'needsUsername' && state.user.isAnonymous && (
+          <Alert kind="info">You're playing as a guest — you can save your account later.</Alert>
+        )}
         {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
         <label className="field">
           Username
@@ -73,7 +77,15 @@ export function UsernamePage() {
         <button className="btn btn--primary btn--block" type="submit" disabled={busy || check.kind !== 'ok'}>
           {busy ? <span className="spinner" /> : 'Continue'}
         </button>
-        <button className="btn btn--ghost btn--sm" type="button" onClick={() => void signOut()}>
+        <button
+          className="btn btn--ghost btn--sm"
+          type="button"
+          onClick={() => {
+            if (state.kind !== 'needsUsername' || !state.user.isAnonymous || window.confirm(GUEST_SIGN_OUT_WARNING)) {
+              void signOut();
+            }
+          }}
+        >
           Sign out
         </button>
       </form>

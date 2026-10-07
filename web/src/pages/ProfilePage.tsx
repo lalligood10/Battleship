@@ -1,15 +1,18 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { EmailAuthProvider, GoogleAuthProvider, linkWithCredential, linkWithPopup } from 'firebase/auth';
 import { Link } from 'react-router-dom';
 import { accuracyPercentage, winPercentage } from '@shared/scoring';
 import { ChallengeButton } from '../components/ChallengeButton';
 import { Alert, Empty, Spinner, TopBar } from '../components/ui';
-import { adminStatus, checkUsername, setUsername } from '../lib/api';
+import { adminStatus, checkUsername, completeGuestUpgrade, setUsername } from '../lib/api';
 import { errorMessage } from '../lib/errors';
+import { auth } from '../lib/firebase';
 import { fetchHistory } from '../lib/firestore';
 import { disablePush, enablePush, pushAvailable, pushState, type PushState } from '../lib/push';
 import { hasReplay } from '../game/replay';
 import { isBotGame, opponentUid, type Game } from '../lib/types';
 import { useSession } from '../state/SessionProvider';
+import { GUEST_SIGN_OUT_WARNING, guestUpgradeErrorMessage } from '../state/guest';
 import { useTheme, type ThemePreference } from '../state/theme';
 
 export function ProfilePage() {
@@ -18,6 +21,7 @@ export function ProfilePage() {
   const [history, setHistory] = useState<Game[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [upgradeNotice, setUpgradeNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!uid) return;
@@ -51,6 +55,9 @@ export function ProfilePage() {
           <div className="muted">Rating {profile.rating}</div>
         </div>
       </div>
+
+      {profile.isGuest && <GuestUpgradeCard onSuccess={() => setUpgradeNotice('Account saved.')} />}
+      {upgradeNotice && <Alert kind="success">{upgradeNotice}</Alert>}
 
       <UsernameSettings current={profile.username} />
 
@@ -120,10 +127,95 @@ export function ProfilePage() {
         )}
       </section>
 
-      <button className="btn btn--secondary btn--block" onClick={() => void signOut()}>
+      <button
+        className="btn btn--secondary btn--block"
+        onClick={() => {
+          if (!profile.isGuest || window.confirm(GUEST_SIGN_OUT_WARNING)) void signOut();
+        }}
+      >
         Sign out
       </button>
     </div>
+  );
+}
+
+function GuestUpgradeCard({ onSuccess }: { onSuccess: () => void }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState<'email' | 'google' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const finishUpgrade = async () => {
+    await completeGuestUpgrade();
+    onSuccess();
+  };
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy('email');
+    setError(null);
+    try {
+      await linkWithCredential(auth().currentUser!, EmailAuthProvider.credential(email.trim(), password));
+      await finishUpgrade();
+    } catch (err) {
+      setError(guestUpgradeErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const google = async () => {
+    setBusy('google');
+    setError(null);
+    try {
+      await linkWithPopup(auth().currentUser!, new GoogleAuthProvider());
+      await finishUpgrade();
+    } catch (err) {
+      setError(guestUpgradeErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <section className="card stack">
+      <h2 style={{ fontSize: 18 }}>Save your account</h2>
+      <p className="muted" style={{ margin: 0 }}>
+        Keep your name, stats and games by linking an email or Google account.
+      </p>
+      {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
+      <form className="stack" onSubmit={submit}>
+        <label className="field">
+          Email
+          <input
+            className="input"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+        </label>
+        <label className="field">
+          Password
+          <input
+            className="input"
+            type="password"
+            autoComplete="new-password"
+            minLength={6}
+            required
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </label>
+        <button className="btn btn--primary btn--block" type="submit" disabled={busy !== null}>
+          {busy === 'email' ? <span className="spinner" /> : 'Link email'}
+        </button>
+      </form>
+      <button className="btn btn--secondary btn--block" onClick={() => void google()} disabled={busy !== null}>
+        {busy === 'google' ? <span className="spinner" /> : 'Continue with Google'}
+      </button>
+    </section>
   );
 }
 

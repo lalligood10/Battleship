@@ -1,5 +1,5 @@
 // Runs before every emulator test file. Points the Admin SDK at the local Firestore emulator.
-process.env.GCLOUD_PROJECT ??= 'broadside-dev';
+process.env.GCLOUD_PROJECT ??= 'demo-broadside';
 process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
 process.env.FIREBASE_AUTH_EMULATOR_HOST ??= '127.0.0.1:9099';
 

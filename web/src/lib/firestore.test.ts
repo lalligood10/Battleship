@@ -18,4 +18,9 @@ describe('challengeFromSnapshot', () => {
   it('reads supported Abilities mode', () => {
     expect(challengeFromSnapshot(snapshot({ mode: 'abilities' }))?.mode).toBe('abilities');
   });
+
+  it('defaults a missing turn timer to off and preserves a selected timer', () => {
+    expect(challengeFromSnapshot(snapshot({}))?.turnTimerMs).toBeNull();
+    expect(challengeFromSnapshot(snapshot({ turnTimerMs: 120_000 }))?.turnTimerMs).toBe(120_000);
+  });
 });

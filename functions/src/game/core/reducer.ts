@@ -10,6 +10,7 @@ import { defaultSettings, type CoreState, type EndReason, type GameMode, type Pl
 export type CoreAction =
   | { type: 'placeFleet'; player: string; fleet: unknown; at?: number }
   | ModeAction
+  | { type: 'skipTurn'; player: string }
   | { type: 'resign'; player: string }
   | { type: 'claimTimeout'; claimant: string; now: number };
 
@@ -111,6 +112,20 @@ export function reduce(state: CoreState, action: CoreAction): CoreResult {
     next.winner = action.claimant;
     next.endReason = 'timeout';
     return { ok: true, state: next, events: [{ type: 'gameOver', winner: action.claimant, reason: 'timeout' }] };
+  }
+
+  if (action.type === 'skipTurn') {
+    if (state.phase !== 'playing') return fail('wrong_phase', 'Turns can only be skipped during play');
+    if (state.currentTurn !== action.player) return fail('not_your_turn', "It's not your turn");
+    if (isBotUid(action.player)) return fail('not_your_turn', 'Bot turns cannot be skipped');
+    const next = copyState(state);
+    next.currentTurn = otherPlayer(state, action.player);
+    next.turnNumber += 1;
+    return {
+      ok: true,
+      state: next,
+      events: [{ type: 'turnChanged', currentTurn: next.currentTurn, turnNumber: next.turnNumber }],
+    };
   }
 
   if (state.phase === 'gameOver') return fail('wrong_phase', 'This game is already over');

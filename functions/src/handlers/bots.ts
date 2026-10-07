@@ -66,10 +66,10 @@ export async function createBotGameTx(
   const now = Timestamp.now();
   const gameRef = refs.games().doc();
   const base = newGameDoc(uid, host, code, now, { isQuickMatch: false, mode });
+  base.isBotGame = true;
+  base.botDifficulty = difficulty;
   const doc = { ...base, ...joinUpdate(base, bot.uid, botUser, now) };
   doc.players[bot.uid] = { ...doc.players[bot.uid]!, ready: true };
-  doc.isBotGame = true;
-  doc.botDifficulty = difficulty;
 
   tx.set(gameRef, doc);
   tx.set(refs.gameCode(code), { gameId: gameRef.id, createdAt: now });

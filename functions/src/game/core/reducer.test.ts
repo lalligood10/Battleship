@@ -577,3 +577,53 @@ describe('core reducer', () => {
     expect(withListener).toEqual(withoutListener);
   });
 });
+
+describe('skipTurn', () => {
+  it('passes the turn, increments the turn number, and emits turnChanged', () => {
+    const state = placed();
+    const player = state.currentTurn!;
+    const nextPlayer = state.playerIds.find((uid) => uid !== player)!;
+    const result = reduce(state, { type: 'skipTurn', player });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.state.currentTurn).toBe(nextPlayer);
+    expect(result.state.turnNumber).toBe(state.turnNumber + 1);
+    expect(result.events).toEqual([
+      { type: 'turnChanged', currentTurn: nextPlayer, turnNumber: state.turnNumber + 1 },
+    ]);
+  });
+
+  it('rejects skipping outside play', () => {
+    const result = reduce(createCoreState({ playerIds: ['one', 'two'], seed: 1 }), {
+      type: 'skipTurn',
+      player: 'one',
+    });
+    expect(result).toMatchObject({ ok: false, error: { code: 'wrong_phase' } });
+  });
+
+  it('rejects skipping when it is not the player’s turn', () => {
+    const state = placed();
+    const player = state.playerIds.find((uid) => uid !== state.currentTurn)!;
+    const result = reduce(state, { type: 'skipTurn', player });
+    expect(result).toMatchObject({ ok: false, error: { code: 'not_your_turn' } });
+  });
+
+  it('rejects skipping a bot turn', () => {
+    const botUid = BOT_PROFILES.easy.uid;
+    let state = createCoreState({ playerIds: ['human', botUid], seed: 1 });
+    for (const player of state.playerIds) {
+      const result = reduce(state, { type: 'placeFleet', player, fleet });
+      if (!result.ok) throw new Error(result.error.message);
+      state = result.state;
+    }
+    state.currentTurn = botUid;
+    const result = reduce(state, { type: 'skipTurn', player: botUid });
+    expect(result).toMatchObject({ ok: false, error: { code: 'not_your_turn' } });
+  });
+
+  it('rejects a player who is not in the game', () => {
+    const result = reduce(placed(), { type: 'skipTurn', player: 'outsider' });
+    expect(result).toMatchObject({ ok: false, error: { code: 'not_player' } });
+  });
+});

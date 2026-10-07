@@ -7,10 +7,12 @@
  */
 import { onAuthStateChanged, signOut as fbSignOut, type User } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import * as api from '../lib/api';
 import { auth, db } from '../lib/firebase';
 import { errorMessage } from '../lib/errors';
 import type { UserProfile } from '../lib/types';
+import { needsGuestUpgradeFinish } from './guest';
 
 export type SessionState =
   | { kind: 'loading' }
@@ -23,6 +25,7 @@ interface SessionContextValue {
   /** Convenience: uid when signed in. */
   uid: string | null;
   profile: UserProfile | null;
+  isGuest: boolean;
   error: string | null;
   clearError: () => void;
   signOut: () => Promise<void>;
@@ -40,6 +43,7 @@ export function profileFromData(id: string, data: Record<string, unknown>): User
     leaderboardVisible: data.leaderboardVisible !== false,
     suspended: data.suspended === true,
     isBot: data.isBot === true,
+    isGuest: data.isGuest === true,
     botStats: (data.botStats as UserProfile['botStats']) ?? undefined,
     createdAt: (data.createdAt as UserProfile['createdAt']) ?? null,
     updatedAt: (data.updatedAt as UserProfile['updatedAt']) ?? null,
@@ -51,21 +55,29 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [profile, setProfile] = useState<UserProfile | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  const uid = user?.uid ?? null;
+  const uidRef = useRef<string | null>(null);
+  const guestUpgradeAttempts = useRef(new Set<string>());
 
   useEffect(() => onAuthStateChanged(auth(), (u) => setUser(u)), []);
 
   useEffect(() => {
-    if (!user) {
+    uidRef.current = uid;
+    if (!uid) {
       setProfile(undefined);
       return;
     }
     setProfile(undefined);
     return onSnapshot(
-      doc(db(), 'users', user.uid),
-      (snap) => setProfile(snap.exists() ? profileFromData(snap.id, snap.data()) : null),
-      (err) => setError(errorMessage(err)),
+      doc(db(), 'users', uid),
+      (snap) => {
+        if (uidRef.current === uid) setProfile(snap.exists() ? profileFromData(snap.id, snap.data()) : null);
+      },
+      (err) => {
+        if (uidRef.current === uid) setError(errorMessage(err));
+      },
     );
-  }, [user]);
+  }, [uid]);
 
   const state: SessionState = useMemo(() => {
     if (user === undefined) return { kind: 'loading' };
@@ -75,11 +87,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return { kind: 'ready', user, profile };
   }, [user, profile]);
 
+  useEffect(() => {
+    if (
+      state.kind !== 'ready' ||
+      !needsGuestUpgradeFinish(state.profile, state.user) ||
+      guestUpgradeAttempts.current.has(state.user.uid)
+    ) {
+      return;
+    }
+    guestUpgradeAttempts.current.add(state.user.uid);
+    void api.completeGuestUpgrade().catch((err: unknown) => setError(errorMessage(err)));
+  }, [state]);
+
   const value = useMemo<SessionContextValue>(
     () => ({
       state,
-      uid: user?.uid ?? null,
+      uid,
       profile: profile ?? null,
+      isGuest: profile?.isGuest === true,
       error,
       clearError: () => setError(null),
       signOut: async () => {
@@ -90,7 +115,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         }
       },
     }),
-    [state, user, profile, error],
+    [state, uid, profile, error],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
