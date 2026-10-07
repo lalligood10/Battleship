@@ -1,26 +1,32 @@
 import { useEffect, useMemo, useState } from 'react';
+import { isBotUid } from '@shared/bots';
 import { Jet } from '../../components/art/Jet';
 import { Ship } from '../../components/art/Ship';
 import { useNavigate } from 'react-router-dom';
 import { Board } from '../../components/Board';
+import { AchievementUnlocks } from '../../components/Achievements';
+import { HeadToHeadCard } from '../../components/HeadToHead';
 import { Alert, Icon, TopBar } from '../../components/ui';
 import { buildMarks, markAt } from '../../game/marks';
 import { hasReplay } from '../../game/replay';
 import { shouldPlayResultFx } from '../../game/resultFx';
 import { requestRematch } from '../../lib/api';
 import { errorMessage } from '../../lib/errors';
-import { isBotGame, opponentUid, rematchState, shotsBy, type Game, type PrivateBoard } from '../../lib/types';
+import { isBotGame, rematchState, shotsBy, type Game, type PrivateBoard } from '../../lib/types';
 import { Reactions } from '../../components/Reactions';
 import { MuteToggle } from '../../audio/MuteToggle';
 import { ModeBadge } from '../../components/ModeBadge';
 import { PushOptIn } from '../../components/PushOptIn';
 import { ShotHeatmapPanel } from '../../components/Heatmap/Heatmap';
 import { formatAccuracy, resultStats } from '../../game/resultStats';
+import { getHeadToHead, type HeadToHeadDoc } from '../../lib/stats';
+import { pollHeadToHeadForGame, resultsRetentionVisibility } from './resultsRetention';
 
 export function ResultsView({ game, uid, board }: { game: Game; uid: string; board: PrivateBoard | null }) {
   const navigate = useNavigate();
   const won = game.winnerUid === uid;
-  const opp = opponentUid(game, uid) ?? '';
+  const retention = resultsRetentionVisibility(game.playerUids, uid);
+  const opp = retention.opponentUid ?? '';
   const opponentName = game.players[opp]?.username ?? 'Your opponent';
   const botGame = isBotGame(game);
   const change = game.ratingChanges?.[uid];
@@ -30,11 +36,18 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
   const [fxDone, setFxDone] = useState(() => !shouldPlayResultFx(game.finishedAt?.toMillis() ?? null, Date.now()));
   const [rematchBusy, setRematchBusy] = useState(false);
   const [rematchError, setRematchError] = useState<string | null>(null);
+  const [h2hState, setH2hState] = useState<{ gameId: string; doc: HeadToHeadDoc | null } | null>(null);
+  const h2h = h2hState?.gameId === game.id ? h2hState.doc : null;
   useEffect(() => {
     if (fxDone) return;
     const t = setTimeout(() => setFxDone(true), 2700);
     return () => clearTimeout(t);
   }, [fxDone]);
+
+  useEffect(() => {
+    if (!retention.showHeadToHead || !opp || isBotUid(opp)) return;
+    return pollHeadToHeadForGame(game.id, () => getHeadToHead(uid, opp), (doc) => setH2hState({ gameId: game.id, doc }));
+  }, [game.id, opp, retention.showHeadToHead, uid]);
 
   const theirBoard = useMemo(
     () => buildMarks(shotsBy(game, uid), game.revealedFleets?.[opp] ?? [], true),
@@ -155,6 +168,7 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
           )}
         </div>
       </div>
+      {retention.showAchievementUnlocks && <AchievementUnlocks gameId={game.id} uid={uid} />}
 
       <div className="results-grid">
         <section className="results-fleets" aria-labelledby="fleets-heading">
@@ -176,6 +190,9 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
       </div>
 
       <Reactions game={game} uid={uid} />
+      {retention.showHeadToHead && !isBotUid(opp) && (
+        <HeadToHeadCard h2h={h2h} myUid={uid} opponentName={opponentName} mode={game.mode ?? 'classic'} />
+      )}
       <div className="results-actions">
         {hasReplay(game) && (
           <button className="btn btn--secondary btn--block" onClick={() => navigate(`/game/${game.id}?replay=1`)}>

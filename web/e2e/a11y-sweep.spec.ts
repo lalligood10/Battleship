@@ -1,8 +1,10 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { KNOWN_ISSUES, isBlocking, partitionFindings, type Finding } from '../src/a11y/findings';
 import { INTERACTIVE_SELECTOR, TARGET_SIZE_EXEMPT_SELECTOR, undersizedTargets, type TargetBox } from '../src/a11y/targetSize';
 
@@ -12,17 +14,21 @@ import { INTERACTIVE_SELECTOR, TARGET_SIZE_EXEMPT_SELECTOR, undersizedTargets, t
  * that are not listed in KNOWN_ISSUES; writes every finding (with exact rule ids) to the report dir.
  */
 const REPORT_DIR = process.env.A11Y_REPORT_DIR ?? 'test-results/a11y-sweep';
+const PHASE5_SCREENSHOT_DIR = process.env.PHASE5_SCREENSHOT_DIR ? path.resolve(process.env.PHASE5_SCREENSHOT_DIR) : null;
 const AUTH = 'http://127.0.0.1:9099';
+const FIRESTORE = 'http://127.0.0.1:8080/v1/projects/demo-broadside/databases/(default)/documents';
 const PROJECT = 'demo-broadside';
 const ADMIN_EMAIL = 'lalligood10@gmail.com';
 const ADMIN_PASSWORD = 'broadside-a11y-admin';
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
+const WEB_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const themes = ['dark', 'light'] as const;
 const widths = [375, 1280] as const;
+const USERNAME_DIGITS = 'bcdfghjmnv';
 
 function lettersOnly(value: string): string {
-  return value.replace(/\d/g, (digit) => 'bcdfghjkmn'[Number(digit)]!);
+  return value.replace(/\d/g, (digit) => USERNAME_DIGITS[Number(digit)]!);
 }
 
 function username(prefix: string): string {
@@ -54,6 +60,62 @@ async function ensureVerifiedAdmin(): Promise<void> {
     body: JSON.stringify({ localId, password: ADMIN_PASSWORD, emailVerified: true }),
   });
   if (!res.ok) throw new Error(`Could not verify the emulator admin account: ${res.status}`);
+}
+
+async function uidForEmail(email: string): Promise<string> {
+  const res = await fetch(`${AUTH}/identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:lookup`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer owner' },
+    body: JSON.stringify({ email: [email] }),
+  });
+  if (!res.ok) throw new Error(`Could not look up the test account: ${res.status}`);
+  const body = (await res.json()) as { users?: Array<{ localId: string }> };
+  const uid = body.users?.[0]?.localId;
+  if (!uid) throw new Error('Could not find the test account uid');
+  return uid;
+}
+
+async function patchFirestoreDocument(docPath: string, fields: Record<string, unknown>): Promise<void> {
+  const res = await fetch(`${FIRESTORE}/${docPath}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer owner' },
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(`Could not seed Firestore test data at ${docPath}: ${res.status}`);
+}
+
+async function seedAchievement(uid: string, gameId: string): Promise<void> {
+  await patchFirestoreDocument(`users/${uid}/achievements/first-victory`, {
+    unlockedAtMs: { integerValue: String(Date.now()) },
+    gameId: { stringValue: gameId },
+    dailyDateKey: { nullValue: null },
+  });
+}
+
+async function seedDailyRun(uid: string, dateKey: string, completed: boolean): Promise<void> {
+  const nowMs = Date.now();
+  await patchFirestoreDocument(`users/${uid}/dailyRuns/${dateKey}`, {
+    dateKey: { stringValue: dateKey },
+    shots: {
+      arrayValue: {
+        values: [
+          {
+            mapValue: {
+              fields: {
+                row: { integerValue: '0' },
+                col: { integerValue: '0' },
+                result: { stringValue: 'miss' },
+                at: { integerValue: String(nowMs) },
+              },
+            },
+          },
+        ],
+      },
+    },
+    sunkShips: { arrayValue: { values: [] } },
+    startedAtMs: { integerValue: String(nowMs - 1000) },
+    completedAtMs: completed ? { integerValue: String(nowMs) } : { nullValue: null },
+  });
 }
 
 class Sweep {
@@ -196,10 +258,23 @@ let setupServer: ChildProcess | undefined;
 
 async function startSetupServer(): Promise<string> {
   const url = `http://127.0.0.1:${SETUP_PORT}/`;
-  setupServer = spawn('npx', ['vite', '--port', String(SETUP_PORT), '--strictPort', '--host', '127.0.0.1'], {
-    env: { ...process.env, VITE_USE_EMULATORS: 'false', VITE_FIREBASE_API_KEY: '', VITE_FIREBASE_APP_ID: '' },
-    stdio: 'ignore',
-  });
+  setupServer = spawn(
+    process.execPath,
+    [
+      path.join(WEB_DIR, 'node_modules/vite/bin/vite.js'),
+      '--port',
+      String(SETUP_PORT),
+      '--strictPort',
+      '--host',
+      '127.0.0.1',
+    ],
+    {
+      detached: true,
+      env: { ...process.env, VITE_USE_EMULATORS: 'false', VITE_FIREBASE_API_KEY: '', VITE_FIREBASE_APP_ID: '' },
+      stdio: 'ignore',
+      cwd: WEB_DIR,
+    },
+  );
   for (let i = 0; i < 60; i++) {
     try {
       if ((await fetch(url)).ok) return url;
@@ -211,8 +286,33 @@ async function startSetupServer(): Promise<string> {
   throw new Error('Setup dev server did not start');
 }
 
-test.afterAll(() => {
-  setupServer?.kill();
+test.afterAll(async () => {
+  const server = setupServer;
+  if (!server || server.pid === undefined || server.exitCode !== null || server.signalCode !== null) return;
+
+  const exited = once(server, 'exit').then(
+    () => true,
+    () => true,
+  );
+  try {
+    process.kill(-server.pid, 'SIGTERM');
+  } catch {}
+
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const stopped = await Promise.race([
+    exited,
+    new Promise<boolean>((resolve) => {
+      timeout = setTimeout(() => resolve(false), 5000);
+    }),
+  ]);
+  if (timeout) clearTimeout(timeout);
+
+  if (!stopped) {
+    try {
+      process.kill(-server.pid, 'SIGKILL');
+    } catch {}
+    await exited;
+  }
 });
 
 test('axe + target size sweep, setup screen (no Firebase config)', async ({ browser }) => {
@@ -252,9 +352,11 @@ for (const theme of themes) {
       await expect(host.locator('main#main-content')).toBeFocused();
 
       await host.getByRole('tab', { name: 'Create account' }).click();
-      await host.getByLabel('Email').fill(`sweep-${Date.now()}-${theme}-${width}@example.test`);
+      const hostEmail = `sweep-${Date.now()}-${theme}-${width}@example.test`;
+      await host.getByLabel('Email').fill(hostEmail);
       await host.getByLabel('Password').fill('broadside-a11y-sweep');
       await host.getByRole('button', { name: 'Create account', exact: true }).click();
+      const hostUid = await uidForEmail(hostEmail);
       await pickUsername(host, 'sweephost');
       await sweep.audit(host, 'username');
       await host.getByRole('button', { name: 'Continue', exact: true }).click();
@@ -310,14 +412,50 @@ for (const theme of themes) {
       await host.getByRole('button', { name: 'Resign' }).click();
       await host.getByRole('button', { name: 'Yes, resign' }).click();
       await expect(host.getByRole('heading', { name: 'Game over' })).toBeVisible();
+      await expect(host.getByRole('heading', { name: 'Head-to-head' })).toBeVisible({ timeout: 15_000 });
+      const resultGameId = new URL(host.url()).pathname.split('/').at(-1);
+      if (!resultGameId) throw new Error('Could not read the finished game id');
+      await seedAchievement(hostUid, resultGameId);
+      await expect(host.locator('.ach-unlocks')).toBeVisible();
       await sweep.audit(host, 'game: results');
+      if (PHASE5_SCREENSHOT_DIR) {
+        mkdirSync(PHASE5_SCREENSHOT_DIR, { recursive: true });
+        await host.screenshot({
+          path: path.join(PHASE5_SCREENSHOT_DIR, `results-${theme}-${width}.png`),
+          fullPage: true,
+          style: '.tabbar, .skip-link { display: none !important; }',
+        });
+      }
+
+      const dailyDateKey = new Date().toISOString().slice(0, 10);
+      await seedDailyRun(hostUid, dailyDateKey, false);
+      await host.goto('/daily');
+      await expect(host.getByRole('heading', { name: 'Daily waters' })).toBeVisible();
+      await expect(host.locator('[data-fire-control]')).toBeVisible();
+      await sweep.audit(host, 'daily: in progress');
+
+      await seedDailyRun(hostUid, dailyDateKey, true);
+      await host.reload();
+      await expect(host.getByRole('heading', { name: 'Fleet cleared' })).toBeVisible();
+      await expect(host.getByRole('heading', { name: "Today's top 10" })).toBeVisible();
+      await sweep.audit(host, 'daily: cleared');
 
       await host.goto('/leaderboards');
       await expect(host.locator('.list-item, .empty').first()).toBeVisible();
       await sweep.audit(host, 'leaderboards');
       await host.goto('/profile');
       await expect(host.locator('.list-item, .empty').first()).toBeVisible();
-      await sweep.audit(host, 'profile');
+      await expect(host.getByRole('heading', { name: 'Achievements' })).toBeVisible();
+      await expect(host.locator('.mode-stats__list, .mode-stats .empty').first()).toBeVisible();
+      await expect(host.locator('.ach-shelf')).toBeVisible();
+      await sweep.audit(host, 'profile (mode stats + achievements)');
+      if (PHASE5_SCREENSHOT_DIR) {
+        await host.screenshot({
+          path: path.join(PHASE5_SCREENSHOT_DIR, `profile-${theme}-${width}.png`),
+          fullPage: true,
+          style: '.tabbar, .skip-link { display: none !important; }',
+        });
+      }
       const replay = host.getByRole('link', { name: /^Watch replay/ }).first();
       if (await replay.count()) {
         await replay.click();

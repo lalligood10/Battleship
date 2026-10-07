@@ -1,0 +1,80 @@
+/* Phase 5: per-mode service record (Profile). */
+.mode-stats__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.mode-stats__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+.mode-stats__since {
+  border: 1px solid var(--border);
+  color: var(--amber);
+  font-family: var(--mono);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+.mode-stats__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.mode-stats__mode {
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+.mode-stats__mode--salvo {
+  border-left-color: var(--amber);
+}
+.mode-stats__mode--abilities {
+  border-left-style: double;
+  border-left-width: 6px;
+}
+.mode-stats__mode-name {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  font-weight: 400;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+.mode-stats__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+.mode-stats__cell {
+  min-width: 0;
+}
+.mode-stats__cell dt {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.mode-stats__cell dd {
+  margin: 2px 0 0;
+  font-family: var(--mono);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+@media (min-width: 520px) {
+  .mode-stats__grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .mode-stats__cell dd {
+    font-size: var(--fs-md);
+  }
+}

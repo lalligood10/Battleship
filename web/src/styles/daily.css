@@ -1,0 +1,110 @@
+/* Phase 5 (Session B): daily challenge page. */
+.daily-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+}
+.daily-head {
+  display: grid;
+  gap: 4px;
+}
+.daily-head .game-section__title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+}
+.daily-date {
+  color: var(--amber);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.daily-reset {
+  margin: 0;
+}
+.daily-ships {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.daily-ship {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap-min);
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-2);
+}
+.daily-ship__glyph {
+  width: 1em;
+  text-align: center;
+  color: var(--accent);
+}
+.daily-ship__state {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.daily-ship--sunk {
+  border-style: dashed;
+}
+.daily-ship--sunk .grow {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.daily-ship--sunk .daily-ship__glyph,
+.daily-ship--sunk .daily-ship__state {
+  color: var(--amber);
+}
+.daily-cleared {
+  border: 1px solid var(--accent);
+}
+.daily-cleared__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: 400;
+  color: var(--accent);
+}
+.daily-cleared__score {
+  margin: 0;
+  font-size: var(--fs-lg);
+}
+.daily-cleared__score b {
+  font-size: var(--fs-2xl);
+  font-variant-numeric: tabular-nums;
+}
+.daily-top {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.daily-top__row {
+  min-height: var(--tap-min);
+  box-shadow: none;
+  background: var(--card-2);
+}
+.daily-top__row--me {
+  border: 2px solid var(--accent);
+}
+.daily-top__you {
+  margin-left: 8px;
+}
+@media (min-width: 900px) {
+  .daily-page {
+    max-width: 1040px;
+  }
+  .daily-layout {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { ChallengeButton } from '../components/ChallengeButton';
+import { HeadToHeadChip } from '../components/HeadToHead';
 import { Alert, Empty, Spinner, TopBar } from '../components/ui';
 import { errorMessage } from '../lib/errors';
 import { fetchFriendsLeaderboard, fetchGlobalLeaderboard, fetchWeeklyLeaderboard } from '../lib/firestore';
+import { getHeadToHead, type HeadToHeadDoc } from '../lib/stats';
 import { useUid } from '../state/SessionProvider';
 
 type Tab = 'global' | 'weekly' | 'friends';
@@ -12,6 +14,8 @@ interface Row {
   username: string;
   primary: number;
   secondary: string;
+  /** Friends tab only: my head-to-head record with this player (null when none is tracked yet). */
+  h2h?: HeadToHeadDoc | null;
 }
 
 export function LeaderboardsPage() {
@@ -40,13 +44,19 @@ export function LeaderboardsPage() {
             primary: w.wins,
             secondary: `Rating ${w.rating}`,
           }));
-        case 'friends':
-          return (await fetchFriendsLeaderboard(uid)).map((u) => ({
+        case 'friends': {
+          const friends = await fetchFriendsLeaderboard(uid);
+          const records = await Promise.all(
+            friends.map((u) => (u.id === uid ? Promise.resolve(null) : getHeadToHead(uid, u.id).catch(() => null))),
+          );
+          return friends.map((u, i) => ({
             id: u.id,
             username: u.username,
             primary: u.rating,
             secondary: `${u.stats.wins}W · ${u.stats.losses}L`,
+            h2h: records[i] ?? null,
           }));
+        }
       }
     };
     load()
@@ -99,7 +109,15 @@ export function LeaderboardsPage() {
                   {r.username}
                   {r.id === uid && <span className="leaderboard__you"> (you)</span>}
                 </div>
-                <div className="muted leaderboard__meta">{r.secondary}</div>
+                <div className="muted leaderboard__meta">
+                  {r.secondary}
+                  {tab === 'friends' && r.id !== uid && (
+                    <>
+                      {' '}
+                      <HeadToHeadChip h2h={r.h2h ?? null} myUid={uid} opponentName={r.username} />
+                    </>
+                  )}
+                </div>
               </span>
               <span className="leaderboard__score">
                 <b className="mono">{r.primary}</b>
