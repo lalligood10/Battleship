@@ -63,6 +63,12 @@ export async function sendTurnReminders(now: Timestamp = Timestamp.now()): Promi
       logger.warn('Turn reminder failed for game', { gameId: snap.id, error });
     }
   }
-  await deliver(notifications);
+  for (const notification of notifications) {
+    try {
+      await deliver([notification]);
+    } catch (error) {
+      logger.warn('Turn reminder delivery failed', { gameId: notification.gameId, error });
+    }
+  }
   return notifications.length;
 }
