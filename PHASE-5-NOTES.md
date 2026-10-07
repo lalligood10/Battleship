@@ -38,9 +38,9 @@
 - **Seed:** the first call of the day creates the seed with `crypto.randomInt` in a transaction and stores `{ seed, fleet: dailyFleet(seed, dateKey) }` at `dailyChallengesPrivate/{dateKey}`, which is server-only. Every player that day therefore plays the same board, and the fleet can't be derived from the public repo.
 - **Format:** solo. You fire at the hidden fleet until everything is sunk. Score = shots taken, and lower is better. Each player gets one run per day. A run persists across reloads and can be resumed any time that UTC day.
 - **Callables:** `getDailyChallenge()` returns a `DailyView`. `fireDailyShot({ dateKey, row, col })` returns a `DailyView`. It rejects stale `dateKey`s, repeated cells and completed runs. The client only ever sees its own resolved shots.
-- **Scores:** written to `dailyScores/{dateKey}/players/{uid}` when a run clears. Guests can play, but they are left off the daily scoreboard until they upgrade, consistent with the other leaderboards.
-- A guest, or a signed-in player without a `users/{uid}` profile, still receives the daily completion and `daily-clear` achievement but no score row. Guests are told they aren't ranked.
-- The daily top-10 uses a collection-scoped index on `dailyScores/{dateKey}/players`, ordered by `shots` ascending and `completedAtMs` ascending.
+- **Scores:** written to `dailyScores/{dateKey}/players/{uid}` when a run clears. Guest profiles can play and earn `daily-clear`, but aren't ranked until they upgrade. An upgrade publishes today's completed run to the scoreboard.
+- A username profile is required to use the daily challenge, as for games. Upgrades publish only today's completed guest score; past days aren't backfilled. Guests are told they aren't ranked.
+- The daily top-10 uses a Firestore composite index on collection `players` (`shots` ASC, `completedAtMs` ASC) for `dailyScores/{dateKey}/players`.
 - If `fireDailyShot` rejects a stale-day shot after 00:00 UTC or a duplicate cell fired from another tab, the page shows the error and reloads today's board.
 - The daily page reuses the shot sound, not the live-game strike or sink visual effects.
 
@@ -57,14 +57,15 @@
 | Check | Result |
 |---|---|
 | Functions lint and typecheck | Passed |
-| Functions unit tests | **25 files, 290 tests passed** |
-| Functions emulator tests | **14 files, 227 tests passed** |
+| Functions unit tests | **25 files, 291 tests passed** |
+| Functions emulator tests | **14 files, 230 tests passed** |
 | Achievement simulation (`ACHIEVEMENT_SIM_GAMES=200`) | **1 file, 3 tests passed** |
-| Web lint and typecheck | Passed; lint emitted existing warnings |
-| Web unit tests | **53 files, 355 tests passed** |
-| Web build | Passed |
-| Full Browser visual QA | **15 tests passed in 197 seconds** |
-| Final screenshot sweep | **5 tests passed in 115 seconds** |
+| Web lint and typecheck | Passed; lint emitted 21 existing warnings |
+| Web unit tests | **53 files, 356 tests passed** |
+| Web build | Passed; emitted the large-bundle warning |
+| Full Browser visual QA (before review fixes) | **15 tests passed in 197 seconds** |
+| Final screenshot sweep (before review fixes) | **5 tests passed in 115 seconds** |
+| Profile history overflow, 375px | Reported baseline: row `345/328px` scroll/client width. After fix: page `375/375px` and row `343/343px` in dark and light; Replay and Challenge buttons are both 44px tall. |
 
 Achievement simulation output (qualifying player-games; first unlocks):
 
@@ -73,6 +74,10 @@ Achievement simulation output (qualifying player-games; first unlocks):
 - Abilities: `{"first-victory":168,"last-ship-standing":104,"full-arsenal":286,"admiral-slayer":10}`; `{"first-victory":2,"last-ship-standing":2,"full-arsenal":2,"admiral-slayer":1}`.
 
 Results and Profile were captured and visually inspected at 375px and 1280px in dark and light themes. No content overlap or contrast issue was found. The full-page screenshot capture hides the fixed tab bar and focus-only skip link so they do not obscure the screens being reviewed; the accessibility assertions run before capture.
+
+The 375px overflow check used the Profile history row markup with the production tokens, base and screen stylesheets. The before values are from the reported browser-test baseline; after screenshots: `/home/ubuntu/deliverables/phase5-screens/profile-history-375-dark-after.png` and `/home/ubuntu/deliverables/phase5-screens/profile-history-375-light-after.png`. Both were visually inspected.
+
+The emulator run passed despite emitting the non-blocking `MetadataLookupWarning: received unexpected error = All promises were rejected code = ETIMEDOUT, ENOTFOUND`.
 
 ## Known limitations / deferred
 

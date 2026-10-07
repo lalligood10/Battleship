@@ -34,6 +34,7 @@ export async function processGameEnd(
   if (!record) return null;
   const recordRef = db.doc(RETENTION_PATHS.gameEnd(gameId));
   if (!(await recordRef.get()).exists) await recordRef.set(record);
+  const failedConsumers: GameEndConsumerId[] = [];
   for (const consumer of consumers) {
     try {
       await db.runTransaction(async (tx) => {
@@ -43,8 +44,12 @@ export async function processGameEnd(
         tx.create(marker, { appliedAtMs: nowMs });
       });
     } catch (err) {
+      failedConsumers.push(consumer.id);
       logger.error('game-end consumer failed', { gameId, consumer: consumer.id, err: String(err) });
     }
+  }
+  if (failedConsumers.length > 0) {
+    throw new Error(`Game-end consumers failed: ${failedConsumers.join(', ')}`);
   }
   return record;
 }

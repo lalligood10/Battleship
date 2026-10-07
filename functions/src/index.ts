@@ -97,7 +97,7 @@ export const fireSalvo = active(games.fireSalvo);
 export const useAbility = active(games.useAbility);
 export const resign = active(games.resign);
 export const claimTurnTimeout = active(timers.claimTurnTimeout);
-export const completeGuestUpgrade = authed(guests.completeGuestUpgrade);
+export const completeGuestUpgrade = authed((uid) => guests.completeGuestUpgrade(uid));
 
 // Play vs Computer
 export const createBotGame = active(bots.createBotGame);
@@ -114,9 +114,9 @@ export const createChallenge = authed(challenges.createChallenge);
 export const respondChallenge = authed(challenges.respondChallenge);
 export const cancelChallenge = authed(challenges.cancelChallenge);
 
-// Phase 5 daily challenge (guests included)
-export const getDailyChallenge = authed((uid, data) => daily.getDailyChallenge(uid, data));
-export const fireDailyShot = authed((uid, data) => daily.fireDailyShot(uid, data));
+// Phase 5 daily challenge (users with profiles, including guests)
+export const getDailyChallenge = active((uid, data) => daily.getDailyChallenge(uid, data));
+export const fireDailyShot = active((uid, data) => daily.fireDailyShot(uid, data));
 
 export const onChallengeCreated = onDocumentCreated('challenges/{challengeId}', async (event) => {
   const challenge = event.data?.data() as ChallengeDoc | undefined;
@@ -144,7 +144,7 @@ export const onGameWritten = onDocumentWritten('games/{gameId}', async (event) =
 });
 
 // Phase 5: stats, head-to-head and achievements, once per finished game
-export const onGameFinished = onDocumentUpdated('games/{gameId}', async (event) => {
+export const onGameFinished = onDocumentUpdated({ document: 'games/{gameId}', retry: true }, async (event) => {
   const before = event.data?.before.data() as GameDoc | undefined;
   const after = event.data?.after.data() as GameDoc | undefined;
   if (!after || !isFinishTransition(before, after)) return;

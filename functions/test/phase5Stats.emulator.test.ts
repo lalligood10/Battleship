@@ -5,7 +5,9 @@ import type { Shot } from '../src/game/engine';
 import { setUsername } from '../src/handlers/users';
 import { db, refs } from '../src/lib/firestore';
 import { processGameEnd } from '../src/triggers/gameEnd';
+import { achievementsConsumer } from '../src/triggers/gameEnd/achievements';
 import { headToHeadConsumer, statsConsumer } from '../src/triggers/gameEnd/stats';
+import type { GameEndConsumer } from '../src/triggers/gameEnd';
 import type { GameDoc, GamePlayer } from '../src/types';
 import { clearFirestore } from './setup';
 
@@ -92,6 +94,32 @@ describe('Phase 5 stats + head-to-head consumers', () => {
     const first = { a: await stats(ALICE), b: await stats(BOB), h: await h2h() };
     await processGameEnd('g1', finishedGame(), CONSUMERS, NOW + 5_000);
     expect({ a: await stats(ALICE), b: await stats(BOB), h: await h2h() }).toEqual(first);
+  });
+
+  it('retries failed consumers without reapplying successful consumers', async () => {
+    let attempts = 0;
+    const flakyHeadToHead: GameEndConsumer = {
+      ...headToHeadConsumer,
+      apply: async (tx, record, game, nowMs) => {
+        attempts += 1;
+        if (attempts === 1) throw new Error('temporary failure');
+        await headToHeadConsumer.apply(tx, record, game, nowMs);
+      },
+    };
+    const consumers = [statsConsumer, flakyHeadToHead, achievementsConsumer];
+
+    await expect(processGameEnd('g-retry', finishedGame(), consumers, NOW)).rejects.toThrow('headToHead');
+    expect((await stats(ALICE))!.pvp.classic.gamesPlayed).toBe(1);
+    expect((await db.doc(RETENTION_PATHS.gameEndApplied('g-retry', 'stats')).get()).exists).toBe(true);
+    expect((await db.doc(RETENTION_PATHS.gameEndApplied('g-retry', 'achievements')).get()).exists).toBe(true);
+    expect((await db.doc(RETENTION_PATHS.gameEndApplied('g-retry', 'headToHead')).get()).exists).toBe(false);
+    expect((await db.doc(RETENTION_PATHS.headToHead(ALICE, BOB)).get()).exists).toBe(false);
+
+    await processGameEnd('g-retry', finishedGame(), consumers, NOW);
+    expect(attempts).toBe(2);
+    expect((await stats(ALICE))!.pvp.classic.gamesPlayed).toBe(1);
+    expect((await h2h())!.gamesPlayed).toBe(1);
+    expect((await db.doc(RETENTION_PATHS.gameEndApplied('g-retry', 'headToHead')).get()).exists).toBe(true);
   });
 
   it('accumulates a rematch chain with the winner reversed', async () => {

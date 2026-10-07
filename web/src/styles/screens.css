@@ -531,15 +531,32 @@
 }
 .history-row {
   gap: var(--space-2);
+  min-width: 0;
 }
 .history-row__link {
   border: 1px solid var(--border);
+  min-width: 0;
+}
+.history-row__link > .grow {
+  min-width: 0;
+}
+.history-row__name,
+.history-row__meta {
+  overflow-wrap: anywhere;
 }
 .history-row__name {
   font-weight: 700;
 }
 .history-row__meta {
   font-size: var(--fs-xs);
+}
+@media (max-width: 480px) {
+  .history-row {
+    flex-wrap: wrap;
+  }
+  .history-row__link {
+    flex: 1 1 100%;
+  }
 }
 
 /* Leaderboards ------------------------------------------------------------------------------ */

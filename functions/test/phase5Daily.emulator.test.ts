@@ -4,12 +4,14 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { cellsOf } from '../src/game/engine';
 import { RETENTION_PATHS, dailyDateKey, type DailyChallengePrivateDoc, type DailyView } from '../src/game/analytics/contract';
 import { ensureDailyChallenge, fireDailyShot, getDailyChallenge } from '../src/handlers/daily';
+import { fireDailyShot as fireDailyShotCallable } from '../src/index';
 import { db } from '../src/lib/firestore';
 import { clearFirestore } from './setup';
 
 const ALICE = 'uid-p5d-alice';
 const BOB = 'uid-p5d-bob';
 const GUEST = 'uid-p5d-guest';
+const SUSPENDED = 'uid-p5d-suspended';
 const DAY1 = Date.UTC(2026, 9, 7, 12);
 const DAY2 = Date.UTC(2026, 9, 8, 9);
 const KEY1 = dailyDateKey(DAY1);
@@ -45,6 +47,7 @@ beforeEach(async () => {
   await db.doc(`users/${ALICE}`).set({ username: 'DailyAlice' });
   await db.doc(`users/${BOB}`).set({ username: 'DailyBob' });
   await db.doc(`users/${GUEST}`).set({ username: 'Guest-1234', isGuest: true });
+  await db.doc(`users/${SUSPENDED}`).set({ username: 'SuspendedDaily', suspended: true });
 });
 
 describe('getDailyChallenge', () => {
@@ -80,6 +83,14 @@ describe('getDailyChallenge', () => {
 });
 
 describe('fireDailyShot', () => {
+  it('rejects suspended profiles at the callable boundary', async () => {
+    const request = {
+      auth: { uid: SUSPENDED, token: {} },
+      data: { dateKey: KEY1, row: 0, col: 0 },
+    } as Parameters<typeof fireDailyShotCallable.run>[0];
+    await expectError(fireDailyShotCallable.run(request), 'permission-denied');
+  });
+
   it('two users get identical results on the same cells, and responses never carry the fleet', async () => {
     await getDailyChallenge(ALICE, {}, DAY1);
     const cells = [

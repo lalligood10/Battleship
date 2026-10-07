@@ -1,5 +1,5 @@
 /** Daily challenge: one shared hidden fleet per UTC day, solo, fewest shots wins. */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Board } from '../components/Board';
 import { Alert, Spinner, TopBar } from '../components/ui';
@@ -7,6 +7,7 @@ import { alreadyShot, buildMarks, coordLabel, markAt } from '../game/marks';
 import { SHIP_NAMES, type Coordinate } from '../game/placement';
 import {
   dailyCounts,
+  dailyDateKey,
   dailyStatus,
   dailyStatusText,
   fetchDailyScore,
@@ -14,6 +15,7 @@ import {
   fetchTodayRun,
   fireDailyShot,
   getDailyChallenge,
+  msUntilNextMinute,
   timeUntilReset,
   type DailyScoreRow,
   type DailyStatus,
@@ -35,7 +37,8 @@ export function DailyPage() {
   const [target, setTarget] = useState<Coordinate | null>(null);
   const [busy, setBusy] = useState(false);
   const [announcement, setAnnouncement] = useState('');
-  const [openedAtMs] = useState(() => Date.now());
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const reloadedForDate = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -54,6 +57,31 @@ export function DailyPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let timer = 0;
+    const updateAtNextMinute = () => {
+      timer = window.setTimeout(() => {
+        setNowMs(Date.now());
+        updateAtNextMinute();
+      }, msUntilNextMinute(Date.now()));
+    };
+    updateAtNextMinute();
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const currentDateKey = dailyDateKey(nowMs);
+  const viewDateKey = view?.dateKey;
+  useEffect(() => {
+    if (!viewDateKey || viewDateKey === currentDateKey) {
+      reloadedForDate.current = null;
+      return;
+    }
+    if (reloadedForDate.current === currentDateKey) return;
+    reloadedForDate.current = currentDateKey;
+    setTarget(null);
+    void load();
+  }, [currentDateKey, load, viewDateKey]);
 
   const marks = useMemo(() => buildMarks(view?.shots ?? []), [view]);
   const cleared = view?.completedAtMs != null;
@@ -116,7 +144,7 @@ export function DailyPage() {
               Daily waters <span className="mono daily-date">{view.dateKey}</span>
             </h2>
             <p className="daily-reset muted small">
-              Same board for everyone. Resets at 00:00 UTC (in {timeUntilReset(openedAtMs)}).
+              Same board for everyone. Resets at 00:00 UTC (in {timeUntilReset(nowMs)}).
             </p>
           </div>
           <Board

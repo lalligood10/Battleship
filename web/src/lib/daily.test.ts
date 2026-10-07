@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import type { Shot } from '@shared/engine';
 import { DailyCardView } from '../pages/DailyPage';
-import { dailyCounts, dailyStatus, dailyStatusText, rankScores, scoreFromData, timeUntilReset, type DailyScoreRow } from './daily';
+import { dailyCounts, dailyStatus, dailyStatusText, msUntilNextMinute, rankScores, scoreFromData, timeUntilReset, type DailyScoreRow } from './daily';
 
 const shot = (result: Shot['result']): Shot => ({ row: 0, col: 0, result, at: 0 });
 
@@ -56,6 +56,14 @@ describe('timeUntilReset and counts', () => {
   it('counts shots and hits', () => {
     expect(dailyCounts({ shots: [shot('miss'), shot('hit'), shot('sunk'), shot('miss')] })).toEqual({ shots: 4, hits: 2, accuracy: 50 });
     expect(dailyCounts({ shots: [] }).accuracy).toBe(0);
+  });
+});
+
+describe('msUntilNextMinute', () => {
+  it('returns the delay to the next minute boundary', () => {
+    expect(msUntilNextMinute(Date.UTC(2026, 9, 7, 18, 48))).toBe(60_000);
+    expect(msUntilNextMinute(Date.UTC(2026, 9, 7, 18, 48, 45, 500))).toBe(14_500);
+    expect(msUntilNextMinute(Date.UTC(2026, 9, 7, 18, 48, 59, 999))).toBe(1);
   });
 });
 

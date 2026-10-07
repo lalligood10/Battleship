@@ -93,6 +93,10 @@ export function timeUntilReset(nowMs: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+export function msUntilNextMinute(nowMs: number): number {
+  return 60_000 - (nowMs % 60_000);
+}
+
 export function dailyCounts(view: Pick<DailyView, 'shots'>): { shots: number; hits: number; accuracy: number } {
   const shots = view.shots.length;
   const hits = view.shots.filter((s) => s.result !== 'miss').length;

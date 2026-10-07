@@ -222,6 +222,16 @@ describe('applyRecordToHeadToHead', () => {
     expect(h1.gamesPlayed).toBe(1);
   });
 
+  it('keeps the newest game fields when an earlier game is applied later', () => {
+    const earlier = record({}, 'game-a');
+    const later = record({ winnerUid: 'bob', finishedAt: ts(99_000) }, 'game-b');
+    const h = applyRecordToHeadToHead(applyRecordToHeadToHead(undefined, later), earlier);
+
+    expect(h.gamesPlayed).toBe(2);
+    expect(h.wins).toEqual({ alice: 1, bob: 1 });
+    expect(h).toMatchObject({ lastGameId: 'game-b', lastWinnerUid: 'bob', lastPlayedAtMs: 99_000 });
+  });
+
   it('keeps a stored username when the record has none', () => {
     const r = record({ players: { alice: { sunkShips: [] }, bob: { username: 'Bob', sunkShips: [] } } });
     const h = applyRecordToHeadToHead({ ...applyRecordToHeadToHead(undefined, record()), usernames: { alice: 'Old', bob: 'Bob' } }, r);

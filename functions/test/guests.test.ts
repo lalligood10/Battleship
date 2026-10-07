@@ -10,14 +10,16 @@ import {
 } from 'firebase/auth';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { ShipPlacement } from '../src/game/engine';
+import { cellsOf, type ShipPlacement } from '../src/game/engine';
+import { RETENTION_PATHS, dailyDateKey, type DailyChallengePrivateDoc } from '../src/game/analytics/contract';
 import { createBotGame } from '../src/handlers/bots';
 import { createChallenge, respondChallenge } from '../src/handlers/challenges';
+import { fireDailyShot, getDailyChallenge } from '../src/handlers/daily';
 import { createGame, joinGame, placeShips, requestRematch, resign } from '../src/handlers/games';
 import { completeGuestUpgrade } from '../src/handlers/guests';
 import { joinQuickMatch } from '../src/handlers/quickMatch';
 import { setUsername } from '../src/handlers/users';
-import { refs } from '../src/lib/firestore';
+import { db, refs } from '../src/lib/firestore';
 import { clearFirestore, PROJECT_ID } from './setup';
 
 const authApp = initializeApp({ apiKey: 'fake', projectId: PROJECT_ID }, 'guest-tests');
@@ -25,6 +27,8 @@ const clientAuth = getClientAuth(authApp);
 connectAuthEmulator(clientAuth, 'http://127.0.0.1:9099', { disableWarnings: true });
 
 const BOB = 'uid-guest-test-bob';
+const DAILY_NOW = Date.UTC(2026, 9, 7, 12);
+const DAILY_KEY = dailyDateKey(DAILY_NOW);
 const FLEET: ShipPlacement[] = [
   { type: 'carrier', row: 0, col: 0, horizontal: true },
   { type: 'battleship', row: 2, col: 0, horizontal: true },
@@ -119,6 +123,35 @@ describe('guest profiles and upgrade', () => {
       suspended: true,
       leaderboardVisible: false,
     });
+  });
+
+  it("publishes today's completed daily score when a guest upgrades", async () => {
+    const guest = await createGuest();
+    await setUsername(guest.uid, { username: 'DailyUpgrader' });
+    await getDailyChallenge(guest.uid, {}, DAILY_NOW);
+    const privateChallenge = (
+      await db.doc(RETENTION_PATHS.dailyChallengePrivate(DAILY_KEY)).get()
+    ).data() as DailyChallengePrivateDoc;
+    const occupied = new Set(privateChallenge.fleet.flatMap((ship) => cellsOf(ship).map((cell) => `${cell.row},${cell.col}`)));
+    const miss = [...Array(100).keys()]
+      .map((i) => ({ row: Math.floor(i / 10), col: i % 10 }))
+      .find((cell) => !occupied.has(`${cell.row},${cell.col}`))!;
+    let view = await fireDailyShot(guest.uid, { dateKey: DAILY_KEY, ...miss }, DAILY_NOW);
+    for (const ship of privateChallenge.fleet) {
+      for (const cell of cellsOf(ship)) {
+        view = await fireDailyShot(guest.uid, { dateKey: DAILY_KEY, ...cell }, DAILY_NOW + 1);
+      }
+    }
+    expect(view.completedAtMs).not.toBeNull();
+
+    await linkGuest(guest, 'daily-upgrader@example.test');
+    expect(await completeGuestUpgrade(guest.uid, DAILY_NOW)).toEqual({ isGuest: false });
+    expect((await db.doc(RETENTION_PATHS.dailyScore(DAILY_KEY, guest.uid)).get()).data()).toEqual({
+      username: 'DailyUpgrader',
+      shots: view.shots.length,
+      completedAtMs: view.completedAtMs,
+    });
+    await expect(completeGuestUpgrade(guest.uid, DAILY_NOW)).resolves.toEqual({ isGuest: false });
   });
 
   it('rejects an Auth-missing UID with the account-linking precondition', async () => {

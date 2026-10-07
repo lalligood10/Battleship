@@ -102,6 +102,7 @@ function emptyWins(uids: readonly string[]): Record<string, number> {
 
 export function applyRecordToHeadToHead(doc: HeadToHeadDoc | undefined, record: GameEndRecord): HeadToHeadDoc {
   const playerUids = [...record.playerUids].sort() as [string, string];
+  const isLatestGame = !doc || record.endedAt >= count(doc.lastPlayedAtMs);
   const wins = { ...emptyWins(playerUids), ...doc?.wins };
   const winsByMode = Object.fromEntries(
     GAME_MODES.map((m) => [m, { ...emptyWins(playerUids), ...doc?.winsByMode?.[m] }]),
@@ -117,8 +118,8 @@ export function applyRecordToHeadToHead(doc: HeadToHeadDoc | undefined, record: 
     gamesPlayed: count(doc?.gamesPlayed) + 1,
     wins,
     winsByMode,
-    lastGameId: record.gameId,
-    lastWinnerUid: record.winner,
-    lastPlayedAtMs: record.endedAt,
+    lastGameId: isLatestGame ? record.gameId : doc.lastGameId,
+    lastWinnerUid: isLatestGame ? record.winner : doc.lastWinnerUid,
+    lastPlayedAtMs: isLatestGame ? record.endedAt : doc.lastPlayedAtMs,
   };
 }
