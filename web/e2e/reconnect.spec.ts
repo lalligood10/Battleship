@@ -8,6 +8,11 @@ declare global {
 }
 
 const effectSelectors = '.strike-result, .sink-ship, .strike-jet-path, .carrier-run';
+const USERNAME_DIGITS = 'bcdfghjmnv';
+
+function usernameSuffix(value: string): string {
+  return value.replace(/\d/g, (digit) => USERNAME_DIGITS[Number(digit)]!);
+}
 
 async function waitForQuietBoard(page: Page) {
   await expect(page.locator('.toast')).toHaveCount(0);
@@ -75,7 +80,7 @@ test('game reconnect restores the board without replaying transient effects', as
   await page.getByLabel('Password').fill('broadside-reconnect');
   await page.getByRole('button', { name: 'Create account', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pick a username' })).toBeVisible();
-  await page.getByLabel('Username').fill(`rec${Date.now().toString().slice(-10)}`);
+  await page.getByLabel('Username').fill(`rec${usernameSuffix(Date.now().toString().slice(-10))}`);
   await expect(page.getByText('Available')).toBeVisible();
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByRole('button', { name: 'Play vs Computer' }).first().click();
@@ -133,7 +138,7 @@ test('Quick Match resumes after reload and cancellation stays closed', async ({ 
   await page.getByLabel('Password').fill('broadside-reconnect');
   await page.getByRole('button', { name: 'Create account', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pick a username' })).toBeVisible();
-  await page.getByLabel('Username').fill(`qmr${Date.now().toString().slice(-10)}`);
+  await page.getByLabel('Username').fill(`qmr${usernameSuffix(Date.now().toString().slice(-10))}`);
   await expect(page.getByText('Available')).toBeVisible();
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
 

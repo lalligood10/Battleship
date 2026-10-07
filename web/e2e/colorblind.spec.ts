@@ -57,7 +57,7 @@ async function newPage(browser: Browser, theme: 'dark' | 'light'): Promise<Page>
 }
 
 function lettersOnly(value: string): string {
-  return value.replace(/\d/g, (digit) => 'bcdfghjkmn'[Number(digit)]!);
+  return value.replace(/\d/g, (digit) => 'bcdfghjmnv'[Number(digit)]!);
 }
 
 async function pickUsername(page: Page, prefix: string): Promise<void> {

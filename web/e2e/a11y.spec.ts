@@ -8,7 +8,7 @@ const viewports = [
 
 function testUsername(viewportWidth: number): string {
   const digits = `${Date.now().toString().slice(-6)}${viewportWidth % 1000}`;
-  const suffix = digits.replace(/\d/g, (digit) => 'bcdfghjkmn'[Number(digit)]!);
+  const suffix = digits.replace(/\d/g, (digit) => 'bcdfghjmnv'[Number(digit)]!);
   return `a11y_${suffix}`;
 }
 

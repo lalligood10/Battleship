@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { EmailAuthProvider, GoogleAuthProvider, linkWithCredential, linkWithPopup } from 'firebase/auth';
 import { Link } from 'react-router-dom';
 import { accuracyPercentage, winPercentage } from '@shared/scoring';
+import { AchievementShelf } from '../components/Achievements';
 import { ChallengeButton } from '../components/ChallengeButton';
 import { ModeStats } from '../components/ModeStats';
 import { Alert, Empty, Spinner, TopBar } from '../components/ui';
@@ -90,7 +91,7 @@ export function ProfilePage() {
 
       <ModeStats stats={modeStats} error={modeStatsError} />
 
-      {/* Phase 5: achievement shelf mounts here */}
+      <AchievementShelf uid={uid} />
 
       <section className="card stack" aria-labelledby="profile-appearance">
         <h2 id="profile-appearance" className="panel-title">
