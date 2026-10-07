@@ -5,13 +5,14 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { cellsOf, type ShipPlacement } from '../src/game/engine';
+import { cellKey, cellsOf, type ShipPlacement } from '../src/game/engine';
 import { applyElo, weekId } from '../src/game/scoring';
 import { requireAdmin, updateUser } from '../src/handlers/admin';
 import {
   cancelGame,
   claimTimeoutWin,
   createGame,
+  fireSalvo,
   fireShot,
   joinGame,
   placeShips,
@@ -69,6 +70,16 @@ async function startedGame() {
   const first = game.currentTurnUid!;
   const second = first === ALICE ? BOB : ALICE;
   return { gameId, code, first, second };
+}
+
+async function startedSalvoGame() {
+  const { gameId, code } = await createGame(ALICE, { mode: 'salvo' });
+  await joinGame(BOB, { code });
+  await placeShips(ALICE, { gameId, ships: FLEET });
+  await placeShips(BOB, { gameId, ships: FLEET });
+  const game = (await refs.game(gameId).get()).data()!;
+  const first = game.currentTurnUid!;
+  return { gameId, first, second: first === ALICE ? BOB : ALICE };
 }
 
 beforeEach(async () => {
@@ -149,6 +160,29 @@ describe('create / join / cancel', () => {
     expect(game.status).toBe('placing');
     expect(game.playerUids).toEqual([ALICE, BOB]);
     expect(game.players[BOB]).toMatchObject({ username: 'Bob', rating: 1000, ready: false });
+  });
+
+  it('stores the selected mode, defaults legacy creation to Classic, and rejects invalid modes', async () => {
+    await setupPlayers();
+    const classic = await createGame(ALICE);
+    const salvo = await createGame(ALICE, { mode: 'salvo' });
+
+    expect((await refs.game(classic.gameId).get()).data()!.mode).toBe('classic');
+    expect((await refs.game(salvo.gameId).get()).data()!.mode).toBe('salvo');
+    await expectHttpsError(createGame(ALICE, { mode: 'bogus' }), 'invalid-argument', 'Choose a game type');
+    await expectHttpsError(
+      createChallenge(ALICE, { opponentUid: BOB, mode: 'bogus' }),
+      'invalid-argument',
+      'Choose a game type',
+    );
+  });
+
+  it('joins the host game type without requiring or comparing a caller mode', async () => {
+    await setupPlayers();
+    const { gameId, code } = await createGame(ALICE, { mode: 'salvo' });
+
+    expect(await joinGame(BOB, { code, mode: 'classic' })).toEqual({ gameId });
+    expect((await refs.game(gameId).get()).data()!.mode).toBe('salvo');
   });
 
   it('host re-opening their own link just returns the game; third player is refused', async () => {
@@ -302,6 +336,81 @@ describe('firing', () => {
 
     await expectHttpsError(fireShot(second, { gameId, row: 0, col: 9 }), 'failed-precondition', 'not in progress');
   });
+
+  it('stores full Salvo volleys, checks start-of-volley firepower, and rejects legacy fireShot', async () => {
+    await setupPlayers();
+    const { gameId, first, second } = await startedSalvoGame();
+    const destroyerCells = cellsOf(FLEET[4]!);
+    const firstTargets = [...destroyerCells, { row: 9, col: 0 }, { row: 9, col: 1 }, { row: 9, col: 2 }];
+
+    await expectHttpsError(fireShot(first, { gameId, row: 9, col: 9 }), 'failed-precondition', 'latest web app');
+    await expectHttpsError(
+      fireSalvo(first, { gameId, targets: firstTargets.slice(0, 4) }),
+      'failed-precondition',
+      'Fire exactly 5 shots this turn',
+    );
+    expect(await fireSalvo(first, { gameId, targets: firstTargets })).toEqual({ gameOver: false, winnerUid: null });
+
+    const secondTargets = [...destroyerCells, { row: 9, col: 0 }, { row: 9, col: 1 }];
+    await expectHttpsError(
+      fireSalvo(second, { gameId, targets: [...secondTargets, { row: 9, col: 2 }] }),
+      'failed-precondition',
+      'Fire exactly 4 shots this turn',
+    );
+    await fireSalvo(second, { gameId, targets: secondTargets });
+    await expectHttpsError(
+      fireSalvo(first, { gameId, targets: firstTargets }),
+      'failed-precondition',
+      'Fire exactly 4 shots this turn',
+    );
+
+    const game = (await refs.game(gameId).get()).data()!;
+    expect(game.mode).toBe('salvo');
+    expect(game.turnNumber).toBe(3);
+    expect(game.currentTurnUid).toBe(first);
+    expect(game.shots[first]).toHaveLength(5);
+    expect(game.shots[second]).toHaveLength(4);
+    expect(game.shots[first]!.every((shot) => shot.volley === 1)).toBe(true);
+    expect(game.shots[second]!.every((shot) => shot.volley === 2)).toBe(true);
+    expect(game.players[first]).toMatchObject({ shotsFired: 5, hits: 2 });
+    expect(game.players[second]).toMatchObject({ shotsFired: 4, hits: 2 });
+    expect(game.players[first]!.sunkShips).toEqual(['destroyer']);
+    expect(game.players[second]!.sunkShips).toEqual(['destroyer']);
+  });
+
+  it('finishes a human Salvo game and applies volley shot totals to stats', async () => {
+    await setupPlayers();
+    const { gameId } = await startedSalvoGame();
+    let game = (await refs.game(gameId).get()).data()!;
+    let volleys = 0;
+    while (game.status === 'active') {
+      const shooter = game.currentTurnUid!;
+      const defender = game.playerUids.find((uid) => uid !== shooter)!;
+      const defenderBoard = (await refs.privateBoard(gameId, defender).get()).data()!;
+      const alreadyFired = new Set((game.shots[shooter] ?? []).map((shot) => cellKey(shot.row, shot.col)));
+      const preferred = defenderBoard.fleet.flatMap((ship) => cellsOf(ship));
+      const remaining = [
+        ...preferred,
+        ...Array.from({ length: 100 }, (_, index) => ({ row: Math.floor(index / 10), col: index % 10 })),
+      ].filter((target, index, all) => {
+        const key = cellKey(target.row, target.col);
+        return !alreadyFired.has(key) && all.findIndex((cell) => cellKey(cell.row, cell.col) === key) === index;
+      });
+      const allowance = 5 - game.players[shooter]!.sunkShips.length;
+      expect(remaining.length).toBeGreaterThanOrEqual(allowance);
+      await fireSalvo(shooter, { gameId, targets: remaining.slice(0, allowance) });
+      game = (await refs.game(gameId).get()).data()!;
+      volleys++;
+      expect(volleys).toBeLessThan(30);
+    }
+
+    expect(game.status).toBe('finished');
+    expect(game.mode).toBe('salvo');
+    for (const uid of [ALICE, BOB]) {
+      expect(game.shots[uid]!.every((shot) => typeof shot.volley === 'number')).toBe(true);
+      expect((await refs.user(uid).get()).data()!.stats.shotsFired).toBe(game.players[uid]!.shotsFired);
+    }
+  });
 });
 
 describe('resign and timeout', () => {
@@ -373,6 +482,39 @@ describe('quick match', () => {
 
     await cancelQuickMatch(ALICE);
     expect((await refs.quickMatch(ALICE).get()).exists).toBe(false);
+  });
+
+  it('pairs only matching modes and defaults legacy tickets to Classic', async () => {
+    await setupPlayers();
+    await setUsername(CAROL, { username: 'Carol' });
+    const createdAt = Timestamp.now();
+    await refs.quickMatch(ALICE).set({
+      username: 'Alice',
+      rating: 1000,
+      createdAt,
+      gameId: null,
+    });
+    await joinQuickMatch(BOB, { mode: 'salvo' });
+    expect((await refs.quickMatch(BOB).get()).data()!.mode).toBe('salvo');
+    await joinQuickMatch(CAROL, { mode: 'classic' });
+
+    const paired = await joinQuickMatch(ALICE);
+    expect(paired.gameId).toBeTruthy();
+    expect((await refs.game(paired.gameId!).get()).data()).toMatchObject({
+      mode: 'classic',
+      playerUids: [ALICE, CAROL],
+    });
+    expect((await refs.quickMatch(BOB).get()).data()!.gameId).toBeNull();
+    await expectHttpsError(joinQuickMatch(BOB, { mode: 'bogus' }), 'invalid-argument', 'Choose a game type');
+  });
+
+  it('does not return a matched ticket when the requested mode differs', async () => {
+    await setupPlayers();
+    await joinQuickMatch(ALICE, { mode: 'salvo' });
+    const paired = await joinQuickMatch(BOB, { mode: 'salvo' });
+    expect(paired.gameId).toBeTruthy();
+
+    expect(await joinQuickMatch(ALICE, { mode: 'classic' })).toEqual({ gameId: null });
   });
 
   it('keeps far-apart ratings apart until the waiting ticket is old enough', async () => {
@@ -706,6 +848,19 @@ describe('vs computer', () => {
     expect(board.hitCells).toEqual([]);
   });
 
+  it('stores Salvo mode and defaults legacy bot creation to Classic', async () => {
+    await setUsername(ALICE, { username: 'Alice' });
+    const classic = await createBotGame(ALICE, { difficulty: 'easy' });
+    const salvo = await createBotGame(ALICE, { difficulty: 'easy', mode: 'salvo' });
+    expect((await refs.game(classic.gameId).get()).data()!.mode).toBe('classic');
+    expect((await refs.game(salvo.gameId).get()).data()!.mode).toBe('salvo');
+    await expectHttpsError(
+      createBotGame(ALICE, { difficulty: 'easy', mode: 'bogus' }),
+      'invalid-argument',
+      'Choose a game type',
+    );
+  });
+
   it('creates an unrated rematch against the same bot difficulty', async () => {
     const originalId = await botGame('hard');
     const original = (await refs.game(originalId).get()).data()!;
@@ -754,6 +909,35 @@ describe('vs computer', () => {
     expect(game.turnNumber).toBe(5);
     // The bot's shots are stored with results only.
     expect(game.shots[BOT]![0]).toMatchObject({ result: expect.stringMatching(/miss|hit|sunk/) });
+  });
+
+  it('answers a Salvo volley with the bot firepower remaining after the human sinks a ship', async () => {
+    await setUsername(ALICE, { username: 'Alice' });
+    const { gameId } = await createBotGame(ALICE, { difficulty: 'medium', mode: 'salvo' });
+    await placeShips(ALICE, { gameId, ships: FLEET });
+    const botBoard = (await refs.privateBoard(gameId, BOT).get()).data()!;
+    const destroyerCells = cellsOf(botBoard.fleet.find((ship) => ship.type === 'destroyer')!);
+    const occupied = new Set(botBoard.fleet.flatMap((ship) => cellsOf(ship)).map((cell) => cellKey(cell.row, cell.col)));
+    const water = Array.from({ length: 100 }, (_, index) => ({
+      row: Math.floor(index / 10),
+      col: index % 10,
+    })).filter((cell) => !occupied.has(cellKey(cell.row, cell.col)));
+    const targets = [...destroyerCells, ...water.slice(0, 3)];
+
+    await fireSalvo(ALICE, { gameId, targets });
+
+    const game = (await refs.game(gameId).get()).data()!;
+    expect(game.mode).toBe('salvo');
+    expect(game.turnNumber).toBe(3);
+    expect(game.currentTurnUid).toBe(ALICE);
+    expect(game.shots[ALICE]).toHaveLength(5);
+    expect(game.players[BOT]!.sunkShips).toContain('destroyer');
+    const botVolley = game.shots[BOT]!;
+    expect(botVolley).toHaveLength(5 - game.players[BOT]!.sunkShips.length);
+    expect(botVolley.every((shot) => shot.volley === 2)).toBe(true);
+    expect(new Set(botVolley.map((shot) => cellKey(shot.row, shot.col))).size).toBe(botVolley.length);
+    expect(game.players[BOT]!.shotsFired).toBe(botVolley.length);
+    expect(game.players[ALICE]!.shotsFired).toBe(5);
   });
 
   it('refuses timeout claims against the computer', async () => {
@@ -862,6 +1046,32 @@ describe('challenges', () => {
 
     // Already answered.
     await expectHttpsError(respondChallenge(BOB, { challengeId, accept: true }), 'failed-precondition');
+  });
+
+  it('keeps pending challenges separate by mode and auto-accepts only a matching mode', async () => {
+    await pastOpponents();
+    const salvo = await createChallenge(ALICE, { opponentUid: BOB, mode: 'salvo' });
+    const classic = await createChallenge(BOB, { opponentUid: ALICE, mode: 'classic' });
+    expect(classic.gameId).toBeNull();
+    expect(classic.challengeId).not.toBe(salvo.challengeId);
+    expect((await refs.challenges().get()).size).toBe(2);
+    await expectHttpsError(createChallenge(ALICE, { opponentUid: BOB, mode: 'salvo' }), 'already-exists');
+
+    const accepted = await createChallenge(ALICE, { opponentUid: BOB, mode: 'classic' });
+    expect(accepted.challengeId).toBe(classic.challengeId);
+    expect(accepted.gameId).toBeTruthy();
+    expect((await refs.game(accepted.gameId!).get()).data()!.mode).toBe('classic');
+    expect((await refs.challenge(salvo.challengeId).get()).data()!.status).toBe('pending');
+  });
+
+  it('allows one pending challenge per mode in the same direction', async () => {
+    await pastOpponents();
+    const salvo = await createChallenge(ALICE, { opponentUid: BOB, mode: 'salvo' });
+    const classic = await createChallenge(ALICE, { opponentUid: BOB, mode: 'classic' });
+
+    expect(classic.challengeId).not.toBe(salvo.challengeId);
+    expect((await refs.challenges().get()).size).toBe(2);
+    await expectHttpsError(createChallenge(ALICE, { opponentUid: BOB, mode: 'salvo' }), 'already-exists');
   });
 
   it('decline and cancel close the challenge without a game', async () => {
@@ -1000,5 +1210,216 @@ describe('challenges', () => {
       await expectHttpsError(createChallenge(ALICE, { opponentUid: BOB, sourceGameId: 42 }), 'invalid-argument');
       expect((await refs.challenges().get()).size).toBe(0);
     });
+
+    it('uses the source game mode for a challenge rematch', async () => {
+      await pastOpponents();
+      const { gameId, code } = await createGame(ALICE, { mode: 'salvo' });
+      await joinGame(BOB, { code });
+      await placeShips(ALICE, { gameId, ships: FLEET });
+      await placeShips(BOB, { gameId, ships: FLEET });
+      await resign(ALICE, { gameId });
+
+      const challenge = await createChallenge(ALICE, { opponentUid: BOB, mode: 'classic', sourceGameId: gameId });
+      expect((await refs.challenge(challenge.challengeId).get()).data()!.mode).toBe('salvo');
+      const accepted = await respondChallenge(BOB, { challengeId: challenge.challengeId, accept: true });
+      expect((await refs.game(accepted.gameId!).get()).data()!.mode).toBe('salvo');
+    });
+  });
+});
+
+describe('mode retention on rematches', () => {
+  it('retains Salvo mode for a human rematch', async () => {
+    await setupPlayers();
+    const { gameId, code } = await createGame(ALICE, { mode: 'salvo' });
+    await joinGame(BOB, { code });
+    await placeShips(ALICE, { gameId, ships: FLEET });
+    await placeShips(BOB, { gameId, ships: FLEET });
+    await resign(ALICE, { gameId });
+
+    const rematch = await requestRematch(BOB, { gameId });
+    expect((await refs.game(rematch.gameId).get()).data()!.mode).toBe('salvo');
+  });
+
+  it('retains Salvo mode for a bot rematch', async () => {
+    await setUsername(ALICE, { username: 'Alice' });
+    const { gameId } = await createBotGame(ALICE, { difficulty: 'hard', mode: 'salvo' });
+    await placeShips(ALICE, { gameId, ships: FLEET });
+    await resign(ALICE, { gameId });
+
+    const rematch = await requestRematch(ALICE, { gameId });
+    expect((await refs.game(rematch.gameId).get()).data()!.mode).toBe('salvo');
+  });
+});
+
+const GAME_MODES = ['classic', 'salvo', 'abilities'] as const;
+
+describe('mode immutability', () => {
+  async function expectStoredMode(gameId: string, mode: (typeof GAME_MODES)[number]) {
+    expect((await refs.game(gameId).get()).data()!.mode).toBe(mode);
+  }
+
+  it.each(GAME_MODES)('stores %s across every creation path', async (mode) => {
+    await setupPlayers();
+    await setUsername(CAROL, { username: 'Carol' });
+
+    const ticket = await joinQuickMatch(ALICE, { mode });
+    expect(ticket).toEqual({ gameId: null });
+    expect((await refs.quickMatch(ALICE).get()).data()).toMatchObject({ mode, gameId: null });
+    const paired = await joinQuickMatch(CAROL, { mode });
+    expect(paired.gameId).toBeTruthy();
+    expect((await refs.quickMatch(ALICE).get()).data()).toMatchObject({ mode, gameId: paired.gameId });
+    await expectStoredMode(paired.gameId!, mode);
+
+    const human = await createGame(ALICE, { mode });
+    await expectStoredMode(human.gameId, mode);
+    await joinGame(BOB, { code: human.code, mode: mode === 'classic' ? 'abilities' : 'classic' });
+    await expectStoredMode(human.gameId, mode);
+    await placeShips(ALICE, { gameId: human.gameId, ships: FLEET });
+    await placeShips(BOB, { gameId: human.gameId, ships: FLEET });
+    await resign(ALICE, { gameId: human.gameId });
+    await expectStoredMode(human.gameId, mode);
+    const humanRematch = await requestRematch(BOB, { gameId: human.gameId });
+    await expectStoredMode(humanRematch.gameId, mode);
+
+    const bot = await createBotGame(ALICE, { difficulty: 'easy', mode });
+    await expectStoredMode(bot.gameId, mode);
+    await placeShips(ALICE, { gameId: bot.gameId, ships: FLEET });
+    await resign(ALICE, { gameId: bot.gameId });
+    await expectStoredMode(bot.gameId, mode);
+    const botRematch = await requestRematch(ALICE, { gameId: bot.gameId });
+    await expectStoredMode(botRematch.gameId, mode);
+
+    const lastPlayedAt = Timestamp.now();
+    await refs.opponent(ALICE, BOB).set({ username: 'Bob', gamesPlayed: 1, lastPlayedAt });
+    await refs.opponent(BOB, ALICE).set({ username: 'Alice', gamesPlayed: 1, lastPlayedAt });
+    const challenge = await createChallenge(ALICE, { opponentUid: BOB, mode });
+    expect((await refs.challenge(challenge.challengeId).get()).data()!.mode).toBe(mode);
+    const accepted = await respondChallenge(BOB, { challengeId: challenge.challengeId, accept: true });
+    await expectStoredMode(accepted.gameId!, mode);
+
+    const opposite = await createChallenge(BOB, { opponentUid: ALICE, mode });
+    const autoAccepted = await createChallenge(ALICE, { opponentUid: BOB, mode });
+    expect(autoAccepted.challengeId).toBe(opposite.challengeId);
+    expect(autoAccepted.gameId).toBeTruthy();
+    expect((await refs.challenge(opposite.challengeId).get()).data()).toMatchObject({ mode, status: 'accepted' });
+    await expectStoredMode(autoAccepted.gameId!, mode);
+  });
+
+  it('defaults missing modes to Classic on each creation path', async () => {
+    await setupPlayers();
+    const game = await createGame(ALICE);
+    await expectStoredMode(game.gameId, 'classic');
+
+    const bot = await createBotGame(ALICE, { difficulty: 'easy' });
+    await expectStoredMode(bot.gameId, 'classic');
+
+    expect(await joinQuickMatch(ALICE)).toEqual({ gameId: null });
+    expect((await refs.quickMatch(ALICE).get()).data()).toMatchObject({ mode: 'classic', gameId: null });
+
+    await refs.opponent(ALICE, BOB).set({ username: 'Bob', gamesPlayed: 1, lastPlayedAt: Timestamp.now() });
+    const challenge = await createChallenge(ALICE, { opponentUid: BOB });
+    expect((await refs.challenge(challenge.challengeId).get()).data()!.mode).toBe('classic');
+  });
+
+  it.each(['bogus', 'Salvo', 42, null, {}] as unknown[])(
+    'rejects invalid mode %o without writing game, ticket, or challenge documents',
+    async (mode) => {
+      await setupPlayers();
+
+      await expectHttpsError(createGame(ALICE, { mode }), 'invalid-argument', 'Choose a game type');
+      await expectHttpsError(
+        createBotGame(ALICE, { difficulty: 'easy', mode }),
+        'invalid-argument',
+        'Choose a game type',
+      );
+      await expectHttpsError(joinQuickMatch(ALICE, { mode }), 'invalid-argument', 'Choose a game type');
+      await expectHttpsError(
+        createChallenge(ALICE, { opponentUid: BOB, mode }),
+        'invalid-argument',
+        'Choose a game type',
+      );
+
+      expect((await refs.games().get()).size).toBe(0);
+      expect((await refs.quickMatchQueue().get()).size).toBe(0);
+      expect((await refs.challenges().get()).size).toBe(0);
+    },
+  );
+
+  it.each(['salvo', 'abilities'] as const)('inherits the host %s mode when joining by code', async (mode) => {
+    await setupPlayers();
+    const { gameId, code } = await createGame(ALICE, { mode });
+
+    await joinGame(BOB, { code, mode: mode === 'salvo' ? 'abilities' : 'salvo' });
+
+    await expectStoredMode(gameId, mode);
+  });
+
+  it('queues a Salvo seeker but pairs an Abilities seeker with the Abilities ticket', async () => {
+    await setupPlayers();
+    await setUsername(CAROL, { username: 'Carol' });
+
+    await joinQuickMatch(ALICE, { mode: 'classic' });
+    await joinQuickMatch(BOB, { mode: 'abilities' });
+    expect(await joinQuickMatch(CAROL, { mode: 'salvo' })).toEqual({ gameId: null });
+    expect((await refs.quickMatch(CAROL).get()).data()).toMatchObject({ mode: 'salvo', gameId: null });
+    expect((await refs.quickMatch(ALICE).get()).data()!.gameId).toBeNull();
+    expect((await refs.quickMatch(BOB).get()).data()!.gameId).toBeNull();
+
+    const paired = await joinQuickMatch(CAROL, { mode: 'abilities' });
+    expect(paired.gameId).toBeTruthy();
+    await expectStoredMode(paired.gameId!, 'abilities');
+    expect((await refs.quickMatch(BOB).get()).data()).toMatchObject({ mode: 'abilities', gameId: paired.gameId });
+    expect((await refs.quickMatch(ALICE).get()).data()).toMatchObject({ mode: 'classic', gameId: null });
+    expect((await refs.quickMatch(CAROL).get()).exists).toBe(false);
+  });
+
+  it.each(['salvo', 'abilities'] as const)('preserves %s through gameplay, chat, resign, rematch, and cancellation', async (mode) => {
+    await setupPlayers();
+    const { gameId, code } = await createGame(ALICE, { mode });
+    await expectStoredMode(gameId, mode);
+
+    await joinGame(BOB, { code });
+    await expectStoredMode(gameId, mode);
+    await placeShips(ALICE, { gameId, ships: FLEET });
+    await expectStoredMode(gameId, mode);
+    await placeShips(BOB, { gameId, ships: FLEET });
+    await expectStoredMode(gameId, mode);
+
+    const game = (await refs.game(gameId).get()).data()!;
+    const first = game.currentTurnUid!;
+    const second = first === ALICE ? BOB : ALICE;
+    if (mode === 'salvo') {
+      const targets = [9, 8, 7, 6, 5].map((col) => ({ row: 9, col }));
+      await fireSalvo(first, { gameId, targets });
+      await expectStoredMode(gameId, mode);
+      await fireSalvo(second, { gameId, targets });
+      await expectStoredMode(gameId, mode);
+    }
+    // Abilities turn actions arrive with the Abilities mode rules; here only the shared handlers run.
+
+    await sendChatMessage(first, { gameId, text: 'Mode check' });
+    await expectStoredMode(gameId, mode);
+    await resign(second, { gameId });
+    await expectStoredMode(gameId, mode);
+
+    const rematch = await requestRematch(BOB, { gameId });
+    await expectStoredMode(gameId, mode);
+    await expectStoredMode(rematch.gameId, mode);
+    await cancelGame(BOB, { gameId: rematch.gameId });
+    await expectStoredMode(rematch.gameId, mode);
+
+    if (mode === 'abilities') {
+      const lastPlayedAt = Timestamp.now();
+      await refs.opponent(ALICE, BOB).set({ username: 'Bob', gamesPlayed: 1, lastPlayedAt });
+      const challenge = await createChallenge(ALICE, {
+        opponentUid: BOB,
+        mode: 'classic',
+        sourceGameId: gameId,
+      });
+      expect((await refs.challenge(challenge.challengeId).get()).data()!.mode).toBe('abilities');
+      const accepted = await respondChallenge(BOB, { challengeId: challenge.challengeId, accept: true });
+      await expectStoredMode(accepted.gameId!, 'abilities');
+      await expectStoredMode(gameId, 'abilities');
+    }
   });
 });

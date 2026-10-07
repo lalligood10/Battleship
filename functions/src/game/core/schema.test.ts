@@ -1,8 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import { createCoreState } from './reducer';
-import { cellStates, defaultSettings, phaseFromStatus } from './schema';
+import { cellStates, defaultSettings, GAME_MODE_OPTIONS, parseGameModeInput, phaseFromStatus } from './schema';
 
 describe('core schema helpers', () => {
+  it('exposes all game modes and defaults omitted mode input to Classic', () => {
+    expect(GAME_MODE_OPTIONS.map(({ mode, label, description }) => ({ mode, label, description }))).toEqual([
+      {
+        mode: 'classic',
+        label: 'Classic',
+        description: 'One shot per turn. Sink all five enemy ships to win.',
+      },
+      {
+        mode: 'salvo',
+        label: 'Salvo',
+        description: 'Fire one shot for each ship you still have afloat. Lose ships, lose firepower.',
+      },
+      {
+        mode: 'abilities',
+        label: 'Abilities',
+        description: 'Use one ship power instead of a normal shot. Each power works once per game.',
+      },
+    ]);
+    expect(GAME_MODE_OPTIONS.every((option) => option.howToPlay.length > 0)).toBe(true);
+    expect(parseGameModeInput(undefined)).toBe('classic');
+    expect(parseGameModeInput('classic')).toBe('classic');
+    expect(parseGameModeInput('salvo')).toBe('salvo');
+    expect(parseGameModeInput(null)).toBeNull();
+    expect(parseGameModeInput('abilities')).toBe('abilities');
+  });
+
   it('maps persisted statuses to core phases', () => {
     expect(['waiting', 'placing', 'active', 'finished', 'cancelled'].map(phaseFromStatus)).toEqual([
       'lobby',

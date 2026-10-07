@@ -1,0 +1,223 @@
+/* Abilities-mode action bar and board preview cells. Colours come from the theme tokens in index.css. */
+.ability-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.ability-bar__list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.ability-option {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-2);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.08s ease,
+    border-color 0.15s ease;
+}
+.ability-option:active:not([aria-disabled='true']) {
+  transform: scale(0.98);
+}
+.ability-option:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.ability-option--selected {
+  border: 2px solid var(--accent);
+  padding: 7px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--card));
+}
+.ability-option[aria-disabled='true'] {
+  cursor: default;
+}
+.ability-option--disabled {
+  opacity: 0.75;
+}
+.ability-option--used,
+.ability-option--lost {
+  opacity: 0.6;
+}
+.ability-option--lost .ability-option__label {
+  text-decoration: line-through;
+}
+.ability-option__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+}
+.ability-option__label {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.ability-option__desc {
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.ability-status {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.ability-status--ready {
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+  color: var(--success);
+}
+.ability-status--used {
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+  color: var(--muted);
+}
+.ability-status--lost {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
+}
+.ability-bar__aim {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ability-bar__aim:empty {
+  display: none;
+}
+.ability-bar__hint {
+  flex: 1 1 180px;
+  min-width: 0;
+  line-height: 1.35;
+}
+.ability-bar__actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.ability-bar__action {
+  min-height: 44px;
+}
+.ability-bar__rotate {
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+.ability-bar__rotate--vertical {
+  transform: rotate(90deg);
+}
+
+@media (max-width: 420px) {
+  .ability-bar__list {
+    gap: 6px;
+  }
+  .ability-option {
+    padding: 6px;
+  }
+  .ability-option--selected {
+    padding: 5px;
+  }
+  .ability-option__head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .ability-option__label {
+    font-size: 14px;
+  }
+  .ability-bar__hint {
+    flex-basis: 100%;
+  }
+  .ability-bar__actions {
+    margin-left: 0;
+  }
+}
+
+/* Board cells covered by the aimed ability. Applied by the board alongside `.cell`. */
+.cell.ability-preview {
+  box-shadow:
+    inset 0 0 0 2px var(--accent),
+    inset 0 0 0 999px color-mix(in srgb, var(--accent) 35%, transparent);
+  z-index: 1;
+}
+.cell.ability-preview--invalid {
+  box-shadow:
+    inset 0 0 0 2px var(--danger),
+    inset 0 0 0 999px color-mix(in srgb, var(--danger) 35%, transparent);
+  cursor: not-allowed;
+}
+.cell.sonar-marker {
+  outline: 1px dashed var(--muted);
+  outline-offset: -4px;
+  z-index: 1;
+}
+.cell.sonar-marker--detected {
+  outline: 2px solid var(--success);
+  background-color: color-mix(in srgb, var(--success) 18%, var(--water));
+}
+.cell.sonar-marker--clear {
+  outline: 1px dashed var(--muted);
+}
+.sonar-history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.sonar-history__item {
+  color: var(--muted);
+  font-size: 12px;
+}
+.sonar-history__item--detected {
+  color: var(--success);
+}
+.cell.sonar-flash {
+  animation: sonar-flash 800ms ease-out;
+}
+@keyframes sonar-flash {
+  0% {
+    background-color: color-mix(in srgb, var(--accent) 72%, var(--water));
+    box-shadow: inset 0 0 0 3px var(--accent);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+.cell-sonar-label {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% - 1px);
+  left: 50%;
+  padding: 2px 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ability-option,
+  .ability-bar__rotate,
+  .cell.sonar-flash {
+    transition: none;
+    animation: none;
+  }
+}

@@ -17,6 +17,12 @@ import {
   type Shot,
 } from './engine';
 import type { BotDifficulty } from './bots';
+import type {
+  AbilityLogEntry,
+  AirstrikeTarget,
+  SonarTarget,
+} from './core/modes/types';
+import { airstrikeCells, sonarCells } from './core/modes/abilities';
 
 export interface AiInput {
   /** The bot's own previous shots, in order. */
@@ -24,6 +30,8 @@ export interface AiInput {
   boardSize: number;
   difficulty: BotDifficulty;
   rng: () => number;
+  /** Cells already selected for the current volley, without exposing their results. */
+  exclude?: ReadonlySet<string>;
 }
 
 interface AiState {
@@ -224,7 +232,10 @@ function huntCandidates(state: AiState, n: number, hard: boolean): Coordinate[] 
 export function chooseShot(input: AiInput): Coordinate {
   const { shots, boardSize, difficulty, rng } = input;
   const n = boardSize ?? GAME_CONFIG.BOARD_SIZE;
-  const state = analyse(shots);
+  const analyzed = analyse(shots);
+  const state = input.exclude?.size
+    ? { ...analyzed, tried: new Set([...analyzed.tried, ...input.exclude]) }
+    : analyzed;
 
   if (difficulty !== 'easy' && state.unresolved.length > 0) {
     const targets = targetCandidates(state, difficulty === 'hard');
@@ -233,6 +244,116 @@ export function chooseShot(input: AiInput): Coordinate {
   const hunt = huntCandidates(state, n, difficulty === 'hard');
   if (hunt.length === 0) throw new Error('No untried cells remain');
   return pick(hunt, rng);
+}
+
+export type AbilityBotAction =
+  | { type: 'fire'; target: Coordinate }
+  | { type: 'ability'; abilityId: 'carrier-airstrike'; target: AirstrikeTarget }
+  | { type: 'ability'; abilityId: 'submarine-sonar'; target: SonarTarget };
+
+export interface AbilityAiInput extends AiInput {
+  uid: string;
+  turnNumber: number;
+  abilityLog: AbilityLogEntry[];
+  /** The bot's own incoming shots, used only to know whether its carrier or submarine sank. */
+  opponentShots: Shot[];
+}
+
+function chooseAirstrike(
+  shots: Shot[],
+  unresolved: Coordinate[],
+  boardSize: number,
+  rng: () => number,
+): AirstrikeTarget | null {
+  const tried = new Set(shots.map((shot) => cellKey(shot.row, shot.col)));
+  const candidates: AirstrikeTarget[] = [];
+  for (let row = 0; row < boardSize; row++) {
+    for (let col = 0; col < boardSize; col++) {
+      for (const horizontal of [true, false]) {
+        const target = { row, col, horizontal };
+        const cells = airstrikeCells(target, boardSize);
+        if (cells.some((cell) => !isOnBoard(cell.row, cell.col))) continue;
+        if (cells.filter((cell) => !tried.has(cellKey(cell.row, cell.col))).length < 2) continue;
+        const touchesHit = unresolved.some((hit) =>
+          cells.some(
+            (cell) =>
+              Math.abs(cell.row - hit.row) + Math.abs(cell.col - hit.col) <= 1,
+          ),
+        );
+        if (touchesHit) candidates.push(target);
+      }
+    }
+  }
+  return candidates.length > 0 ? pick(candidates, rng) : null;
+}
+
+/**
+ * Chooses a bot turn in Abilities mode. Decisions use only the bot's own shot history,
+ * the public ability log, and public sink results for the bot's carrier and submarine.
+ */
+export function chooseAbilityAction(input: AbilityAiInput): AbilityBotAction {
+  const { shots, boardSize, difficulty, rng, uid, turnNumber, abilityLog } = input;
+  const n = boardSize ?? GAME_CONFIG.BOARD_SIZE;
+  const state = analyse(shots);
+  const ownLog = abilityLog.filter((entry) => entry.player === uid);
+  const usedAbilities = new Set(ownLog.map((entry) => entry.result.abilityId));
+  const sunkOwnShips = new Set(input.opponentShots.flatMap((shot) => (shot.sunkShip ? [shot.sunkShip] : [])));
+
+  if (
+    difficulty !== 'easy' &&
+    state.unresolved.length > 0 &&
+    !usedAbilities.has('carrier-airstrike') &&
+    !sunkOwnShips.has('carrier')
+  ) {
+    const target = chooseAirstrike(shots, state.unresolved, n, rng);
+    if (target) return { type: 'ability', abilityId: 'carrier-airstrike', target };
+  }
+
+  if (difficulty === 'hard' && state.unresolved.length === 0) {
+    const sonarResult = ownLog.find((entry) => entry.result.abilityId === 'submarine-sonar')?.result;
+    if (
+      !sonarResult &&
+      turnNumber >= 6 &&
+      !sunkOwnShips.has('submarine')
+    ) {
+      let bestCount = 0;
+      let centers: SonarTarget[] = [];
+      for (let row = 0; row < n; row++) {
+        for (let col = 0; col < n; col++) {
+          const center = { row, col };
+          const count = sonarCells(center, n).filter(
+            (cell) => !state.tried.has(cellKey(cell.row, cell.col)),
+          ).length;
+          if (count > bestCount) {
+            bestCount = count;
+            centers = [center];
+          } else if (count === bestCount && count > 0) {
+            centers.push(center);
+          }
+        }
+      }
+      if (centers.length > 0) {
+        return { type: 'ability', abilityId: 'submarine-sonar', target: pick(centers, rng) };
+      }
+    }
+
+    if (sonarResult?.abilityId === 'submarine-sonar') {
+      const cells = sonarCells(sonarResult.center, n);
+      if (sonarResult.shipPresent) {
+        const preferred = cells.filter((cell) => !state.tried.has(cellKey(cell.row, cell.col)));
+        if (preferred.length > 0) return { type: 'fire', target: pick(preferred, rng) };
+      } else {
+        const exclude = new Set(input.exclude ?? []);
+        for (const cell of cells) exclude.add(cellKey(cell.row, cell.col));
+        return {
+          type: 'fire',
+          target: chooseShot({ ...input, exclude }),
+        };
+      }
+    }
+  }
+
+  return { type: 'fire', target: chooseShot(input) };
 }
 
 /**

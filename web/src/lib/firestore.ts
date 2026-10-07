@@ -15,6 +15,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { GAME_CONFIG } from '@shared/config';
+import { parseGameModeInput } from '@shared/core/schema';
 import { weekId } from '@shared/scoring';
 import { isReactionId } from '@shared/reactions';
 import { db } from './firebase';
@@ -33,6 +34,7 @@ export function gameFromSnapshot(snap: DocumentSnapshot<DocumentData>): Game | n
     playerUids: (d.playerUids as string[] | undefined) ?? [],
     players: (d.players as Game['players'] | undefined) ?? {},
     shots: (d.shots as Game['shots'] | undefined) ?? {},
+    abilityLog: (d.abilityLog as Game['abilityLog'] | undefined) ?? [],
     currentTurnUid: (d.currentTurnUid as string | null | undefined) ?? null,
     turnNumber: Number(d.turnNumber ?? 0),
     winnerUid: (d.winnerUid as string | null | undefined) ?? null,
@@ -228,6 +230,7 @@ export function challengeFromSnapshot(snap: DocumentSnapshot<DocumentData>): Cha
     toUid: String(d.toUid ?? ''),
     fromUsername: String(d.fromUsername ?? ''),
     toUsername: String(d.toUsername ?? ''),
+    mode: parseGameModeInput(d.mode) ?? 'classic',
     status: d.status as Challenge['status'],
     sourceGameId: (d.sourceGameId as string | null | undefined) ?? null,
     gameId: (d.gameId as string | null | undefined) ?? null,

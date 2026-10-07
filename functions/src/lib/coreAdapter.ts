@@ -33,5 +33,6 @@ export function coreStateFromGame(
     shots: Object.fromEntries(game.playerUids.map((uid) => [uid, [...(game.shots[uid] ?? [])]])),
     winner: game.winnerUid,
     endReason: game.endReason,
+    abilityLog: [...(game.abilityLog ?? [])],
   };
 }

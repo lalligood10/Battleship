@@ -2,8 +2,15 @@
  * 10×10 grid with A–J / 1–10 labels. Rendering is driven by `markOf(cell)`; interaction by optional
  * `onCellTap` (single tap/click) and `onDrag*` (pointer drag across cells, used for ship placement).
  */
-import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
-import { BOARD_SIZE, COLUMN_LABELS, ROW_LABELS, type Coordinate } from '../game/placement';
+import {
+  useRef,
+  useState,
+  type FocusEvent,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
+import { BOARD_SIZE, cellKey, COLUMN_LABELS, ROW_LABELS, type Coordinate } from '../game/placement';
 import { isInteractive, moveFocus, type CellMark } from '../game/boardNav';
 
 export type { CellMark } from '../game/boardNav';
@@ -17,6 +24,7 @@ export interface BoardProps {
   disabled?: boolean;
   small?: boolean;
   ariaLabel: string;
+  queueNumber?: (c: Coordinate) => number | undefined;
   onCellTap?: (c: Coordinate) => void;
   onDragStart?: (c: Coordinate) => boolean;
   onDragMove?: (c: Coordinate) => void;
@@ -25,12 +33,39 @@ export interface BoardProps {
   fog?: boolean;
   /** Decorative overlay rendered above the 10×10 cell area (labels excluded). */
   overlay?: ReactNode;
+  preview?: { cells: readonly Coordinate[]; invalid?: boolean; className?: string };
+  cellClassName?: (c: Coordinate) => string | undefined;
+  cellLabel?: (c: Coordinate) => string | undefined;
+  cellInteractive?: (c: Coordinate, mark: CellMark) => boolean;
+  onCellAim?: (c: Coordinate | null) => void;
+  onEscape?: () => void;
 }
 
 const DRAG_THRESHOLD_PX = 6;
 
 export function Board(props: BoardProps) {
-  const { markOf, selected, lastShot, targeting, disabled, small, fog, ariaLabel, overlay, onCellTap, onDragStart, onDragMove, onDragEnd } = props;
+  const {
+    markOf,
+    selected,
+    lastShot,
+    targeting,
+    disabled,
+    small,
+    fog,
+    ariaLabel,
+    overlay,
+    queueNumber,
+    onCellTap,
+    onDragStart,
+    onDragMove,
+    onDragEnd,
+    preview,
+    cellClassName,
+    cellLabel,
+    cellInteractive,
+    onCellAim,
+    onEscape,
+  } = props;
   const gridRef = useRef<HTMLDivElement>(null);
   const [focus, setFocus] = useState<Coordinate>(lastShot ?? { row: 0, col: 0 });
   const drag = useRef<{ start: Coordinate; startX: number; startY: number; dragging: boolean; active: boolean } | null>(null);
@@ -51,6 +86,7 @@ export function Board(props: BoardProps) {
   };
 
   const handlePointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    onCellAim?.(cellFromPoint(e.clientX, e.clientY));
     const d = drag.current;
     if (!d || !onDragStart || !onDragMove) return;
     if (!d.dragging) {
@@ -73,20 +109,35 @@ export function Board(props: BoardProps) {
       return;
     }
     setFocus(d.start);
+    onCellAim?.(d.start);
     onCellTap?.(d.start);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') {
+      onEscape?.();
+      return;
+    }
     const next = moveFocus(focus, e.key, e.ctrlKey);
     if (next) {
       e.preventDefault();
       setFocus(next);
+      onCellAim?.(next);
       gridRef.current?.querySelector<HTMLElement>(`[data-row="${next.row}"][data-col="${next.col}"]`)?.focus();
       return;
     }
     if (e.key !== 'Enter' && e.key !== ' ') return;
     e.preventDefault();
-    if (isInteractive(markOf(focus), { targeting, disabled })) onCellTap?.(focus);
+    const mark = markOf(focus);
+    if (cellInteractive?.(focus, mark) ?? isInteractive(mark, { targeting, disabled })) onCellTap?.(focus);
+  };
+
+  const handleFocus = (event: FocusEvent<HTMLDivElement>) => {
+    const target = (event.target as HTMLElement).closest<HTMLElement>('[data-row][data-col]');
+    if (!target || !gridRef.current?.contains(target)) return;
+    const c = { row: Number(target.dataset.row), col: Number(target.dataset.col) };
+    setFocus(c);
+    onCellAim?.(c);
   };
 
   const rows: ReactNode[] = [];
@@ -99,12 +150,22 @@ export function Board(props: BoardProps) {
     for (let col = 0; col < BOARD_SIZE; col++) {
       const c = { row, col };
       const mark = markOf(c);
+      const queuedNumber = queueNumber?.(c);
+      const label = cellLabel?.(c);
       const isLast = lastShot?.row === row && lastShot?.col === col;
-      const interactive = isInteractive(mark, { targeting, disabled });
+      const interactive = cellInteractive?.(c, mark) ?? isInteractive(mark, { targeting, disabled });
       const classes = ['cell', `cell--${mark}`];
+      const previewClass = preview?.className ?? 'ability-preview';
+      if (preview?.cells.some((cell) => cellKey(cell.row, cell.col) === cellKey(row, col))) {
+        classes.push(previewClass);
+        if (preview.invalid) classes.push(`${previewClass}--invalid`);
+      }
+      const customClass = cellClassName?.(c);
+      if (customClass) classes.push(...customClass.split(/\s+/).filter(Boolean));
       if (selected?.(c)) classes.push('cell--selected');
+      if (queuedNumber !== undefined) classes.push('cell--queued');
       if (isLast) classes.push('cell--last');
-      if (targeting && mark === 'water' && !disabled) classes.push('cell--target');
+      if (targeting && interactive && !disabled) classes.push('cell--target');
       if (!interactive) classes.push('cell--disabled');
       cells.push(
         <div
@@ -113,10 +174,13 @@ export function Board(props: BoardProps) {
           data-row={row}
           data-col={col}
           role="gridcell"
-          aria-label={`${COLUMN_LABELS[col]}${ROW_LABELS[row]} ${mark}`}
+          aria-label={`${COLUMN_LABELS[col]}${ROW_LABELS[row]} ${mark}${queuedNumber === undefined ? '' : `, queued shot ${queuedNumber}`}${label ? `, ${label}` : ''}`}
           aria-disabled={interactive ? undefined : true}
           tabIndex={focus.row === row && focus.col === col ? 0 : -1}
-        />,
+        >
+          {queuedNumber !== undefined && <span className="cell-queue-number" aria-hidden>{queuedNumber}</span>}
+          {label && <span className="cell-sonar-label" aria-hidden>{label}</span>}
+        </div>,
       );
     }
     rows.push(
@@ -145,6 +209,8 @@ export function Board(props: BoardProps) {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onPointerLeave={() => onCellAim?.(null)}
+        onFocus={handleFocus}
         onKeyDown={handleKeyDown}
         aria-readonly={disabled || undefined}
       >

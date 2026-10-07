@@ -3,6 +3,8 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Alert, Empty, Modal, Spinner } from '../components/ui';
 import { HomeBanner } from '../components/art/HomeBanner';
+import { GameModePicker } from '../components/GameModePicker';
+import { ModeBadge } from '../components/ModeBadge';
 import * as api from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { db } from '../lib/firebase';
@@ -19,6 +21,8 @@ import {
 import { useActiveGames } from '../state/ActiveGamesProvider';
 import { useSession, useUid } from '../state/SessionProvider';
 import { GAME_CONFIG } from '@shared/config';
+import { GAME_MODE_OPTIONS, type GameMode } from '@shared/core/schema';
+import { useGameMode } from '../state/gameMode';
 
 export function HomePage() {
   const uid = useUid();
@@ -30,12 +34,14 @@ export function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [quickMatching, setQuickMatching] = useState(false);
   const [pickingComputer, setPickingComputer] = useState(false);
+  const [mode, setMode] = useGameMode();
+  const modeLabel = GAME_MODE_OPTIONS.find((option) => option.mode === mode)?.label ?? 'Classic';
 
   const create = async () => {
     setBusy('create');
     setError(null);
     try {
-      const { gameId } = await api.createGame();
+      const { gameId } = await api.createGame(mode);
       navigate(`/game/${gameId}`);
     } catch (err) {
       setError(errorMessage(err));
@@ -62,7 +68,7 @@ export function HomePage() {
     setBusy('quick');
     setError(null);
     try {
-      const { gameId } = await api.joinQuickMatch();
+      const { gameId } = await api.joinQuickMatch(mode);
       if (gameId) navigate(`/game/${gameId}`);
       else setQuickMatching(true);
     } catch (err) {
@@ -92,6 +98,16 @@ export function HomePage() {
       {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
 
       <section className="card stack">
+        <GameModePicker value={mode} onChange={setMode} heading="Game Modes" />
+      </section>
+
+      <section className="card stack" aria-labelledby="play-heading">
+        <div className="row" style={{ gap: 8 }}>
+          <h2 className="play-heading grow" id="play-heading">
+            Play
+          </h2>
+          <ModeBadge mode={mode} />
+        </div>
         <div className="stack" style={{ gap: 4 }}>
           <button className="btn btn--primary btn--block" onClick={() => setPickingComputer(true)} disabled={busy !== null}>
             {busy === 'bot' ? <span className="spinner" /> : 'Play vs Computer'}
@@ -124,7 +140,7 @@ export function HomePage() {
           </button>
         </form>
         <button className="btn btn--ghost btn--sm" onClick={quickMatch} disabled={busy !== null}>
-          {busy === 'quick' ? <span className="spinner" /> : 'Quick Match with a random player'}
+          {busy === 'quick' ? <span className="spinner" /> : `Quick Match · ${modeLabel}`}
         </button>
       </section>
 
@@ -166,9 +182,15 @@ export function HomePage() {
       </section>
 
       {quickMatching && (
-        <QuickMatchModal uid={uid} onClose={() => setQuickMatching(false)} onPlayComputer={() => setPickingComputer(true)} />
+        <QuickMatchModal
+          uid={uid}
+          mode={mode}
+          modeLabel={modeLabel}
+          onClose={() => setQuickMatching(false)}
+          onPlayComputer={() => setPickingComputer(true)}
+        />
       )}
-      {pickingComputer && <DifficultyModal onClose={() => setPickingComputer(false)} />}
+      {pickingComputer && <DifficultyModal mode={mode} onClose={() => setPickingComputer(false)} />}
     </div>
   );
 }
@@ -179,16 +201,17 @@ const DIFFICULTY_OPTIONS: { level: BotDifficulty; label: string; blurb: string }
   { level: 'hard', label: 'Hard — Admiral Bot', blurb: 'Admiral Bot hunts with parity and never wastes a shot.' },
 ];
 
-function DifficultyModal({ onClose }: { onClose: () => void }) {
+function DifficultyModal({ mode, onClose }: { mode: GameMode; onClose: () => void }) {
   const navigate = useNavigate();
   const [busy, setBusy] = useState<BotDifficulty | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const modeLabel = GAME_MODE_OPTIONS.find((option) => option.mode === mode)?.label ?? 'Classic';
 
   const pick = async (difficulty: BotDifficulty) => {
     setBusy(difficulty);
     setError(null);
     try {
-      const { gameId } = await api.createBotGame(difficulty);
+      const { gameId } = await api.createBotGame(difficulty, mode);
       navigate(`/game/${gameId}`);
     } catch (err) {
       setError(errorMessage(err));
@@ -197,7 +220,7 @@ function DifficultyModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal title="Play vs Computer" onClose={onClose}>
+    <Modal title={`Play vs Computer · ${modeLabel}`} onClose={onClose}>
       {error && <Alert>{error}</Alert>}
       <div className="stack">
         {DIFFICULTY_OPTIONS.map(({ level, label, blurb }) => (
@@ -244,7 +267,10 @@ function IncomingChallengeRow({ challenge, onError }: { challenge: Challenge; on
       <div className="avatar">{challenge.fromUsername.slice(0, 1).toUpperCase()}</div>
       <div className="grow">
         <b>{challenge.fromUsername} challenged you</b>
-        <p className="muted small">Accept to start placing ships</p>
+        <div className="row" style={{ gap: 8, marginTop: 4 }}>
+          <p className="grow muted small">Accept to start placing ships</p>
+          <ModeBadge mode={challenge.mode} />
+        </div>
       </div>
       <button
         type="button"
@@ -287,7 +313,10 @@ function OutgoingChallengeRow({ challenge, onError }: { challenge: Challenge; on
       <div className="avatar">{challenge.toUsername.slice(0, 1).toUpperCase()}</div>
       <div className="grow">
         <b>vs {challenge.toUsername}</b>
-        <p className="muted small">Waiting for {challenge.toUsername}</p>
+        <div className="row" style={{ gap: 8, marginTop: 4 }}>
+          <p className="grow muted small">Waiting for {challenge.toUsername}</p>
+          <ModeBadge mode={challenge.mode} />
+        </div>
       </div>
       <button
         type="button"
@@ -320,7 +349,10 @@ function GameRow({ game, uid }: { game: Game; uid: string }) {
             </span>
           )}
         </b>
-        <p className="muted small">{status}</p>
+        <div className="row" style={{ gap: 8, marginTop: 4 }}>
+          <p className="grow muted small">{status}</p>
+          <ModeBadge mode={game.mode} />
+        </div>
       </div>
       {attention && <span className="badge badge--turn badge--dot">{game.status === 'placing' ? 'Setup' : 'Go'}</span>}
     </Link>
@@ -331,7 +363,19 @@ function GameRow({ game, uid }: { game: Game; uid: string }) {
 /** After this long in the queue we offer Play vs Computer instead. */
 const QUICK_MATCH_FALLBACK_SECONDS = 20;
 
-function QuickMatchModal({ uid, onClose, onPlayComputer }: { uid: string; onClose: () => void; onPlayComputer: () => void }) {
+function QuickMatchModal({
+  uid,
+  mode,
+  modeLabel,
+  onClose,
+  onPlayComputer,
+}: {
+  uid: string;
+  mode: GameMode;
+  modeLabel: string;
+  onClose: () => void;
+  onPlayComputer: () => void;
+}) {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -365,7 +409,7 @@ function QuickMatchModal({ uid, onClose, onPlayComputer }: { uid: string; onClos
     const t = setInterval(() => {
       if (stopped.current || polling.current) return;
       polling.current = api
-        .joinQuickMatch()
+        .joinQuickMatch(mode)
         .then(({ gameId }) => {
           if (gameId && !stopped.current) navigate(`/game/${gameId}`);
         })
@@ -378,7 +422,7 @@ function QuickMatchModal({ uid, onClose, onPlayComputer }: { uid: string; onClos
       stopped.current = true;
       clearInterval(t);
     };
-  }, [navigate]);
+  }, [mode, navigate]);
 
   /** Stops polling and waits for any in-flight re-join so it can't recreate the ticket after we cancel. */
   const stopPolling = async () => {
@@ -410,9 +454,9 @@ function QuickMatchModal({ uid, onClose, onPlayComputer }: { uid: string; onClos
   };
 
   return (
-    <Modal title="Looking for an opponent…" onClose={() => undefined}>
+    <Modal title={`Looking for a ${modeLabel} opponent…`} onClose={() => undefined}>
       {error && <Alert>{error}</Alert>}
-      <Spinner label="Matching you with a player near your rating. The range widens the longer you wait." />
+      <Spinner label={`Matching you for ${modeLabel} near your rating. The range widens the longer you wait.`} />
       <p className="muted small center">
         Your request stays open for {GAME_CONFIG.QUICK_MATCH_TICKET_TTL_MS / 60000} minutes.
       </p>

@@ -24,6 +24,9 @@ export function replayTimeline(game: Pick<Game, 'playerUids' | 'shots'>): Replay
     let shooterUid: string;
     if (shotA.at < shotB.at) shooterUid = a;
     else if (shotB.at < shotA.at) shooterUid = b;
+    else if (shotA.volley !== undefined && shotB.volley !== undefined && shotA.volley !== shotB.volley) {
+      shooterUid = shotA.volley < shotB.volley ? a : b;
+    }
     else if (previousShooter === a) shooterUid = b;
     else if (previousShooter === b) shooterUid = a;
     else shooterUid = shotsA.length >= shotsB.length ? a : b;

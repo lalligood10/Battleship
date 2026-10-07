@@ -9,7 +9,22 @@ import type { PlayerStats } from '@shared/scoring';
 import type { BotDifficulty } from '@shared/bots';
 import type { ReactionId } from '@shared/reactions';
 import type { GameMode } from '@shared/core/schema';
+import type {
+  AbilityLogEntry,
+  AirstrikeTarget,
+  RelocateTarget,
+  SonarTarget,
+} from '@shared/core/modes/types';
 
+export type { GameMode } from '@shared/core/schema';
+export type {
+  AbilityId,
+  AbilityLogEntry,
+  AirstrikeTarget,
+  RelocateTarget,
+  SonarTarget,
+} from '@shared/core/modes/types';
+export type AbilityTarget = AirstrikeTarget | RelocateTarget | SonarTarget;
 export type { Coordinate, ShipPlacement, Shot, ShotResult } from '@shared/engine';
 export type { ShipType } from '@shared/config';
 export type { PlayerStats } from '@shared/scoring';
@@ -60,6 +75,7 @@ export interface Game {
   playerUids: string[];
   players: Record<string, GamePlayer>;
   shots: Record<string, Shot[]>;
+  abilityLog?: AbilityLogEntry[];
   currentTurnUid: string | null;
   turnNumber: number;
   winnerUid: string | null;
@@ -88,6 +104,7 @@ export interface Challenge {
   toUid: string;
   fromUsername: string;
   toUsername: string;
+  mode: GameMode;
   status: ChallengeStatus;
   sourceGameId: string | null;
   gameId: string | null;

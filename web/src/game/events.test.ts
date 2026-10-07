@@ -185,6 +185,149 @@ describe('diffGameEvents', () => {
     ]);
   });
 
+  it('groups same-shooter Salvo shots into one turn', () => {
+    const prev = game({ mode: 'salvo', turnNumber: 3, currentTurnUid: 'human', playerUids: ['human', 'bot'] });
+    const next = game({
+      mode: 'salvo',
+      playerUids: ['human', 'bot'],
+      shots: {
+        human: [
+          { row: 0, col: 0, result: 'miss', at: 40, volley: 3 },
+          { row: 0, col: 1, result: 'hit', at: 40, volley: 3 },
+        ],
+        bot: [
+          { row: 2, col: 0, result: 'miss', at: 41, volley: 4 },
+          { row: 2, col: 1, result: 'hit', at: 41, volley: 4 },
+        ],
+      },
+      currentTurnUid: 'human',
+      turnNumber: 5,
+    });
+
+    expect(diffGameEvents(prev, next)).toEqual([
+      { type: 'shotFired', shooter: 'human', target: { row: 0, col: 0 }, turnNumber: 3 },
+      { type: 'shotResolved', shooter: 'human', target: { row: 0, col: 0 }, result: 'miss', turnNumber: 3 },
+      { type: 'shotFired', shooter: 'human', target: { row: 0, col: 1 }, turnNumber: 3 },
+      { type: 'shotResolved', shooter: 'human', target: { row: 0, col: 1 }, result: 'hit', turnNumber: 3 },
+      {
+        type: 'salvoResolved',
+        shooter: 'human',
+        targets: [{ row: 0, col: 0 }, { row: 0, col: 1 }],
+        results: ['miss', 'hit'],
+        turnNumber: 3,
+      },
+      { type: 'turnChanged', currentTurn: 'bot', turnNumber: 4 },
+      { type: 'shotFired', shooter: 'bot', target: { row: 2, col: 0 }, turnNumber: 4 },
+      { type: 'shotResolved', shooter: 'bot', target: { row: 2, col: 0 }, result: 'miss', turnNumber: 4 },
+      { type: 'shotFired', shooter: 'bot', target: { row: 2, col: 1 }, turnNumber: 4 },
+      { type: 'shotResolved', shooter: 'bot', target: { row: 2, col: 1 }, result: 'hit', turnNumber: 4 },
+      {
+        type: 'salvoResolved',
+        shooter: 'bot',
+        targets: [{ row: 2, col: 0 }, { row: 2, col: 1 }],
+        results: ['miss', 'hit'],
+        turnNumber: 4,
+      },
+      { type: 'turnChanged', currentTurn: 'human', turnNumber: 5 },
+    ]);
+  });
+
+  it('emits abilityUsed after all airstrike shots and before the turn changes', () => {
+    const prev = game({ mode: 'abilities', turnNumber: 3, currentTurnUid: 'human' });
+    const airstrike = {
+      abilityId: 'carrier-airstrike' as const,
+      cells: [
+        { row: 2, col: 1, result: 'miss' as const },
+        { row: 2, col: 2, result: 'hit' as const },
+        { row: 2, col: 3, result: 'miss' as const },
+      ],
+    };
+    const next = game({
+      mode: 'abilities',
+      shots: {
+        human: [
+          { row: 2, col: 1, result: 'miss', at: 40 },
+          { row: 2, col: 2, result: 'hit', at: 40 },
+          { row: 2, col: 3, result: 'miss', at: 40 },
+        ],
+        two: [],
+      },
+      abilityLog: [{ player: 'human', turnNumber: 3, result: airstrike }],
+      currentTurnUid: 'two',
+      turnNumber: 4,
+    });
+
+    const events = diffGameEvents(prev, next);
+    expect(events.map((event) => event.type)).toEqual([
+      'shotFired',
+      'shotResolved',
+      'shotFired',
+      'shotResolved',
+      'shotFired',
+      'shotResolved',
+      'abilityUsed',
+      'turnChanged',
+    ]);
+    expect(events[6]).toEqual({
+      type: 'abilityUsed',
+      player: 'human',
+      abilityId: 'carrier-airstrike',
+      result: airstrike,
+      turnNumber: 3,
+    });
+    expect(events[7]).toEqual({ type: 'turnChanged', currentTurn: 'two', turnNumber: 4 });
+  });
+
+  it('emits no-shot ability events before the following turn transition', () => {
+    const prev = game({ mode: 'abilities', turnNumber: 6, currentTurnUid: 'human' });
+    const sonar = {
+      abilityId: 'submarine-sonar' as const,
+      center: { row: 0, col: 1 },
+      shipPresent: true,
+    };
+    const next = game({
+      mode: 'abilities',
+      abilityLog: [{ player: 'human', turnNumber: 6, result: sonar }],
+      currentTurnUid: 'two',
+      turnNumber: 7,
+    });
+
+    expect(diffGameEvents(prev, next)).toEqual([
+      { type: 'abilityUsed', player: 'human', abilityId: 'submarine-sonar', result: sonar, turnNumber: 6 },
+      { type: 'turnChanged', currentTurn: 'two', turnNumber: 7 },
+    ]);
+  });
+
+  it('emits every newly logged no-shot ability in turn order', () => {
+    const prev = game({ mode: 'abilities', turnNumber: 6, currentTurnUid: 'human' });
+    const humanSonar = {
+      abilityId: 'submarine-sonar' as const,
+      center: { row: 0, col: 1 },
+      shipPresent: true,
+    };
+    const botSonar = {
+      abilityId: 'submarine-sonar' as const,
+      center: { row: 9, col: 9 },
+      shipPresent: false,
+    };
+    const next = game({
+      mode: 'abilities',
+      abilityLog: [
+        { player: 'human', turnNumber: 6, result: humanSonar },
+        { player: 'two', turnNumber: 7, result: botSonar },
+      ],
+      currentTurnUid: 'human',
+      turnNumber: 8,
+    });
+
+    expect(diffGameEvents(prev, next)).toEqual([
+      { type: 'abilityUsed', player: 'human', abilityId: 'submarine-sonar', result: humanSonar, turnNumber: 6 },
+      { type: 'turnChanged', currentTurn: 'two', turnNumber: 7 },
+      { type: 'abilityUsed', player: 'two', abilityId: 'submarine-sonar', result: botSonar, turnNumber: 7 },
+      { type: 'turnChanged', currentTurn: 'human', turnNumber: 8 },
+    ]);
+  });
+
   it('emits a turn change without a shot when the active turn changes', () => {
     const prev = game({ status: 'placing', currentTurnUid: null, turnNumber: 0 });
     const next = game({ currentTurnUid: 'two', turnNumber: 1 });

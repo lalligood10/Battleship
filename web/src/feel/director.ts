@@ -10,7 +10,7 @@ interface Clock {
 }
 
 export interface FeelDirector {
-  fireRequested(target: Coordinate): void;
+  fireRequested(target: Coordinate | readonly Coordinate[]): void;
   fireFailed(): void;
   handle(events: readonly CoreEvent[]): void;
   subscribe(listener: (cue: FeelCue) => void): () => void;
@@ -26,6 +26,7 @@ interface QueuedShot {
   shotKey: string;
   target: Coordinate;
   result: 'miss' | 'hit';
+  turnNumber: number;
   impactAt: number;
   sunk?: SunkInfo;
   impacted: boolean;
@@ -53,7 +54,8 @@ export function createFeelDirector(opts: {
   const shotCounts = new Map<string, number>();
   let timerSequence = 0;
   let revealedState = { target: opts.initialShots.target, own: opts.initialShots.own };
-  let localWindup: { shotKey: string; target: Coordinate; t0: number } | null = null;
+  let localWindup: { shotKey: string; targets: Coordinate[]; t0: number; handled: number } | null = null;
+  let lastVolley: { shooter: string; turnNumber: number; impactAt: number } | null = null;
   let free = -Infinity;
   let gameOverPending = false;
   let disposed = false;
@@ -129,23 +131,45 @@ export function createFeelDirector(opts: {
     const side: Side = event.shooter === opts.myUid ? 'target' : 'own';
     const pending = side === 'target' ? localWindup : null;
     const index = shotCount(event.shooter, side);
-    const shotKey = pending ? pending.shotKey : `${event.shooter}:${index}`;
+    const shotKey = `${event.shooter}:${index}`;
     shotCounts.set(event.shooter, index + 1);
+    const lastVolleyImpactAt =
+      lastVolley?.shooter === event.shooter && lastVolley.turnNumber === event.turnNumber
+        ? lastVolley.impactAt
+        : null;
 
     let windupAt: number | null = null;
     let impactAt: number;
     if (side === 'target' && pending) {
-      impactAt = Math.max(pending.t0 + config.timing.windupMs, time, free);
-      localWindup = null;
+      impactAt =
+        pending.handled === 0
+          ? Math.max(pending.t0 + config.timing.windupMs, time, free)
+          : Math.max(
+              time,
+              free,
+              lastVolleyImpactAt === null ? -Infinity : lastVolleyImpactAt + config.timing.salvoStaggerMs,
+            );
+      pending.handled += 1;
+      if (pending.handled >= pending.targets.length) localWindup = null;
     } else if (side === 'target') {
-      windupAt = Math.max(time, free);
-      impactAt = windupAt + config.timing.windupMs;
+      if (lastVolleyImpactAt !== null) {
+        impactAt = Math.max(time, free, lastVolleyImpactAt + config.timing.salvoStaggerMs);
+        windupAt = Math.max(time, impactAt - config.timing.windupMs);
+      } else {
+        windupAt = Math.max(time, free);
+        impactAt = windupAt + config.timing.windupMs;
+      }
     } else {
-      windupAt = Math.max(
-        time + (opts.botGame ? config.timing.botReplyDelayMs - config.timing.windupMs : 0),
-        free,
-      );
-      impactAt = windupAt + config.timing.windupMs;
+      if (lastVolleyImpactAt !== null) {
+        impactAt = Math.max(time, free, lastVolleyImpactAt + config.timing.salvoStaggerMs);
+        windupAt = Math.max(time, impactAt - config.timing.windupMs);
+      } else {
+        windupAt = Math.max(
+          time + (opts.botGame ? config.timing.botReplyDelayMs - config.timing.windupMs : 0),
+          free,
+        );
+        impactAt = windupAt + config.timing.windupMs;
+      }
     }
 
     const shot: QueuedShot = {
@@ -154,12 +178,14 @@ export function createFeelDirector(opts: {
       shotKey,
       target: { ...event.target },
       result: event.result,
+      turnNumber: event.turnNumber,
       impactAt,
       impacted: false,
     };
     queuedShots.push(shot);
+    lastVolley = { shooter: event.shooter, turnNumber: event.turnNumber, impactAt };
 
-    if (windupAt !== null) {
+    if (windupAt !== null && !pending) {
       emitAt(windupAt, () => emit({ type: 'windup', side, shotKey, target: shot.target }));
     }
     free = impactAt;
@@ -190,10 +216,17 @@ export function createFeelDirector(opts: {
   return {
     fireRequested(target) {
       if (disposed || localWindup) return;
-      const queuedOwnShots = queuedShots.filter((shot) => shot.side === 'target' && !shot.impacted).length;
-      const shotKey = `${opts.myUid}:${revealedState.target + queuedOwnShots}`;
-      localWindup = { shotKey, target: { ...target }, t0: clock.now() };
-      emit({ type: 'windup', side: 'target', shotKey, target: { ...target } });
+      const targets = (Array.isArray(target) ? target : [target]).map((coordinate) => ({ ...coordinate }));
+      if (targets.length === 0) return;
+      const shotKey = `${opts.myUid}:${shotCount(opts.myUid, 'target')}`;
+      localWindup = { shotKey, targets, t0: clock.now(), handled: 0 };
+      emit({
+        type: 'windup',
+        side: 'target',
+        shotKey,
+        target: targets[0]!,
+        ...(targets.length > 1 ? { targets } : {}),
+      });
     },
     fireFailed() {
       if (disposed || !localWindup) return;
@@ -223,6 +256,15 @@ export function createFeelDirector(opts: {
           }
           case 'gameOver':
             handleGameOver(event, time);
+            break;
+          case 'abilityUsed':
+            emit({
+              type: 'abilityUsed',
+              side: event.player === opts.myUid ? 'target' : 'own',
+              player: event.player,
+              abilityId: event.abilityId,
+              result: event.result,
+            });
             break;
           case 'shotFired':
           case 'turnChanged':

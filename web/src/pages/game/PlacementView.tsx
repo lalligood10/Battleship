@@ -28,6 +28,7 @@ import { errorMessage } from '../../lib/errors';
 import { isBotGame, opponentUid, type Game, type PrivateBoard } from '../../lib/types';
 import { AbandonControls } from './AbandonControls';
 import { MuteToggle } from '../../audio/MuteToggle';
+import { ModeBadge } from '../../components/ModeBadge';
 
 export function PlacementView({ game, uid, board }: { game: Game; uid: string; board: PrivateBoard | null }) {
   const ready = game.players[uid]?.ready === true;
@@ -37,7 +38,7 @@ export function PlacementView({ game, uid, board }: { game: Game; uid: string; b
   if (ready) {
     return (
       <div className="page">
-        <TopBar title={`vs ${opponentName}`} back="/" right={<MuteToggle />} />
+        <TopBar title={`vs ${opponentName}`} back="/" right={<ModeBadge mode={game.mode} />} />
         <Alert kind="info">
           {isBotGame(game)
             ? 'Your fleet is locked in — starting the battle…'
@@ -135,7 +136,16 @@ function PlacementEditor({ game, opponentName }: { game: Game; opponentName: str
 
   return (
     <div className="page">
-      <TopBar title="Place your fleet" back="/" right={<MuteToggle />} />
+      <TopBar
+        title="Place your fleet"
+        back="/"
+        right={
+          <div className="row" style={{ gap: 8 }}>
+            <ModeBadge mode={game.mode} />
+            <MuteToggle />
+          </div>
+        }
+      />
       <p className="muted small center">
         vs {opponentName} · Drag ships, or tap a ship then tap where it should go. Rotate with the button below.
       </p>

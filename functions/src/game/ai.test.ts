@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { GAME_CONFIG } from './config';
 import { BOT_DIFFICULTIES, type BotDifficulty } from './bots';
-import { chooseShot, simulateGame } from './ai';
+import { chooseAbilityAction, chooseShot, simulateGame } from './ai';
+import type { AbilityLogEntry } from './core/modes/types';
 import { cellKey, cellsOf, randomFleet, type Coordinate, type ShipPlacement, type Shot } from './engine';
 
 /** Deterministic rng so tests are reproducible. */
@@ -44,6 +45,24 @@ describe('chooseShot', () => {
       }
       expect(shots.length).toBeLessThanOrEqual(N * N);
     }
+  });
+
+  it('excludes cells chosen earlier in the same volley without adding their results to history', () => {
+    const exclude = new Set<string>();
+    const shots: Shot[] = [];
+    for (let i = 0; i < 5; i++) {
+      const target = chooseShot({
+        shots,
+        boardSize: N,
+        difficulty: 'easy',
+        rng: () => 0,
+        exclude,
+      });
+      const key = cellKey(target.row, target.col);
+      expect(exclude.has(key)).toBe(false);
+      exclude.add(key);
+    }
+    expect(shots).toEqual([]);
   });
 
   it('medium: after a hit, fires orthogonally adjacent until the ship sinks', () => {
@@ -111,5 +130,112 @@ describe('simulateGame', () => {
     expect(means.easy).toBeGreaterThan(80);
     expect(means.hard).toBeLessThan(65);
     console.log(`simulation means: easy=${means.easy.toFixed(1)} medium=${means.medium.toFixed(1)} hard=${means.hard.toFixed(1)}`);
+  });
+});
+
+describe('chooseAbilityAction', () => {
+  const choose = (
+    overrides: Partial<Parameters<typeof chooseAbilityAction>[0]> = {},
+  ) =>
+    chooseAbilityAction({
+      uid: 'bot-hard',
+      shots: [],
+      opponentShots: [],
+      abilityLog: [],
+      turnNumber: 1,
+      boardSize: N,
+      difficulty: 'hard',
+      rng: () => 0,
+      ...overrides,
+    });
+
+  it('keeps easy bots to normal shots even with an unresolved hit', () => {
+    const action = choose({
+      difficulty: 'easy',
+      shots: [{ row: 4, col: 4, result: 'hit', at: 0 }],
+    });
+    expect(action.type).toBe('fire');
+  });
+
+  it('uses a carrier airstrike when an unresolved hit has a legal line with two untried cells', () => {
+    const hit = { row: 4, col: 4 };
+    const action = choose({
+      difficulty: 'medium',
+      shots: [{ ...hit, result: 'hit', at: 0 }],
+    });
+    expect(action).toMatchObject({ type: 'ability', abilityId: 'carrier-airstrike' });
+    if (action.type !== 'ability' || action.abilityId !== 'carrier-airstrike') return;
+
+    const cells = Array.from({ length: 3 }, (_, index) => ({
+      row: action.target.row + (action.target.horizontal ? 0 : index),
+      col: action.target.col + (action.target.horizontal ? index : 0),
+    }));
+    expect(cells.every((cell) => cell.row >= 0 && cell.row < N && cell.col >= 0 && cell.col < N)).toBe(true);
+    expect(cells.filter((cell) => !(cell.row === hit.row && cell.col === hit.col)).length).toBeGreaterThanOrEqual(2);
+    expect(cells.some((cell) => Math.abs(cell.row - hit.row) + Math.abs(cell.col - hit.col) <= 1)).toBe(true);
+  });
+
+  it('does not use a carrier airstrike after the bot carrier has sunk or it was already used', () => {
+    const shots: Shot[] = [{ row: 4, col: 4, result: 'hit', at: 0 }];
+    const carrierSunk = choose({
+      difficulty: 'medium',
+      shots,
+      opponentShots: [{ row: 0, col: 0, result: 'sunk', sunkShip: 'carrier', at: 2 }],
+    });
+    const alreadyUsed: AbilityLogEntry[] = [
+      { player: 'bot-hard', turnNumber: 2, result: { abilityId: 'carrier-airstrike', cells: [] } },
+    ];
+    const used = choose({ difficulty: 'medium', shots, abilityLog: alreadyUsed });
+    expect(carrierSunk.type).toBe('fire');
+    expect(used.type).toBe('fire');
+  });
+
+  it('uses sonar on a hard bot hunting from turn six and chooses the center with most untried cells', () => {
+    const action = choose({ turnNumber: 6 });
+    expect(action).toMatchObject({ type: 'ability', abilityId: 'submarine-sonar' });
+    if (action.type !== 'ability' || action.abilityId !== 'submarine-sonar') return;
+    expect(action.target.row).toBeGreaterThanOrEqual(1);
+    expect(action.target.row).toBeLessThanOrEqual(8);
+    expect(action.target.col).toBeGreaterThanOrEqual(1);
+    expect(action.target.col).toBeLessThanOrEqual(8);
+  });
+
+  it('prefers untried cells inside a positive sonar area while hunting', () => {
+    const log: AbilityLogEntry[] = [
+      {
+        player: 'bot-hard',
+        turnNumber: 6,
+        result: { abilityId: 'submarine-sonar', center: { row: 4, col: 4 }, shipPresent: true },
+      },
+    ];
+    const action = choose({ turnNumber: 7, abilityLog: log });
+    expect(action.type).toBe('fire');
+    if (action.type !== 'fire') return;
+    expect(Math.abs(action.target.row - 4)).toBeLessThanOrEqual(1);
+    expect(Math.abs(action.target.col - 4)).toBeLessThanOrEqual(1);
+  });
+
+  it('excludes a negative sonar area from hard-mode hunting', () => {
+    const log: AbilityLogEntry[] = [
+      {
+        player: 'bot-hard',
+        turnNumber: 6,
+        result: { abilityId: 'submarine-sonar', center: { row: 0, col: 0 }, shipPresent: false },
+      },
+    ];
+    const action = choose({ turnNumber: 7, abilityLog: log });
+    expect(action.type).toBe('fire');
+    if (action.type !== 'fire') return;
+    expect(action.target.row <= 1 && action.target.col <= 1).toBe(false);
+  });
+
+  it('waits until turn six to use sonar and does not use it after the submarine sinks', () => {
+    const tooEarly = choose({ turnNumber: 5 });
+    const submarineSunk = choose({
+      turnNumber: 6,
+      opponentShots: [{ row: 0, col: 0, result: 'sunk', sunkShip: 'submarine', at: 2 }],
+    });
+    expect(tooEarly.type).toBe('fire');
+    expect(submarineSunk.type).toBe('fire');
   });
 });

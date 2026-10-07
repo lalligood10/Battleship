@@ -10,6 +10,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { GAME_CONFIG } from '../game/config';
 import { pickQuickMatchOpponent, QUICK_MATCH_COOLDOWN_CHECKS, rankQuickMatchCandidates } from '../game/matchmaking';
+import { parseGameModeInput } from '../game/core/schema';
 import { db, refs } from '../lib/firestore';
 import { generateJoinCode } from '../lib/joinCode';
 import { joinUpdate, newGameDoc } from './games';
@@ -20,7 +21,9 @@ export interface QuickMatchResult {
 }
 
 /** `now` is injectable for tests; callables always use the server clock. */
-export async function joinQuickMatch(uid: string, _data?: unknown, now = Timestamp.now()): Promise<QuickMatchResult> {
+export async function joinQuickMatch(uid: string, data?: unknown, now = Timestamp.now()): Promise<QuickMatchResult> {
+  const mode = parseGameModeInput((data as { mode?: unknown } | undefined)?.mode);
+  if (!mode) throw new HttpsError('invalid-argument', 'Choose a game type');
   return db.runTransaction(async (tx) => {
     const [meSnap, myTicketSnap] = await Promise.all([tx.get(refs.user(uid)), tx.get(refs.quickMatch(uid))]);
     const me = meSnap.data();
@@ -30,18 +33,19 @@ export async function joinQuickMatch(uid: string, _data?: unknown, now = Timesta
     const freshAfterMs = nowMs - GAME_CONFIG.QUICK_MATCH_TICKET_TTL_MS;
     const myTicket = myTicketSnap.data();
     // Already matched by someone else but not navigated yet: hand back the same game.
-    if (myTicket?.gameId) return { gameId: myTicket.gameId };
+    if (myTicket?.gameId && (myTicket.mode ?? 'classic') === mode) return { gameId: myTicket.gameId };
 
     const candidates = await tx.get(
       refs
         .quickMatchQueue()
         .where('createdAt', '>=', Timestamp.fromMillis(freshAfterMs))
         .orderBy('createdAt', 'asc')
-        .limit(25),
+        .limit(50),
     );
-    const tickets = candidates.docs.map((d) => {
+    const tickets = candidates.docs.flatMap((d) => {
       const t = d.data();
-      return { uid: d.id, rating: t.rating, createdAtMs: t.createdAt.toMillis(), gameId: t.gameId };
+      if ((t.mode ?? 'classic') !== mode) return [];
+      return [{ uid: d.id, rating: t.rating, createdAtMs: t.createdAt.toMillis(), gameId: t.gameId }];
     });
     const seeker = { uid, rating: me.rating };
 
@@ -63,6 +67,7 @@ export async function joinQuickMatch(uid: string, _data?: unknown, now = Timesta
       tx.set(refs.quickMatch(uid), {
         username: me.username,
         rating: me.rating,
+        mode,
         createdAt: keepCreatedAt ? myTicket.createdAt : now,
         gameId: null,
       });
@@ -79,7 +84,7 @@ export async function joinQuickMatch(uid: string, _data?: unknown, now = Timesta
 
     const gameRef = refs.games().doc();
     const code = generateJoinCode();
-    const base = newGameDoc(opponentUid, opponent, code, now, { isQuickMatch: true });
+    const base = newGameDoc(opponentUid, opponent, code, now, { isQuickMatch: true, mode });
     tx.set(gameRef, { ...base, ...joinUpdate(base, uid, me, now) });
     tx.set(refs.gameCode(code), { gameId: gameRef.id, createdAt: now });
     // Tell the waiting player where to go; they delete the ticket once they've navigated.

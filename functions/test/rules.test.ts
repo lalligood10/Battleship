@@ -49,6 +49,7 @@ beforeEach(async () => {
     await setDoc(doc(db, 'games', GAME), {
       code: 'ABC234',
       status: 'active',
+      mode: 'classic',
       hostUid: ALICE,
       playerUids: [ALICE, BOB],
       currentTurnUid: ALICE,
@@ -69,12 +70,13 @@ beforeEach(async () => {
     await setDoc(doc(db, 'games', GAME, 'private', BOB), { fleet: [{ type: 'carrier' }], hitCells: [] });
     await setDoc(doc(db, 'gameCodes', 'ABC234'), { gameId: GAME });
     await setDoc(doc(db, 'weeklyWins', '2026-W39', 'players', ALICE), { username: 'Alice', wins: 1 });
-    await setDoc(doc(db, 'quickMatch', ALICE), { username: 'Alice', gameId: null });
+    await setDoc(doc(db, 'quickMatch', ALICE), { username: 'Alice', mode: 'classic', gameId: null });
     await setDoc(doc(db, 'challenges', 'ch-1'), {
       fromUid: ALICE,
       toUid: BOB,
       fromUsername: 'Alice',
       toUsername: 'Bob',
+      mode: 'classic',
       status: 'pending',
       sourceGameId: null,
       gameId: null,
@@ -145,6 +147,27 @@ describe('games', () => {
     await assertFails(updateDoc(doc(as(ALICE), 'games', GAME), { currentTurnUid: BOB }));
     await assertFails(updateDoc(doc(as(ALICE), 'games', GAME), { status: 'finished', winnerUid: ALICE }));
     await assertFails(setDoc(doc(as(ALICE), 'games', 'new-game'), { playerUids: [ALICE] }));
+  });
+
+  it('players cannot change game mode in any game status', async () => {
+    for (const status of ['waiting', 'placing', 'active', 'finished', 'cancelled']) {
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await updateDoc(doc(ctx.firestore(), 'games', GAME), { status, mode: 'classic' });
+      });
+      await assertFails(updateDoc(doc(as(ALICE), 'games', GAME), { mode: 'abilities' }));
+    }
+  });
+
+  it('clients cannot create a game document with a mode', async () => {
+    await assertFails(
+      setDoc(doc(as(ALICE), 'games', 'game-with-mode'), {
+        code: 'XYZ234',
+        status: 'waiting',
+        mode: 'abilities',
+        hostUid: ALICE,
+        playerUids: [ALICE],
+      }),
+    );
   });
 
   it('keeps rematch metadata on the readable finished game and hides the waiting game from its invitee', async () => {
@@ -265,6 +288,13 @@ describe('quick match', () => {
     await assertFails(getDocs(collection(as(BOB), 'quickMatch')));
     await assertSucceeds(deleteDoc(doc(as(ALICE), 'quickMatch', ALICE)));
   });
+
+  it('users cannot create or update a quick-match ticket mode', async () => {
+    await assertFails(
+      setDoc(doc(as(BOB), 'quickMatch', BOB), { username: 'Bob', mode: 'abilities', gameId: null }),
+    );
+    await assertFails(updateDoc(doc(as(ALICE), 'quickMatch', ALICE), { mode: 'abilities' }));
+  });
 });
 
 describe('challenges', () => {
@@ -289,5 +319,10 @@ describe('challenges', () => {
     await assertFails(updateDoc(doc(as(ALICE), 'challenges', 'ch-1'), { status: 'cancelled' }));
     await assertFails(setDoc(doc(as(ALICE), 'challenges', 'ch-2'), { fromUid: ALICE, toUid: BOB, status: 'pending' }));
     await assertFails(deleteDoc(doc(as(ALICE), 'challenges', 'ch-1')));
+  });
+
+  it('neither the challenger nor invitee can change challenge mode', async () => {
+    await assertFails(updateDoc(doc(as(ALICE), 'challenges', 'ch-1'), { mode: 'abilities' }));
+    await assertFails(updateDoc(doc(as(BOB), 'challenges', 'ch-1'), { mode: 'abilities' }));
   });
 });

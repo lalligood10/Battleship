@@ -1,3 +1,4 @@
+import type { AbilityLogEntry } from './game/core/modes/types';
 /**
  * Firestore document shapes shared by every Cloud Function.
  *
@@ -104,6 +105,8 @@ export interface GameDoc {
   code: string;
   status: GameStatus;
   mode?: GameMode;
+  /** Public ability uses in Abilities games. */
+  abilityLog?: AbilityLogEntry[];
   hostUid: string;
   /** Exactly the uids allowed to read this document (used by security rules). */
   playerUids: string[];
@@ -169,6 +172,7 @@ export interface GameCodeDoc {
 export interface QuickMatchTicketDoc {
   username: string;
   rating: number;
+  mode?: GameMode;
   createdAt: Timestamp;
   /** Filled in by the Function once an opponent is found. */
   gameId: string | null;
@@ -181,6 +185,7 @@ export interface ChallengeDoc {
   toUid: string;
   fromUsername: string;
   toUsername: string;
+  mode?: GameMode;
   status: ChallengeStatus;
   /** Finished game this challenge is a rematch of, if any. */
   sourceGameId: string | null;

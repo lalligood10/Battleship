@@ -6,13 +6,19 @@
 import { Timestamp, type Transaction } from 'firebase-admin/firestore';
 import { randomBytes } from 'node:crypto';
 import { HttpsError } from 'firebase-functions/v2/https';
+import { chooseAbilityAction, type AbilityAiInput, type AbilityBotAction } from '../game/ai';
 import { BOT_PROFILES, parseDifficulty, type BotDifficulty } from '../game/bots';
 import { randomFleet } from '../game/engine';
 import { deriveRng } from '../game/core/rng';
+import { parseGameModeInput, type GameMode } from '../game/core/schema';
 import { EMPTY_STATS } from '../game/scoring';
 import { db, refs } from '../lib/firestore';
 import type { PrivateBoardDoc, UserDoc } from '../types';
 import { joinUpdate, newGameDoc, requireUser, reserveJoinCode } from './games';
+
+export function chooseBotAbilityAction(input: AbilityAiInput): AbilityBotAction {
+  return chooseAbilityAction(input);
+}
 
 /** Creates the bot's users/{uid} + usernames/ docs on first use. Idempotent. */
 export async function ensureBotProfile(tx: Transaction, difficulty: BotDifficulty): Promise<UserDoc> {
@@ -44,7 +50,12 @@ export interface CreateBotGameResult {
   gameId: string;
 }
 
-export async function createBotGameTx(tx: Transaction, uid: string, difficulty: BotDifficulty): Promise<string> {
+export async function createBotGameTx(
+  tx: Transaction,
+  uid: string,
+  difficulty: BotDifficulty,
+  mode: GameMode,
+): Promise<string> {
   const bot = BOT_PROFILES[difficulty];
 
   // Reads first (transactions forbid reads after writes): user, join code, then the bot profile.
@@ -54,7 +65,7 @@ export async function createBotGameTx(tx: Transaction, uid: string, difficulty: 
 
   const now = Timestamp.now();
   const gameRef = refs.games().doc();
-  const base = newGameDoc(uid, host, code, now, { isQuickMatch: false });
+  const base = newGameDoc(uid, host, code, now, { isQuickMatch: false, mode });
   const doc = { ...base, ...joinUpdate(base, bot.uid, botUser, now) };
   doc.players[bot.uid] = { ...doc.players[bot.uid]!, ready: true };
   doc.isBotGame = true;
@@ -69,7 +80,10 @@ export async function createBotGameTx(tx: Transaction, uid: string, difficulty: 
 }
 
 export async function createBotGame(uid: string, data: unknown): Promise<CreateBotGameResult> {
-  const difficulty = parseDifficulty((data as { difficulty?: unknown } | undefined)?.difficulty);
+  const input = data as { difficulty?: unknown; mode?: unknown } | undefined;
+  const difficulty = parseDifficulty(input?.difficulty);
+  const mode = parseGameModeInput(input?.mode);
   if (!difficulty) throw new HttpsError('invalid-argument', 'Choose a difficulty: easy, medium or hard');
-  return db.runTransaction(async (tx) => ({ gameId: await createBotGameTx(tx, uid, difficulty) }));
+  if (!mode) throw new HttpsError('invalid-argument', 'Choose a game type');
+  return db.runTransaction(async (tx) => ({ gameId: await createBotGameTx(tx, uid, difficulty, mode) }));
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Board } from '../../components/Board';
 import { StrikeOverlay } from '../../components/art/StrikeOverlay';
 import { Icon, TopBar } from '../../components/ui';
+import { ModeBadge } from '../../components/ModeBadge';
 import { fxDurationMs, strikeFxKind } from '../../game/fx';
 import { buildMarks, coordLabel, markAt } from '../../game/marks';
 import { replayTimeline, shotsUpTo } from '../../game/replay';
@@ -82,7 +83,9 @@ export function ReplayView({ game, uid, board }: { game: Game; uid: string; boar
   const myMarks = buildMarks(shotsAtMe, myFleet, true);
   const current = step > 0 ? timeline[step - 1] : undefined;
   const status = current
-    ? `Shot ${step} of ${timeline.length} · ${current.shooterUid === uid ? 'You' : opponentName} fired at ${coordLabel(current.shot)} — ${
+    ? `${game.mode === 'salvo' && current.shot.volley !== undefined ? `Volley ${current.shot.volley} · ` : ''}Shot ${step} of ${
+        timeline.length
+      } · ${current.shooterUid === uid ? 'You' : opponentName} fired at ${coordLabel(current.shot)} — ${
         current.shot.result === 'sunk' ? `sank the ${SHIP_NAMES[current.shot.sunkShip ?? 'destroyer']}` : current.shot.result
       }`
     : 'Start of game';
@@ -93,9 +96,16 @@ export function ReplayView({ game, uid, board }: { game: Game; uid: string; boar
         title={`Replay vs ${opponentName}`}
         back={`/game/${game.id}`}
         right={
-          <button className="btn btn--ghost btn--icon" onClick={toggleMute} aria-label={muted ? 'Unmute sounds' : 'Mute sounds'}>
-            <Icon name={muted ? 'muted' : 'sound'} />
-          </button>
+          <div className="row" style={{ gap: 8 }}>
+            <ModeBadge mode={game.mode} />
+            <button
+              className="btn btn--ghost btn--icon"
+              onClick={toggleMute}
+              aria-label={muted ? 'Unmute sounds' : 'Mute sounds'}
+            >
+              <Icon name={muted ? 'muted' : 'sound'} />
+            </button>
+          </div>
         }
       />
 

@@ -3,7 +3,18 @@
  * the browser never writes game or user documents directly, which is what makes the anti-cheat hold.
  */
 import { httpsCallable } from 'firebase/functions';
-import type { BotDifficulty, ShipPlacement, ShipType, ShotResult, GameStatus, Coordinate, ReactionId } from './types';
+import type {
+  AbilityId,
+  AbilityTarget,
+  BotDifficulty,
+  Coordinate,
+  GameMode,
+  GameStatus,
+  ReactionId,
+  ShipPlacement,
+  ShipType,
+  ShotResult,
+} from './types';
 import { functions } from './firebase';
 import { toAppError } from './errors';
 
@@ -54,7 +65,8 @@ export interface AdminUserUpdate {
 
 export const adminUpdateUser = (update: AdminUserUpdate) => call<unknown, AdminUserUpdate>('adminUpdateUser', update);
 
-export const createGame = () => call<{ gameId: string; code: string }>('createGame', {});
+export const createGame = (mode: GameMode) =>
+  call<{ gameId: string; code: string }, { mode: GameMode }>('createGame', { mode });
 
 export const joinGame = (code: string) => call<{ gameId: string }, { code: string }>('joinGame', { code });
 
@@ -79,22 +91,40 @@ export const fireShot = (gameId: string, target: Coordinate) =>
     col: target.col,
   });
 
+export interface FireSalvoResult {
+  gameOver: boolean;
+  winnerUid: string | null;
+}
+export const fireSalvo = (gameId: string, targets: Coordinate[]) =>
+  call<FireSalvoResult, { gameId: string; targets: Coordinate[] }>('fireSalvo', { gameId, targets });
+
+export interface UseAbilityResult {
+  gameOver: boolean;
+  winnerUid: string | null;
+}
+export const useAbility = (gameId: string, abilityId: AbilityId, target: AbilityTarget) =>
+  call<UseAbilityResult, { gameId: string; abilityId: AbilityId; target: AbilityTarget }>(
+    'useAbility',
+    { gameId, abilityId, target },
+  );
+
 export const resign = (gameId: string) => call<{ winnerUid: string }, { gameId: string }>('resign', { gameId });
 
 export const claimTimeoutWin = (gameId: string) =>
   call<{ winnerUid: string }, { gameId: string }>('claimTimeoutWin', { gameId });
 
-export const createBotGame = (difficulty: BotDifficulty) =>
-  call<{ gameId: string }, { difficulty: BotDifficulty }>('createBotGame', { difficulty });
+export const createBotGame = (difficulty: BotDifficulty, mode: GameMode) =>
+  call<{ gameId: string }, { difficulty: BotDifficulty; mode: GameMode }>('createBotGame', { difficulty, mode });
 
-export const joinQuickMatch = () => call<{ gameId: string | null }>('joinQuickMatch', {});
+export const joinQuickMatch = (mode: GameMode) =>
+  call<{ gameId: string | null }, { mode: GameMode }>('joinQuickMatch', { mode });
 
 export const cancelQuickMatch = () => call<unknown>('cancelQuickMatch', {});
 
-export const createChallenge = (opponentUid: string, sourceGameId?: string) =>
-  call<{ challengeId: string; gameId: string | null }, { opponentUid: string; sourceGameId?: string }>(
+export const createChallenge = (opponentUid: string, mode: GameMode, sourceGameId?: string) =>
+  call<{ challengeId: string; gameId: string | null }, { opponentUid: string; mode: GameMode; sourceGameId?: string }>(
     'createChallenge',
-    sourceGameId ? { opponentUid, sourceGameId } : { opponentUid },
+    sourceGameId ? { opponentUid, mode, sourceGameId } : { opponentUid, mode },
   );
 
 export const respondChallenge = (challengeId: string, accept: boolean) =>
