@@ -12,6 +12,7 @@ import { isBotGame, opponentUid, rematchState, shotsBy, type Game, type PrivateB
 import { Reactions } from '../../components/Reactions';
 import { MuteToggle } from '../../audio/MuteToggle';
 import { ModeBadge } from '../../components/ModeBadge';
+import { PushOptIn } from '../../components/PushOptIn';
 
 export function ResultsView({ game, uid, board }: { game: Game; uid: string; board: PrivateBoard | null }) {
   const navigate = useNavigate();
@@ -151,6 +152,7 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
           Watch replay
         </button>
       )}
+      <PushOptIn uid={uid} gameFinished={game.status === 'finished'} />
       {game.status === 'finished' && (
         <>
           {rematchError && <Alert onDismiss={() => setRematchError(null)}>{rematchError}</Alert>}

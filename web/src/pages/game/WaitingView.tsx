@@ -5,6 +5,7 @@ import { cancelGame } from '../../lib/api';
 import { errorMessage } from '../../lib/errors';
 import type { Game } from '../../lib/types';
 import { ModeBadge } from '../../components/ModeBadge';
+import { GAME_MODE_OPTIONS } from '@shared/core/schema';
 
 export function WaitingView({ game, uid }: { game: Game; uid: string }) {
   const navigate = useNavigate();
@@ -24,7 +25,14 @@ export function WaitingView({ game, uid }: { game: Game; uid: string }) {
   };
 
   const share = async () => {
-    const data = { title: 'Broadside', text: `Play Broadside with me! Join code ${game.code}`, url: link };
+    const mode = game.mode ?? 'classic';
+    const label = GAME_MODE_OPTIONS.find((item) => item.mode === mode)?.label ?? 'Classic';
+    const timer = game.turnTimerMs ? Math.round(game.turnTimerMs / 1000) : 0;
+    const text =
+      mode === 'classic' && !timer
+        ? `Play Broadside with me! Join code ${game.code}`
+        : `Play Broadside (${label}${timer ? `, ${timer}s turns` : ''}) with me! Join code ${game.code}`;
+    const data = { title: 'Broadside', text, url: link };
     if (typeof navigator.share === 'function') {
       try {
         await navigator.share(data);
