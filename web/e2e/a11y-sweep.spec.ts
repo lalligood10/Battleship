@@ -1,8 +1,10 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { KNOWN_ISSUES, isBlocking, partitionFindings, type Finding } from '../src/a11y/findings';
 import { INTERACTIVE_SELECTOR, TARGET_SIZE_EXEMPT_SELECTOR, undersizedTargets, type TargetBox } from '../src/a11y/targetSize';
 
@@ -17,6 +19,7 @@ const PROJECT = 'demo-broadside';
 const ADMIN_EMAIL = 'lalligood10@gmail.com';
 const ADMIN_PASSWORD = 'broadside-a11y-admin';
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
+const WEB_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const themes = ['dark', 'light'] as const;
 const widths = [375, 1280] as const;
@@ -196,10 +199,23 @@ let setupServer: ChildProcess | undefined;
 
 async function startSetupServer(): Promise<string> {
   const url = `http://127.0.0.1:${SETUP_PORT}/`;
-  setupServer = spawn('npx', ['vite', '--port', String(SETUP_PORT), '--strictPort', '--host', '127.0.0.1'], {
-    env: { ...process.env, VITE_USE_EMULATORS: 'false', VITE_FIREBASE_API_KEY: '', VITE_FIREBASE_APP_ID: '' },
-    stdio: 'ignore',
-  });
+  setupServer = spawn(
+    process.execPath,
+    [
+      path.join(WEB_DIR, 'node_modules/vite/bin/vite.js'),
+      '--port',
+      String(SETUP_PORT),
+      '--strictPort',
+      '--host',
+      '127.0.0.1',
+    ],
+    {
+      detached: true,
+      env: { ...process.env, VITE_USE_EMULATORS: 'false', VITE_FIREBASE_API_KEY: '', VITE_FIREBASE_APP_ID: '' },
+      stdio: 'ignore',
+      cwd: WEB_DIR,
+    },
+  );
   for (let i = 0; i < 60; i++) {
     try {
       if ((await fetch(url)).ok) return url;
@@ -211,8 +227,33 @@ async function startSetupServer(): Promise<string> {
   throw new Error('Setup dev server did not start');
 }
 
-test.afterAll(() => {
-  setupServer?.kill();
+test.afterAll(async () => {
+  const server = setupServer;
+  if (!server || server.pid === undefined || server.exitCode !== null || server.signalCode !== null) return;
+
+  const exited = once(server, 'exit').then(
+    () => true,
+    () => true,
+  );
+  try {
+    process.kill(-server.pid, 'SIGTERM');
+  } catch {}
+
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const stopped = await Promise.race([
+    exited,
+    new Promise<boolean>((resolve) => {
+      timeout = setTimeout(() => resolve(false), 5000);
+    }),
+  ]);
+  if (timeout) clearTimeout(timeout);
+
+  if (!stopped) {
+    try {
+      process.kill(-server.pid, 'SIGKILL');
+    } catch {}
+    await exited;
+  }
 });
 
 test('axe + target size sweep, setup screen (no Firebase config)', async ({ browser }) => {
