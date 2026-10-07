@@ -84,6 +84,7 @@ export const cancelGame = active(games.cancelGame);
 export const placeShips = active(games.placeShips);
 export const fireShot = active(games.fireShot);
 export const fireSalvo = active(games.fireSalvo);
+export const useAbility = active(games.useAbility);
 export const resign = active(games.resign);
 
 // Play vs Computer

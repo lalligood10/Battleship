@@ -6,6 +6,7 @@
 import { Timestamp, type Transaction } from 'firebase-admin/firestore';
 import { randomBytes } from 'node:crypto';
 import { HttpsError } from 'firebase-functions/v2/https';
+import { chooseAbilityAction, type AbilityAiInput, type AbilityBotAction } from '../game/ai';
 import { BOT_PROFILES, parseDifficulty, type BotDifficulty } from '../game/bots';
 import { randomFleet } from '../game/engine';
 import { deriveRng } from '../game/core/rng';
@@ -14,6 +15,10 @@ import { EMPTY_STATS } from '../game/scoring';
 import { db, refs } from '../lib/firestore';
 import type { PrivateBoardDoc, UserDoc } from '../types';
 import { joinUpdate, newGameDoc, requireUser, reserveJoinCode } from './games';
+
+export function chooseBotAbilityAction(input: AbilityAiInput): AbilityBotAction {
+  return chooseAbilityAction(input);
+}
 
 /** Creates the bot's users/{uid} + usernames/ docs on first use. Idempotent. */
 export async function ensureBotProfile(tx: Transaction, difficulty: BotDifficulty): Promise<UserDoc> {
