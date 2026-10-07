@@ -69,10 +69,10 @@ export function SignInPage() {
 
       <form className="card stack" onSubmit={submit}>
         <div className="segmented" role="tablist">
-          <button type="button" role="tab" className={mode === 'signin' ? 'active' : ''} onClick={() => setMode('signin')}>
+          <button type="button" role="tab" aria-selected={mode === 'signin'} className={mode === 'signin' ? 'active' : ''} onClick={() => setMode('signin')}>
             Sign in
           </button>
-          <button type="button" role="tab" className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>
+          <button type="button" role="tab" aria-selected={mode === 'signup'} className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>
             Create account
           </button>
         </div>
