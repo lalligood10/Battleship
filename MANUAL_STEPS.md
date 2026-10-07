@@ -5,6 +5,7 @@ Tick these off in order. Details for each are in the matching README section.
 ## Firebase (once, ~20 min)
 - [ ] Create a Firebase project; try to make the **Project ID** `broadside-dev`. *(README §3a)*
 - [ ] Authentication → enable **Email/Password** and **Google**. *(§3b)*
+- [ ] Authentication → enable **Anonymous** sign-in for `broadside-dev`. *(Phase 3)*
 - [ ] Create the **Firestore** database (production mode). *(§3b)*
 - [ ] Hosting → *Get started*. *(§3b)*
 - [ ] Upgrade to the **Blaze** plan and set a budget alert. *(§3b)*

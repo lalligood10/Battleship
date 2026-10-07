@@ -36,6 +36,14 @@ export function notificationForChallenge(challengeId: string, challenge: Challen
   };
 }
 
+export function notificationsForChallengeUpdate(
+  _challengeId: string,
+  _before: ChallengeDoc | undefined,
+  _after: ChallengeDoc,
+): Notification[] {
+  return [];
+}
+
 function computeNotifications(gameId: string, before: GameDoc | undefined, after: GameDoc): Notification[] {
   const out: Notification[] = [];
   const name = (uid: string) => after.players[uid]?.username ?? 'Your opponent';

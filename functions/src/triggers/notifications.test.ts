@@ -1,7 +1,11 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { describe, expect, it } from 'vitest';
 import type { ChallengeDoc, GameDoc, GamePlayer } from '../types';
-import { notificationForChallenge, notificationsForChange } from './notifications';
+import {
+  notificationForChallenge,
+  notificationsForChallengeUpdate,
+  notificationsForChange,
+} from './notifications';
 
 const now = Timestamp.fromMillis(1_700_000_000_000);
 const player = (username: string, ready = false): GamePlayer => ({
@@ -44,6 +48,12 @@ const joined: GameDoc = {
   players: { host: player('Ann'), guest: player('Bob') },
   shots: { host: [], guest: [] },
 };
+
+describe('notificationsForChallengeUpdate', () => {
+  it('returns no notifications until challenge update notifications are implemented', () => {
+    expect(notificationsForChallengeUpdate('challenge-1', undefined, {} as ChallengeDoc)).toEqual([]);
+  });
+});
 
 describe('notificationsForChange', () => {
   it('tells the host when someone joins', () => {

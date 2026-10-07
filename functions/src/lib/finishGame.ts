@@ -48,6 +48,7 @@ export function finishGame(input: FinishGameInput): Record<string, RatingChange>
       ...(input.extraGameFields ?? {}),
       status: 'finished',
       currentTurnUid: null,
+      turnDeadline: null,
       winnerUid,
       endReason: reason,
       ratingChanges: null,
@@ -70,6 +71,37 @@ export function finishGame(input: FinishGameInput): Record<string, RatingChange>
     return {};
   }
 
+  if (game.isRated === false) {
+    tx.update(refs.game(gameId), {
+      ...(input.extraGameFields ?? {}),
+      status: 'finished',
+      currentTurnUid: null,
+      turnDeadline: null,
+      winnerUid,
+      endReason: reason,
+      ratingChanges: null,
+      revealedFleets,
+      finishedAt: now,
+      updatedAt: now,
+    });
+    for (const [uid, won] of [
+      [winnerUid, true],
+      [loserUid, false],
+    ] as const) {
+      const user = users[uid]!;
+      const played = game.players[uid];
+      tx.update(refs.user(uid), {
+        stats: applyGameToStats(user.stats, won, {
+          shotsFired: played?.shotsFired ?? 0,
+          hits: played?.hits ?? 0,
+        }),
+        lastGameAt: now,
+        updatedAt: now,
+      });
+    }
+    return {};
+  }
+
   // Same-pair farming: K is reduced once the pair has already played several rated games recently.
   const windowStartMs = now.toMillis() - SCORING_CONFIG.SAME_PAIR_WINDOW_MS;
   const priorGames = (input.pairHistory?.recentGames ?? []).filter((t) => t.toMillis() > windowStartMs);
@@ -84,6 +116,7 @@ export function finishGame(input: FinishGameInput): Record<string, RatingChange>
     ...(input.extraGameFields ?? {}),
     status: 'finished',
     currentTurnUid: null,
+    turnDeadline: null,
     winnerUid,
     endReason: reason,
     ratingChanges,

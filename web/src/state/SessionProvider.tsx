@@ -40,6 +40,7 @@ export function profileFromData(id: string, data: Record<string, unknown>): User
     leaderboardVisible: data.leaderboardVisible !== false,
     suspended: data.suspended === true,
     isBot: data.isBot === true,
+    isGuest: data.isGuest === true,
     botStats: (data.botStats as UserProfile['botStats']) ?? undefined,
     createdAt: (data.createdAt as UserProfile['createdAt']) ?? null,
     updatedAt: (data.updatedAt as UserProfile['updatedAt']) ?? null,

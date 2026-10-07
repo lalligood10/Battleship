@@ -9,6 +9,7 @@ import { HttpsError } from 'firebase-functions/v2/https';
 import { isBotUid } from '../game/bots';
 import { GAME_CONFIG } from '../game/config';
 import { parseGameModeInput, type GameMode } from '../game/core/schema';
+import { parseTurnTimerInput } from '../game/timers';
 import { db, refs } from '../lib/firestore';
 import type { ChallengeDoc } from '../types';
 import { joinUpdate, newGameDoc, requireUser, reserveJoinCode } from './games';
@@ -63,6 +64,7 @@ async function acceptInTx(
   const base = newGameDoc(challenge.fromUid, fromUser, code, now, {
     isQuickMatch: false,
     mode: challenge.mode ?? 'classic',
+    turnTimerMs: challenge.turnTimerMs ?? null,
   });
   tx.set(gameRef, { ...base, ...joinUpdate(base, challenge.toUid, toUser, now) });
   tx.set(refs.gameCode(code), { gameId: gameRef.id, createdAt: now });
@@ -80,10 +82,12 @@ function acceptedRematch(tx: Transaction, sourceGameId: string) {
 // ---------- createChallenge ----------
 
 export async function createChallenge(uid: string, data: unknown): Promise<CreateChallengeResult> {
-  const input = (data ?? {}) as { opponentUid?: unknown; mode?: unknown; sourceGameId?: unknown };
+  const input = (data ?? {}) as { opponentUid?: unknown; mode?: unknown; sourceGameId?: unknown; turnTimerMs?: unknown };
   const opponentUid = requireId(input.opponentUid, 'opponentUid');
   const requestedMode = parseGameModeInput(input.mode);
   if (!requestedMode) throw new HttpsError('invalid-argument', 'Choose a game type');
+  const timer = parseTurnTimerInput(input.turnTimerMs);
+  if (!timer.ok) throw new HttpsError('invalid-argument', 'Choose a supported turn timer');
   const sourceGameId =
     input.sourceGameId === undefined || input.sourceGameId === null ? null : requireId(input.sourceGameId, 'sourceGameId');
   if (opponentUid === uid) throw new HttpsError('invalid-argument', "You can't challenge yourself");
@@ -112,7 +116,9 @@ export async function createChallenge(uid: string, data: unknown): Promise<Creat
       }
       if (source.status !== 'finished') throw new HttpsError('failed-precondition', 'That game is not finished yet');
     }
-    const mode: GameMode = sourceSnap?.data()?.mode ?? requestedMode;
+    const sourceGame = sourceSnap?.data();
+    const mode: GameMode = sourceGame?.mode ?? requestedMode;
+    const turnTimerMs = sourceGame ? sourceGame.turnTimerMs ?? null : timer.value;
     // Both players already agreed to this rematch: point at the game it started.
     const done = rematched?.docs[0];
     if (done) return { challengeId: done.id, gameId: done.data().gameId };
@@ -143,6 +149,7 @@ export async function createChallenge(uid: string, data: unknown): Promise<Creat
       fromUsername: me.username,
       toUsername: opponent.username,
       mode,
+      turnTimerMs,
       status: 'pending',
       sourceGameId,
       gameId: null,

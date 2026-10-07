@@ -6,6 +6,7 @@
 import { FieldValue, Timestamp, type Transaction } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { GAME_CONFIG } from '../game/config';
+import { parseTurnTimerInput, turnDeadlineFor } from '../game/timers';
 import {
   cellKey,
   isOnBoard,
@@ -87,7 +88,15 @@ function throwCoreError(error: { code: string; message: string }): never {
 }
 
 export function playerEntry(user: UserDoc): GamePlayer {
-  return { username: user.username, rating: user.rating, ready: false, sunkShips: [], shotsFired: 0, hits: 0 };
+  return {
+    username: user.username,
+    rating: user.rating,
+    isGuest: user.isGuest === true,
+    ready: false,
+    sunkShips: [],
+    shotsFired: 0,
+    hits: 0,
+  };
 }
 
 export function newGameDoc(
@@ -95,12 +104,16 @@ export function newGameDoc(
   host: UserDoc,
   code: string,
   now: Timestamp,
-  opts: { isQuickMatch: boolean; mode?: GameMode; rematchOf?: string; invitedUid?: string },
+  opts: { isQuickMatch: boolean; mode?: GameMode; turnTimerMs?: number | null; rematchOf?: string; invitedUid?: string },
 ): GameDoc {
   return {
     code,
     status: 'waiting',
     mode: opts.mode ?? 'classic',
+    turnTimerMs: opts.turnTimerMs ?? null,
+    turnDeadline: null,
+    timeoutStreak: {},
+    remindedTurn: null,
     hostUid,
     playerUids: [hostUid],
     players: { [hostUid]: playerEntry(host) },
@@ -127,10 +140,12 @@ export function newGameDoc(
 
 /** Adds the second player. Mutates and returns the update to apply to the game doc. */
 export function joinUpdate(game: GameDoc, uid: string, user: UserDoc, now: Timestamp): Partial<GameDoc> {
+  const hostEntry = game.players[game.hostUid]!;
   return {
     status: 'placing',
     playerUids: [...game.playerUids, uid],
     players: { ...game.players, [uid]: playerEntry(user) },
+    isRated: !game.isBotGame && !hostEntry.isGuest && !user.isGuest,
     shots: { ...game.shots, [uid]: [] },
     updatedAt: now,
     lastMoveAt: now,
@@ -154,14 +169,17 @@ export interface CreateGameResult {
 }
 
 export async function createGame(uid: string, data?: unknown): Promise<CreateGameResult> {
-  const mode = parseGameModeInput((data as { mode?: unknown } | undefined)?.mode);
+  const input = data as { mode?: unknown; turnTimerMs?: unknown } | undefined;
+  const mode = parseGameModeInput(input?.mode);
   if (!mode) throw new HttpsError('invalid-argument', 'Choose a game type');
+  const timer = parseTurnTimerInput(input?.turnTimerMs);
+  if (!timer.ok) throw new HttpsError('invalid-argument', 'Choose a supported turn timer');
   return db.runTransaction(async (tx) => {
     const host = await requireUser(uid, tx);
     const code = await reserveJoinCode(tx);
     const now = Timestamp.now();
     const gameRef = refs.games().doc();
-    tx.set(gameRef, newGameDoc(uid, host, code, now, { isQuickMatch: false, mode }));
+    tx.set(gameRef, newGameDoc(uid, host, code, now, { isQuickMatch: false, mode, turnTimerMs: timer.value }));
     tx.set(refs.gameCode(code), { gameId: gameRef.id, createdAt: now });
     return { gameId: gameRef.id, code };
   });
@@ -249,6 +267,7 @@ export async function requestRematch(uid: string, data: unknown): Promise<Reques
     const rematch = newGameDoc(uid, host, code, now, {
       isQuickMatch: false,
       mode: game.mode ?? 'classic',
+      turnTimerMs: game.turnTimerMs ?? null,
       rematchOf: gameId,
       invitedUid,
     });
@@ -261,6 +280,7 @@ export async function requestRematch(uid: string, data: unknown): Promise<Reques
         sunkShips: [],
         shotsFired: 0,
         hits: 0,
+        isGuest: invitedPlayer.isGuest === true,
       };
     }
 
@@ -331,6 +351,7 @@ export async function placeShips(uid: string, data: unknown): Promise<PlaceShips
       status = 'active';
       update.status = status;
       update.currentTurnUid = isBotUid(opponentUid) ? uid : Math.random() < 0.5 ? uid : opponentUid;
+      update.turnDeadline = turnDeadlineFor(game.turnTimerMs, now);
       update.turnNumber = 1;
       update.startedAt = now;
     }
@@ -415,6 +436,7 @@ export async function fireShot(uid: string, data: unknown): Promise<FireShotResu
     const gameUpdate: Record<string, unknown> = {
       [`shots.${uid}`]: FieldValue.arrayUnion(shot),
       [`players.${uid}.shotsFired`]: FieldValue.increment(1),
+      [`timeoutStreak.${uid}`]: 0,
       updatedAt: now,
     };
     if (isHit) gameUpdate[`players.${uid}.hits`] = FieldValue.increment(1);
@@ -545,6 +567,8 @@ export async function fireShot(uid: string, data: unknown): Promise<FireShotResu
       gameUpdate.currentTurnUid = afterBot.currentTurn;
       gameUpdate.turnNumber = afterBot.turnNumber;
       gameUpdate.lastMoveAt = now;
+      gameUpdate.turnDeadline = turnDeadlineFor(game.turnTimerMs, now);
+      gameUpdate[`timeoutStreak.${opponentUid}`] = 0;
 
       if (botHits > 0) {
         tx.update(refs.privateBoard(gameId, uid), {
@@ -593,6 +617,7 @@ export async function fireShot(uid: string, data: unknown): Promise<FireShotResu
     gameUpdate.currentTurnUid = opponentUid;
     gameUpdate.turnNumber = FieldValue.increment(1);
     gameUpdate.lastMoveAt = now;
+    gameUpdate.turnDeadline = turnDeadlineFor(game.turnTimerMs, now);
     tx.update(refs.game(gameId), gameUpdate);
 
     return { result: outcome.result, sunkShip: outcome.sunkShip, gameOver: false, winnerUid: null };
@@ -697,6 +722,8 @@ export async function fireSalvo(uid: string, data: unknown): Promise<FireSalvoRe
       lastMoveAt: now,
       currentTurnUid: finalState.currentTurn,
       turnNumber: finalState.turnNumber,
+      turnDeadline: turnDeadlineFor(game.turnTimerMs, now),
+      [`timeoutStreak.${uid}`]: 0,
     };
     const addVolley = (shooter: string, shots: Shot[], victim: string) => {
       if (shots.length === 0) return;
@@ -711,6 +738,7 @@ export async function fireSalvo(uid: string, data: unknown): Promise<FireSalvoRe
     };
     addVolley(uid, humanShots, opponentUid);
     addVolley(opponentUid, botShots, uid);
+    if (botShots.length > 0) gameUpdate[`timeoutStreak.${opponentUid}`] = 0;
 
     if (finalState.phase === 'gameOver') {
       const winnerUid = finalState.winner!;
@@ -885,6 +913,7 @@ export async function useAbility(uid: string, data: unknown): Promise<UseAbility
     let finalState = abilityResult.state;
     const humanShots = finalState.shots[uid]!.slice(initialState.shots[uid]!.length);
     let botShots: Shot[] = [];
+    let botActed = false;
     if (botOpponent && finalState.phase === 'playing') {
       const botHistory = finalState.shots[opponentUid]!;
       const botAction = chooseBotAbilityAction({
@@ -927,6 +956,7 @@ export async function useAbility(uid: string, data: unknown): Promise<UseAbility
       }
       if (!botResult.ok) throwCoreError(botResult.error);
       finalState = botResult.state;
+      botActed = true;
       botShots = finalState.shots[opponentUid]!.slice(botHistory.length);
     }
 
@@ -938,6 +968,8 @@ export async function useAbility(uid: string, data: unknown): Promise<UseAbility
       turnNumber: finalState.turnNumber,
       lastMoveAt: now,
       updatedAt: now,
+      turnDeadline: turnDeadlineFor(game.turnTimerMs, now),
+      [`timeoutStreak.${uid}`]: 0,
     };
     const addShots = (shooter: string, victim: string, shots: Shot[]) => {
       if (shots.length === 0) return;
@@ -952,6 +984,7 @@ export async function useAbility(uid: string, data: unknown): Promise<UseAbility
     };
     addShots(uid, opponentUid, humanShots);
     addShots(opponentUid, uid, botShots);
+    if (botActed) gameUpdate[`timeoutStreak.${opponentUid}`] = 0;
 
     const gameOver = finalState.phase === 'gameOver';
     if (gameOver) {
@@ -1097,7 +1130,7 @@ interface EndByRuleInput {
 }
 
 /** Shared tail for resign and timeout: reads users + boards, then finishes the game. */
-async function endGameByRule(tx: Transaction, game: GameDoc, input: EndByRuleInput): Promise<void> {
+export async function endGameByRule(tx: Transaction, game: GameDoc, input: EndByRuleInput): Promise<void> {
   const { gameId, winnerUid, loserUid, reason } = input;
   const [winnerSnap, loserSnap, winnerBoard, loserBoard, pairSnap] = await Promise.all([
     tx.get(refs.user(winnerUid)),
@@ -1170,8 +1203,9 @@ export async function claimTimeoutWin(uid: string, data: unknown): Promise<EndGa
 
     const last = game.lastMoveAt?.toMillis() ?? game.createdAt.toMillis();
     const elapsed = Date.now() - last;
-    if (elapsed < game.abandonTimeoutMs) {
-      const hoursLeft = Math.ceil((game.abandonTimeoutMs - elapsed) / 3_600_000);
+    const abandonTimeoutMs = game.abandonTimeoutMs ?? GAME_CONFIG.ABANDON_TIMEOUT_MS;
+    if (elapsed < abandonTimeoutMs) {
+      const hoursLeft = Math.ceil((abandonTimeoutMs - elapsed) / 3_600_000);
       throw new HttpsError('failed-precondition', `Your opponent still has about ${hoursLeft}h to move`);
     }
 

@@ -16,6 +16,10 @@ export const GAME_CONFIG = {
 
   /** How long a player may be inactive before the opponent can claim the win (ms). Default 3 days. */
   ABANDON_TIMEOUT_MS: 3 * 24 * 60 * 60 * 1000,
+  TURN_TIMER_OPTIONS_MS: [60_000, 120_000] as const,
+  TURN_TIMEOUT_FORFEIT_STREAK: 3,
+  TURN_TIMEOUT_GRACE_MS: 2_000,
+  TURN_REMINDER_AFTER_MS: 24 * 60 * 60 * 1000,
 
   /** Games nobody joined are deleted after this long (ms). Default 7 days. */
   UNJOINED_GAME_TTL_MS: 7 * 24 * 60 * 60 * 1000,

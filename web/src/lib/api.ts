@@ -65,8 +65,11 @@ export interface AdminUserUpdate {
 
 export const adminUpdateUser = (update: AdminUserUpdate) => call<unknown, AdminUserUpdate>('adminUpdateUser', update);
 
-export const createGame = (mode: GameMode) =>
-  call<{ gameId: string; code: string }, { mode: GameMode }>('createGame', { mode });
+export const createGame = (mode: GameMode, turnTimerMs?: number | null) =>
+  call<{ gameId: string; code: string }, { mode: GameMode; turnTimerMs?: number | null }>(
+    'createGame',
+    turnTimerMs === undefined ? { mode } : { mode, turnTimerMs },
+  );
 
 export const joinGame = (code: string) => call<{ gameId: string }, { code: string }>('joinGame', { code });
 
@@ -113,6 +116,12 @@ export const resign = (gameId: string) => call<{ winnerUid: string }, { gameId: 
 export const claimTimeoutWin = (gameId: string) =>
   call<{ winnerUid: string }, { gameId: string }>('claimTimeoutWin', { gameId });
 
+export const claimTurnTimeout = (gameId: string) =>
+  call<{ skipped: boolean; forfeited: boolean }, { gameId: string }>('claimTurnTimeout', { gameId });
+
+export const completeGuestUpgrade = () =>
+  call<{ isGuest: boolean }>('completeGuestUpgrade', {});
+
 export const createBotGame = (difficulty: BotDifficulty, mode: GameMode) =>
   call<{ gameId: string }, { difficulty: BotDifficulty; mode: GameMode }>('createBotGame', { difficulty, mode });
 
@@ -121,10 +130,23 @@ export const joinQuickMatch = (mode: GameMode) =>
 
 export const cancelQuickMatch = () => call<unknown>('cancelQuickMatch', {});
 
-export const createChallenge = (opponentUid: string, mode: GameMode, sourceGameId?: string) =>
-  call<{ challengeId: string; gameId: string | null }, { opponentUid: string; mode: GameMode; sourceGameId?: string }>(
+export const createChallenge = (
+  opponentUid: string,
+  mode: GameMode,
+  sourceGameId?: string,
+  turnTimerMs?: number | null,
+) =>
+  call<
+    { challengeId: string; gameId: string | null },
+    { opponentUid: string; mode: GameMode; sourceGameId?: string; turnTimerMs?: number | null }
+  >(
     'createChallenge',
-    sourceGameId ? { opponentUid, mode, sourceGameId } : { opponentUid, mode },
+    {
+      opponentUid,
+      mode,
+      ...(sourceGameId ? { sourceGameId } : {}),
+      ...(turnTimerMs === undefined ? {} : { turnTimerMs }),
+    },
   );
 
 export const respondChallenge = (challengeId: string, accept: boolean) =>

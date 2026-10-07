@@ -42,6 +42,7 @@ export interface UserProfile {
   leaderboardVisible: boolean;
   suspended: boolean;
   isBot?: boolean;
+  isGuest?: boolean;
   botStats?: PlayerStats;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
@@ -54,6 +55,7 @@ export type EndReason = 'all_sunk' | 'resign' | 'timeout';
 export interface GamePlayer {
   username: string;
   rating: number;
+  isGuest?: boolean;
   ready: boolean;
   sunkShips: ShipType[];
   shotsFired: number;
@@ -71,6 +73,11 @@ export interface Game {
   code: string;
   status: GameStatus;
   mode?: GameMode;
+  isRated?: boolean;
+  turnTimerMs?: number | null;
+  turnDeadline?: Timestamp | null;
+  timeoutStreak?: Record<string, number>;
+  remindedTurn?: number | null;
   hostUid: string;
   playerUids: string[];
   players: Record<string, GamePlayer>;
@@ -105,6 +112,7 @@ export interface Challenge {
   fromUsername: string;
   toUsername: string;
   mode: GameMode;
+  turnTimerMs?: number | null;
   status: ChallengeStatus;
   sourceGameId: string | null;
   gameId: string | null;

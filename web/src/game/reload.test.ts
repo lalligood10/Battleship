@@ -50,12 +50,18 @@ describe('game reload', () => {
       code: 'ABCD23',
       status: 'active',
       mode: 'salvo',
+      isRated: true,
+      turnTimerMs: 60_000,
+      turnDeadline: { toMillis: () => 1_700_000_060_000 },
+      timeoutStreak: { alice: 0, bob: 2 },
+      remindedTurn: 3,
       hostUid: 'alice',
       playerUids: ['alice', 'bob'],
       players: {
-        alice: { username: 'Alice', rating: 1000, ready: true, sunkShips: [], shotsFired: 3, hits: 2 },
-        bob: { username: 'Bob', rating: 1000, ready: true, sunkShips: [], shotsFired: 2, hits: 1 },
+        alice: { username: 'Alice', rating: 1000, isGuest: false, ready: true, sunkShips: [], shotsFired: 3, hits: 2 },
+        bob: { username: 'Bob', rating: 1000, isGuest: true, ready: true, sunkShips: [], shotsFired: 2, hits: 1 },
       },
+      abilityLog: [],
       shots: {
         alice: [
           { row: 0, col: 0, result: 'hit', at: 10 },
@@ -96,8 +102,15 @@ describe('game reload', () => {
       rematch: null,
       rematchOf: null,
       invitedUid: null,
+      isRated: undefined,
+      turnTimerMs: null,
+      turnDeadline: null,
+      timeoutStreak: {},
+      remindedTurn: null,
       lastMoveAt: null,
+      abandonTimeoutMs: 259_200_000,
     });
+    expect(legacy?.isRated).toBeUndefined();
     expect(gameFromSnapshot(snapshot(undefined))).toBeNull();
   });
 });
@@ -132,6 +145,7 @@ describe('diffGameEvents after reload', () => {
     expect(diffGameEvents(reloaded, next)).toEqual([
       { type: 'shotFired', shooter: 'two', target: { row: 7, col: 7 }, turnNumber: 5 },
       { type: 'shotResolved', shooter: 'two', target: { row: 7, col: 7 }, result: 'miss', turnNumber: 5 },
+      { type: 'salvoResolved', shooter: 'two', targets: [{ row: 7, col: 7 }], results: ['miss'], turnNumber: 5 },
       { type: 'turnChanged', currentTurn: 'one', turnNumber: 6 },
     ]);
   });
