@@ -62,14 +62,14 @@ export function LeaderboardsPage() {
   return (
     <div className="page">
       <TopBar title="Leaderboards" />
-      <div className="segmented" role="tablist">
+      <div className="segmented" role="tablist" aria-label="Leaderboard">
         {(['global', 'weekly', 'friends'] as Tab[]).map((t) => (
           <button key={t} type="button" role="tab" aria-selected={tab === t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
             {t === 'global' ? 'Global' : t === 'weekly' ? 'This week' : 'Friends'}
           </button>
         ))}
       </div>
-      <p className="muted" style={{ fontSize: 13 }}>
+      <p className="muted small leaderboard__caption">
         {tab === 'global' && 'All players, ranked by rating.'}
         {tab === 'weekly' && 'Most wins this week (Monday to Sunday, UTC).'}
         {tab === 'friends' && 'You and everyone you have played, ranked by rating.'}
@@ -84,25 +84,26 @@ export function LeaderboardsPage() {
         />
       )}
       {rows && rows.length > 0 && (
-        <ol className="list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+        <ol className="list leaderboard">
           {rows.map((r, i) => (
-            <li key={r.id} className={`list-item${r.id === uid ? ' list-item--attention' : ''}`}>
-              <span className={`rank${r.id === uid ? ' me' : ''}`}>{i + 1}</span>
-              <span className="avatar">{r.username.slice(0, 1).toUpperCase()}</span>
-              <span className="grow">
-                <div style={{ fontWeight: 700 }}>
-                  {r.username}
-                  {r.id === uid && <span className="muted"> (you)</span>}
-                </div>
-                <div className="muted" style={{ fontSize: 13 }}>
-                  {r.secondary}
-                </div>
+            <li
+              key={r.id}
+              className={`list-item leaderboard__row${i < 3 ? ' leaderboard__row--podium' : ''}${r.id === uid ? ' list-item--attention' : ''}`}
+            >
+              <span className={`rank leaderboard__rank${r.id === uid ? ' me' : ''}`}>{i + 1}</span>
+              <span className="avatar" aria-hidden="true">
+                {r.username.slice(0, 1).toUpperCase()}
               </span>
-              <span style={{ textAlign: 'right' }}>
-                <b style={{ fontSize: 18 }}>{r.primary}</b>
-                <div className="muted" style={{ fontSize: 11 }}>
-                  {unit}
+              <span className="grow leaderboard__who">
+                <div className="leaderboard__name">
+                  {r.username}
+                  {r.id === uid && <span className="leaderboard__you"> (you)</span>}
                 </div>
+                <div className="muted leaderboard__meta">{r.secondary}</div>
+              </span>
+              <span className="leaderboard__score">
+                <b className="mono">{r.primary}</b>
+                <span className="panel-title">{unit}</span>
               </span>
               {tab === 'friends' && r.id !== uid && <ChallengeButton opponentUid={r.id} opponentName={r.username} />}
             </li>

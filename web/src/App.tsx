@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { MAIN_ID } from './a11y/landmarks';
 import { Alert, Spinner, TabBar } from './components/ui';
 import { isConfigured } from './lib/firebase';
 import { AdminPage } from './pages/AdminPage';
@@ -35,51 +36,55 @@ function Shell() {
 
   if (state.kind === 'loading') {
     return (
-      <div className="app page page--center">
-        <Spinner label="Loading…" />
-      </div>
+      <AppFrame>
+        <div className="page page--center">
+          <Spinner label="Loading…" />
+        </div>
+      </AppFrame>
     );
   }
 
   if (state.kind === 'signedOut') {
     return (
-      <div className="app">
+      <AppFrame>
         {error && <Alert onDismiss={clearError}>{error}</Alert>}
         <Routes>
           <Route path="/join/:code" element={<JoinPage />} />
           <Route path="*" element={<SignInPage />} />
         </Routes>
-      </div>
+      </AppFrame>
     );
   }
 
   if (state.kind === 'needsUsername') {
     return (
-      <div className="app">
+      <AppFrame>
         {error && <Alert onDismiss={clearError}>{error}</Alert>}
         <UsernamePage />
-      </div>
+      </AppFrame>
     );
   }
 
   if (state.profile.suspended) {
     return (
-      <div className="app page page--center">
-        <div className="card stack center">
-          <h1 className="title">Account suspended</h1>
-          <p className="muted">This account cannot play or appear on the leaderboards.</p>
-          <button className="btn btn--secondary" onClick={() => void signOut()}>
-            Sign out
-          </button>
+      <AppFrame>
+        <div className="page page--center">
+          <div className="card stack center">
+            <h1 className="title">Account suspended</h1>
+            <p className="muted">This account cannot play or appear on the leaderboards.</p>
+            <button className="btn btn--secondary" onClick={() => void signOut()}>
+              Sign out
+            </button>
+          </div>
         </div>
-      </div>
+      </AppFrame>
     );
   }
 
   const hideTabs = location.pathname.startsWith('/game/');
   return (
     <ActiveGamesProvider uid={state.user.uid}>
-      <div className="app">
+      <AppFrame footer={!hideTabs && <TabBarWithBadge />}>
         {error && <Alert onDismiss={clearError}>{error}</Alert>}
         <Routes>
           <Route path="/" element={<HomePage />} />
@@ -100,9 +105,23 @@ function Shell() {
           )}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-        {!hideTabs && <TabBarWithBadge />}
-      </div>
+      </AppFrame>
     </ActiveGamesProvider>
+  );
+}
+
+/** App chrome: a skip link, the routed content as the `main` landmark, then any navigation. */
+export function AppFrame({ children, footer }: { children?: ReactNode; footer?: ReactNode }) {
+  return (
+    <div className="app">
+      <a className="skip-link" href={`#${MAIN_ID}`}>
+        Skip to content
+      </a>
+      <main id={MAIN_ID} className="app-main" tabIndex={-1}>
+        {children}
+      </main>
+      {footer}
+    </div>
   );
 }
 

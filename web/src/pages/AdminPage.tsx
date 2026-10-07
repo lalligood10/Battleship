@@ -36,16 +36,24 @@ export function AdminPage() {
   }, [query, users]);
 
   return (
-    <div className="page page--wide">
+    <div className="page page--wide admin">
       <TopBar title="Manage players" back="/profile" />
       <p className="muted small">Rename players, control leaderboard visibility, or suspend access.</p>
-      <input
-        className="input"
-        type="search"
-        placeholder="Search username or email"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-      />
+      <div className="admin__toolbar">
+        <input
+          className="input"
+          type="search"
+          aria-label="Search players"
+          placeholder="Search username or email"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        {filtered && (
+          <p className="panel-title admin__count" aria-live="polite">
+            {filtered.length} {filtered.length === 1 ? 'player' : 'players'}
+          </p>
+        )}
+      </div>
       {error && <Alert>{error}</Alert>}
       {users === null && !error && <Spinner />}
       {filtered?.length === 0 && !error && <Empty title="No players found" />}
@@ -101,19 +109,28 @@ function AdminUserCard({
   };
 
   return (
-    <article className="card stack">
-      <div className="row row--between">
-        <div className="grow">
-          <b>{user.username}{isCurrentUser ? ' (you)' : ''}</b>
-          <div className="muted small">{user.email ?? user.uid}</div>
+    <article className={`card stack admin-user${user.suspended ? ' admin-user--suspended' : ''}`}>
+      <div className="row row--between admin-user__head">
+        <div className="grow admin-user__who">
+          <h2 className="admin-user__name">
+            {user.username}
+            {isCurrentUser ? ' (you)' : ''}
+          </h2>
+          <div className="muted small admin-user__id">{user.email ?? user.uid}</div>
+          {(user.suspended || !user.leaderboardVisible) && (
+            <div className="row admin-user__flags">
+              {user.suspended && <span className="badge admin-user__flag admin-user__flag--danger">Suspended</span>}
+              {!user.leaderboardVisible && <span className="badge admin-user__flag">Hidden</span>}
+            </div>
+          )}
         </div>
-        <div className="small" style={{ textAlign: 'right' }}>
-          <b>{user.rating}</b>
+        <div className="small admin-user__stats">
+          <b className="mono">{user.rating}</b>
           <div className="muted">{user.wins}W · {user.losses}L</div>
         </div>
       </div>
       {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
-      <form className="row" onSubmit={rename}>
+      <form className="row admin-user__rename" onSubmit={rename}>
         <input
           className="input grow"
           aria-label={`Username for ${user.username}`}
@@ -125,7 +142,7 @@ function AdminUserCard({
           Rename
         </button>
       </form>
-      <div className="row">
+      <div className="row admin-user__actions">
         <button
           className="btn btn--secondary btn--sm grow"
           type="button"

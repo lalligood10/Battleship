@@ -46,22 +46,25 @@ export function ProfilePage() {
   return (
     <div className="page">
       <TopBar title="Profile" />
-      <div className="card row" style={{ gap: 14 }}>
-        <div className="avatar" style={{ width: 52, height: 52, fontSize: 22 }}>
+      <section className="card profile-id" aria-label="Your profile">
+        <div className="avatar profile-id__avatar" aria-hidden="true">
           {profile.username.slice(0, 1).toUpperCase()}
         </div>
         <div className="grow">
-          <div style={{ fontWeight: 800, fontSize: 18 }}>{profile.username}</div>
-          <div className="muted">Rating {profile.rating}</div>
+          <p className="profile-id__name">{profile.username}</p>
+          <p className="profile-id__rating">
+            <span className="panel-title">Rating</span> <b className="mono">{profile.rating}</b>
+          </p>
         </div>
-      </div>
+        {profile.isGuest && <span className="badge profile-id__guest">Guest</span>}
+      </section>
 
       {profile.isGuest && <GuestUpgradeCard onSuccess={() => setUpgradeNotice('Account saved.')} />}
       {upgradeNotice && <Alert kind="success">{upgradeNotice}</Alert>}
 
       <UsernameSettings current={profile.username} />
 
-      <div className="stat-grid">
+      <div className="stat-grid profile-stats" role="group" aria-label="Your stats">
         <Stat label="Wins" value={s.wins} />
         <Stat label="Losses" value={s.losses} />
         <Stat label="Played" value={s.gamesPlayed} />
@@ -70,9 +73,11 @@ export function ProfilePage() {
         <Stat label="Best streak" value={s.longestStreak} />
       </div>
 
-      <section className="card stack">
-        <h2 style={{ fontSize: 16 }}>Appearance</h2>
-        <div className="segmented" role="radiogroup" aria-label="Theme">
+      <section className="card stack" aria-labelledby="profile-appearance">
+        <h2 id="profile-appearance" className="panel-title">
+          Appearance
+        </h2>
+        <div className="segmented theme-toggle" role="radiogroup" aria-labelledby="profile-appearance">
           {(['system', 'light', 'dark'] as ThemePreference[]).map((t) => (
             <button key={t} type="button" role="radio" aria-checked={theme === t} className={theme === t ? 'active' : ''} onClick={() => setTheme(t)}>
               {t === 'system' ? 'Auto' : t === 'light' ? 'Light' : 'Dark'}
@@ -89,8 +94,10 @@ export function ProfilePage() {
         </Link>
       )}
 
-      <section className="stack">
-        <h2 style={{ fontSize: 16 }}>Game history</h2>
+      <section className="stack" aria-labelledby="profile-history">
+        <h2 id="profile-history" className="panel-title">
+          Game history
+        </h2>
         {error && <Alert>{error}</Alert>}
         {history === null && !error && <Spinner />}
         {history && history.length === 0 && <Empty title="No finished games yet" message="Your results will appear here." />}
@@ -102,12 +109,12 @@ export function ProfilePage() {
               const won = g.winnerUid === uid;
               const delta = g.ratingChanges?.[uid]?.delta;
               return (
-                <div key={g.id} className="row" style={{ gap: 8 }}>
-                  <Link to={`/game/${g.id}`} className="list-item grow">
+                <div key={g.id} className="row history-row">
+                  <Link to={`/game/${g.id}`} className="list-item grow history-row__link">
                     <span className={`badge ${won ? 'badge--win' : 'badge--loss'}`}>{won ? 'W' : 'L'}</span>
                     <span className="grow">
-                      <div style={{ fontWeight: 700 }}>vs {name}</div>
-                      <div className="muted" style={{ fontSize: 13 }}>
+                      <div className="history-row__name">vs {name}</div>
+                      <div className="muted history-row__meta">
                         {g.endReason === 'resign' ? 'By resignation' : g.endReason === 'timeout' ? 'By timeout' : 'Fleet destroyed'}
                         {g.finishedAt ? ` · ${g.finishedAt.toDate().toLocaleDateString()}` : ''}
                       </div>
@@ -178,11 +185,14 @@ function GuestUpgradeCard({ onSuccess }: { onSuccess: () => void }) {
   };
 
   return (
-    <section className="card stack">
-      <h2 style={{ fontSize: 18 }}>Save your account</h2>
-      <p className="muted" style={{ margin: 0 }}>
-        Keep your name, stats and games by linking an email or Google account.
-      </p>
+    <section className="card stack guest-save" aria-labelledby="guest-save-title">
+      <div className="row row--between">
+        <h2 id="guest-save-title" className="screen-heading">
+          Save your account
+        </h2>
+        <span className="badge guest-save__badge">Unsaved</span>
+      </div>
+      <p className="muted">Keep your name, stats and games by linking an email or Google account.</p>
       {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
       <form className="stack" onSubmit={submit}>
         <label className="field">
@@ -268,8 +278,10 @@ function UsernameSettings({ current }: { current: string }) {
   };
 
   return (
-    <form className="card stack" onSubmit={submit}>
-      <h2 style={{ fontSize: 16 }}>Username</h2>
+    <form className="card stack" onSubmit={submit} aria-labelledby="profile-username">
+      <h2 id="profile-username" className="panel-title">
+        Username
+      </h2>
       {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
       {notice && <Alert kind="success" onDismiss={() => setNotice(null)}>{notice}</Alert>}
       <label className="field">
@@ -283,10 +295,10 @@ function UsernameSettings({ current }: { current: string }) {
           onChange={(event) => setName(event.target.value)}
         />
       </label>
-      <div className="small" style={{ minHeight: 18 }}>
+      <div className="small field-status" aria-live="polite">
         {check.kind === 'checking' && <span className="muted">Checking…</span>}
-        {check.kind === 'ok' && <span style={{ color: 'var(--success)' }}>Available</span>}
-        {check.kind === 'bad' && <span style={{ color: 'var(--danger)' }}>{check.reason}</span>}
+        {check.kind === 'ok' && <span className="field-status--ok">Available</span>}
+        {check.kind === 'bad' && <span className="field-status--bad">{check.reason}</span>}
       </div>
       <button className="btn btn--primary" type="submit" disabled={busy || check.kind !== 'ok'}>
         {busy ? 'Saving…' : 'Change username'}
@@ -324,9 +336,11 @@ function PushSettings({ uid }: { uid: string }) {
   };
 
   return (
-    <section className="card stack">
-      <h2 style={{ fontSize: 16 }}>Notifications</h2>
-      <p className="muted" style={{ fontSize: 14 }}>
+    <section className="card stack" aria-labelledby="profile-push">
+      <h2 id="profile-push" className="panel-title">
+        Notifications
+      </h2>
+      <p className="muted small">
         Get an alert on this device when it's your turn. Your active games list shows this in-app regardless.
       </p>
       {state === 'blocked' ? (

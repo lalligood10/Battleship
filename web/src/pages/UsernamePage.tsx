@@ -48,8 +48,9 @@ export function UsernamePage() {
   };
 
   return (
-    <div className="page page--center">
-      <form className="card stack" onSubmit={submit}>
+    <div className="page page--center username">
+      <form className="card stack username__card" onSubmit={submit}>
+        <p className="panel-title">Enlistment</p>
         <h1 className="title">Pick a username</h1>
         <p className="muted">This is how friends and the leaderboard will see you. 3–16 letters, numbers or _.</p>
         {state.kind === 'needsUsername' && state.user.isAnonymous && (
@@ -69,10 +70,10 @@ export function UsernamePage() {
             aria-describedby="username-status"
           />
         </label>
-        <p id="username-status" className="small" style={{ minHeight: 18 }}>
+        <p id="username-status" className="small field-status" aria-live="polite">
           {check.kind === 'checking' && <span className="muted">Checking…</span>}
-          {check.kind === 'ok' && <span style={{ color: 'var(--success)' }}>Available</span>}
-          {check.kind === 'bad' && <span style={{ color: 'var(--danger)' }}>{check.reason}</span>}
+          {check.kind === 'ok' && <span className="field-status--ok">Available</span>}
+          {check.kind === 'bad' && <span className="field-status--bad">{check.reason}</span>}
         </p>
         <button className="btn btn--primary btn--block" type="submit" disabled={busy || check.kind !== 'ok'}>
           {busy ? <span className="spinner" /> : 'Continue'}
