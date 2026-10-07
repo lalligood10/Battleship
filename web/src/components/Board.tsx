@@ -3,6 +3,7 @@
  * `onCellTap` (single tap/click) and `onDrag*` (pointer drag across cells, used for ship placement).
  */
 import {
+  useEffect,
   useRef,
   useState,
   type FocusEvent,
@@ -39,6 +40,8 @@ export interface BoardProps {
   cellInteractive?: (c: Coordinate, mark: CellMark) => boolean;
   onCellAim?: (c: Coordinate | null) => void;
   onEscape?: () => void;
+  focusRequest?: { cell: Coordinate; id: number } | null;
+  onGridKey?: (key: string, at: Coordinate) => false | { focus?: Coordinate };
 }
 
 const DRAG_THRESHOLD_PX = 6;
@@ -65,10 +68,21 @@ export function Board(props: BoardProps) {
     cellInteractive,
     onCellAim,
     onEscape,
+    focusRequest,
+    onGridKey,
   } = props;
   const gridRef = useRef<HTMLDivElement>(null);
   const [focus, setFocus] = useState<Coordinate>(lastShot ?? { row: 0, col: 0 });
   const drag = useRef<{ start: Coordinate; startX: number; startY: number; dragging: boolean; active: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!focusRequest) return;
+    const { cell } = focusRequest;
+    setFocus(cell);
+    gridRef.current
+      ?.querySelector<HTMLElement>(`[data-row="${cell.row}"][data-col="${cell.col}"]`)
+      ?.focus({ preventScroll: true });
+  }, [focusRequest]);
 
   const cellFromPoint = (x: number, y: number): Coordinate | null => {
     const el = document.elementFromPoint(x, y);
@@ -114,6 +128,18 @@ export function Board(props: BoardProps) {
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const result = onGridKey?.(e.key, focus);
+    if (result && typeof result === 'object') {
+      e.preventDefault();
+      if (result.focus) {
+        setFocus(result.focus);
+        onCellAim?.(result.focus);
+        gridRef.current
+          ?.querySelector<HTMLElement>(`[data-row="${result.focus.row}"][data-col="${result.focus.col}"]`)
+          ?.focus();
+      }
+      return;
+    }
     if (e.key === 'Escape') {
       onEscape?.();
       return;
@@ -192,13 +218,9 @@ export function Board(props: BoardProps) {
 
   return (
     <div className={`board-shell${small ? ' board-shell--sm' : ''}`}>
-      {/* Decorative sea frame: swell, drifting cloud banks and burning wrecks outside the grid. */}
       <div className="board-sea fx" aria-hidden>
-        <span className="sea-swell" />
-        <span className="sea-clouds" />
-        <span className="sea-fire sea-fire--a" />
-        <span className="sea-fire sea-fire--b" />
-        <span className="sea-fire sea-fire--c" />
+        <span className="console-scanlines" />
+        <span className="console-corners" />
       </div>
       <div
         ref={gridRef}
@@ -214,7 +236,7 @@ export function Board(props: BoardProps) {
         onKeyDown={handleKeyDown}
         aria-readonly={disabled || undefined}
       >
-        <div role="row" style={{ display: 'contents' }}>
+        <div role="row" style={{ display: 'contents' }} aria-hidden>
           <div className="label" aria-hidden />
           {COLUMN_LABELS.map((l) => (
             <div className="label" key={l} aria-hidden>

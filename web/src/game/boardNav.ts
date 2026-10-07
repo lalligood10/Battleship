@@ -1,6 +1,12 @@
 import { BOARD_SIZE, type Coordinate } from './placement';
 
 export type CellMark = 'water' | 'ship' | 'ship-invalid' | 'miss' | 'hit' | 'sunk' | 'revealed';
+export type FocusContext = 'none' | 'fire-control' | 'board' | 'elsewhere';
+
+export function focusReturnTarget(context: FocusContext, fired: readonly Coordinate[]): Coordinate | null {
+  if (context === 'elsewhere' || fired.length === 0) return null;
+  return fired[fired.length - 1] ?? null;
+}
 
 export function moveFocus(c: Coordinate, key: string, ctrl: boolean): Coordinate | null {
   let { row, col } = c;
