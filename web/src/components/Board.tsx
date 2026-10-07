@@ -21,6 +21,8 @@ export interface BoardProps {
   onDragStart?: (c: Coordinate) => boolean;
   onDragMove?: (c: Coordinate) => void;
   onDragEnd?: () => void;
+  /** Fog over unexplored water cells (opponent board); clears when a cell is revealed. */
+  fog?: boolean;
   /** Decorative overlay rendered above the 10×10 cell area (labels excluded). */
   overlay?: ReactNode;
 }
@@ -28,7 +30,7 @@ export interface BoardProps {
 const DRAG_THRESHOLD_PX = 6;
 
 export function Board(props: BoardProps) {
-  const { markOf, selected, lastShot, targeting, disabled, small, ariaLabel, overlay, onCellTap, onDragStart, onDragMove, onDragEnd } = props;
+  const { markOf, selected, lastShot, targeting, disabled, small, fog, ariaLabel, overlay, onCellTap, onDragStart, onDragMove, onDragEnd } = props;
   const gridRef = useRef<HTMLDivElement>(null);
   const [focus, setFocus] = useState<Coordinate>(lastShot ?? { row: 0, col: 0 });
   const drag = useRef<{ start: Coordinate; startX: number; startY: number; dragging: boolean; active: boolean } | null>(null);
@@ -136,7 +138,7 @@ export function Board(props: BoardProps) {
       </div>
       <div
         ref={gridRef}
-        className={`board${small ? ' board--sm' : ''}`}
+        className={`board${small ? ' board--sm' : ''}${fog ? ' board--fog' : ''}`}
         role="grid"
         aria-label={ariaLabel}
         onPointerDown={handlePointerDown}
@@ -155,6 +157,7 @@ export function Board(props: BoardProps) {
           ))}
         </div>
         {rows}
+        <div className="board-water" aria-hidden />
         <div className="board-fx fx" style={{ left: 24, top: 20 }} aria-hidden>
           {overlay}
         </div>

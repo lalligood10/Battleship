@@ -118,6 +118,7 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
           <Board
             ariaLabel="Opponent's board"
             targeting
+            fog
             disabled={finished || !myTurn || busy || pendingIncoming}
             markOf={(c) => markAt(targetMarks, c)}
             selected={(c) => target?.row === c.row && target?.col === c.col}

@@ -1,7 +1,8 @@
 /**
  * Animated strike sequence rendered inside a Board's `.fx` overlay: an inbound jet streaks to the
  * target row, then the cell shows a splash (miss), a burst (hit), or a burst plus a sinking ship
- * (sunk, when the server revealed the placement). Decorative only – no input, no timing logic.
+ * (sunk, when the server revealed the placement). While inbound, a reticle locks onto the target.
+ * Decorative only – no input, no timing logic.
  */
 import { useState } from 'react';
 import { SHIP_LENGTHS } from '@shared/config';
@@ -9,6 +10,7 @@ import type { Coordinate, ShipPlacement } from '../../lib/types';
 import { Burst } from './Burst';
 import { CarrierStrike } from './CarrierStrike';
 import { Jet } from './Jet';
+import { Reticle } from './Reticle';
 import { Ship } from './Ship';
 import { Splash } from './Splash';
 
@@ -51,8 +53,15 @@ export function StrikeOverlay({
           </div>
         </div>
       )}
+      {phase === 'inbound' && (
+        <div className="strike-result strike-reticle" style={{ left: tx, top: ty }}>
+          <Reticle />
+        </div>
+      )}
       {phase === 'miss' && (
         <div className="strike-result" style={{ left: tx, top: ty }}>
+          <span className="strike-ripple" />
+          <span className="strike-ripple strike-ripple--late" />
           <Splash className="strike-splash" />
         </div>
       )}
