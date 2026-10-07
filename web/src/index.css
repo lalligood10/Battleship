@@ -1823,3 +1823,115 @@ label.field {
     transition: opacity 150ms linear !important;
   }
 }
+
+/* Game Modes */
+.gm-picker {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.gm-heading {
+  font-size: 18px;
+  margin: 0;
+}
+.gm-options {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+.gm-option {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-2);
+  color: var(--text);
+}
+.gm-option--selected {
+  border: 2px solid var(--accent);
+  padding: 9px 11px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--card));
+}
+.gm-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.gm-radio {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.gm-radio:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.gm-choice-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.gm-how summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding-left: 30px;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.gm-how summary {
+  list-style: none;
+}
+.gm-how summary::-webkit-details-marker {
+  display: none;
+}
+.gm-how summary::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin-left: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+.gm-how[open] summary::after {
+  transform: translateY(2px) rotate(-135deg);
+}
+.gm-how summary:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.gm-how p {
+  margin: 2px 0 4px;
+  padding-left: 30px;
+  line-height: 1.4;
+}
+.gm-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.play-heading {
+  font-size: 18px;
+  margin: 0;
+}
