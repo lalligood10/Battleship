@@ -10,6 +10,7 @@ import { requestRematch } from '../../lib/api';
 import { errorMessage } from '../../lib/errors';
 import { isBotGame, opponentUid, rematchState, shotsBy, type Game, type PrivateBoard } from '../../lib/types';
 import { Reactions } from '../../components/Reactions';
+import { MuteToggle } from '../../audio/MuteToggle';
 
 export function ResultsView({ game, uid, board }: { game: Game; uid: string; board: PrivateBoard | null }) {
   const navigate = useNavigate();
@@ -73,7 +74,7 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
 
   return (
     <div className="page page--wide">
-      <TopBar title="Game over" back="/" />
+      <TopBar title="Game over" back="/" right={<MuteToggle />} />
       <div className="card result-hero stack" role="presentation" onClick={() => setFxDone(true)}>
         {!fxDone && (
           <div className="fx" aria-hidden>
