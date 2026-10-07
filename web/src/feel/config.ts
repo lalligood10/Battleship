@@ -11,8 +11,9 @@ export const FEEL = {
     carrierSinkHoldMs: 2400,
   },
   fx: {
-    shake: { hitPx: 3, sinkPx: 6, ownSinkPx: 10, durationMs: 280 },
-    particles: { hit: 8, sink: 16 },
+    shake: { hitPx: 3, sinkPx: 6, ownSinkPx: 10, durationMs: 280, sinkDurationMs: 420 },
+    particles: { hit: 8, sink: 16, max: 24, durationMs: 800 },
+    reducedFadeMs: 180,
     bannerMs: 2200,
   },
   audio: { masterVolume: 0.6, ambientVolume: 0.08 },
