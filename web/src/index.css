@@ -922,12 +922,19 @@ label.field {
 .board--fog .cell--selected::before {
   opacity: 0.35;
 }
-[data-theme='dark'] .board--fog .cell--water::before {
-  opacity: 0.5;
+/* Dark: fog dims unexplored water (darker than revealed cells) instead of frosting it. */
+[data-theme='dark'] .board--fog .cell::before {
+  background-image:
+    radial-gradient(70% 55% at 30% 35%, rgba(150, 168, 190, 0.1), transparent 75%),
+    radial-gradient(60% 50% at 75% 70%, rgba(150, 168, 190, 0.07), transparent 75%);
+  background-color: rgba(6, 12, 24, 0.42);
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .board--fog .cell--water::before {
-    opacity: 0.5;
+  :root:not([data-theme='light']) .board--fog .cell::before {
+    background-image:
+      radial-gradient(70% 55% at 30% 35%, rgba(150, 168, 190, 0.1), transparent 75%),
+      radial-gradient(60% 50% at 75% 70%, rgba(150, 168, 190, 0.07), transparent 75%);
+    background-color: rgba(6, 12, 24, 0.42);
   }
 }
 
