@@ -115,80 +115,111 @@ export function HomePage() {
   const others = games.filter((g) => !needsMyAction(g, uid));
 
   return (
-    <div className="page">
-      <header className="topbar">
+    <div className="page home-page">
+      <header className="topbar home-topbar">
         <div className="grow">
-          <p className="muted small">Welcome back</p>
+          <p className="home-eyebrow">Welcome back, commander</p>
           <h1>{profile?.username}</h1>
         </div>
-        <Link to="/profile" className="badge" aria-label="Your rating">
-          ★ {profile?.rating}
-        </Link>
+        <RatingBadge rating={profile?.rating} />
       </header>
-
-      <HomeBanner />
 
       {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
 
-      <section className="card stack">
-        <GameModePicker value={mode} onChange={setMode} heading="Game Modes" />
-      </section>
-
-      <section className="card stack" aria-labelledby="play-heading">
-        <div className="row" style={{ gap: 8 }}>
-          <h2 className="play-heading grow" id="play-heading">
-            Play
+      {loaded && waiting.length > 0 && (
+        <section className="home-section home-turns" aria-labelledby="your-turn-heading">
+          <h2 className="home-section-title" id="your-turn-heading">
+            Your turn <span className="home-count">{waiting.length}</span>
           </h2>
-          <ModeBadge mode={mode} />
-        </div>
-        <div className="stack" style={{ gap: 4 }}>
-          <button className="btn btn--primary btn--block" onClick={() => setPickingComputer(true)} disabled={busy !== null}>
-            {busy === 'bot' ? <span className="spinner" /> : 'Play vs Computer'}
-          </button>
-          <p className="muted small center" style={{ margin: 0 }}>
-            Instant game · Easy, Medium or Hard · unrated
-          </p>
-        </div>
-        <div className="stack">
-          <TurnTimerPicker value={turnTimerMs} onChange={setTurnTimerMs} />
-          <button className="btn btn--secondary btn--block" onClick={create} disabled={busy !== null}>
-            {busy === 'create' ? <span className="spinner" /> : 'Start a game with a friend'}
-          </button>
-        </div>
-        <form className="row" onSubmit={join}>
-          <input
-            className="input input--code grow"
-            style={{ fontSize: 20, minHeight: 48, letterSpacing: '0.2em' }}
-            placeholder="CODE"
-            aria-label="Join code"
-            autoCapitalize="characters"
-            autoCorrect="off"
-            maxLength={GAME_CONFIG.JOIN_CODE_LENGTH}
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-          />
-          <button
-            className="btn btn--secondary"
-            type="submit"
-            disabled={busy !== null || code.trim().length !== GAME_CONFIG.JOIN_CODE_LENGTH}
-          >
-            {busy === 'join' ? <span className="spinner" /> : 'Join'}
-          </button>
-        </form>
-        {isGuest ? (
-          <Link to="/profile" className="muted small center">
-            Create an account to use Quick Match
-          </Link>
-        ) : (
-          <button className="btn btn--ghost btn--sm" onClick={quickMatch} disabled={busy !== null}>
-            {busy === 'quick' ? <span className="spinner" /> : `Quick Match · ${modeLabel}`}
-          </button>
-        )}
-      </section>
+          <div className="list">
+            {waiting.map((g) => (
+              <GameRow key={g.id} game={g} uid={uid} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <HomeBanner />
+
+      <div className="home-console">
+        <section className="card home-panel home-missions">
+          <GameModePicker value={mode} onChange={setMode} heading="Mission select" />
+        </section>
+
+        <section className="card home-panel home-play" aria-labelledby="play-heading">
+          <div className="home-panel-head">
+            <h2 className="gm-heading" id="play-heading">
+              Play
+            </h2>
+            <ModeBadge mode={mode} />
+          </div>
+
+          <div className="home-group">
+            <button
+              className="btn btn--primary btn--block home-action"
+              onClick={() => setPickingComputer(true)}
+              disabled={busy !== null}
+            >
+              {busy === 'bot' ? <span className="spinner" /> : 'Play vs Computer'}
+            </button>
+            <p className="home-hint">Instant game · Easy, Medium or Hard · unrated</p>
+          </div>
+
+          <div className="home-group" role="group" aria-labelledby="friend-heading">
+            <h3 className="panel-title" id="friend-heading">
+              With a friend
+            </h3>
+            <TurnTimerPicker value={turnTimerMs} onChange={setTurnTimerMs} />
+            <button className="btn btn--secondary btn--block home-action" onClick={create} disabled={busy !== null}>
+              {busy === 'create' ? <span className="spinner" /> : 'Start a game with a friend'}
+            </button>
+            <form className="home-join" onSubmit={join}>
+              <input
+                className="input input--code home-code"
+                placeholder="CODE"
+                aria-label="Join code"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                maxLength={GAME_CONFIG.JOIN_CODE_LENGTH}
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+              />
+              <button
+                className="btn btn--secondary home-action"
+                type="submit"
+                disabled={busy !== null || code.trim().length !== GAME_CONFIG.JOIN_CODE_LENGTH}
+              >
+                {busy === 'join' ? <span className="spinner" /> : 'Join'}
+              </button>
+            </form>
+          </div>
+
+          <div className="home-group">
+            {isGuest ? (
+              <Link to="/profile" className="btn btn--ghost btn--block home-action home-guest-link">
+                Create an account to use Quick Match
+              </Link>
+            ) : (
+              <>
+                <button
+                  className="btn btn--secondary btn--block home-action"
+                  onClick={quickMatch}
+                  disabled={busy !== null}
+                >
+                  {busy === 'quick' ? <span className="spinner" /> : `Quick Match · ${modeLabel}`}
+                </button>
+                <p className="home-hint">Rated · paired with a player near your rating</p>
+              </>
+            )}
+          </div>
+        </section>
+      </div>
 
       {(incomingChallenges.length > 0 || outgoingChallenges.length > 0) && (
-        <section className="stack">
-          <h2 style={{ fontSize: 18 }}>Challenges</h2>
+        <section className="home-section" aria-labelledby="challenges-heading">
+          <h2 className="home-section-title" id="challenges-heading">
+            Challenges
+          </h2>
           <div className="list">
             {incomingChallenges.map((c) => (
               <IncomingChallengeRow key={c.id} challenge={c} onError={setError} />
@@ -200,28 +231,29 @@ export function HomePage() {
         </section>
       )}
 
-      <section className="stack">
-        <h2 style={{ fontSize: 18 }}>Your games</h2>
-        {listError && <Alert>{listError}</Alert>}
-        {!loaded ? (
-          <Spinner />
-        ) : games.length === 0 ? (
-          <Empty title="No games yet" message="No one's online right now? Play the computer instead.">
-            <button className="btn btn--primary" onClick={() => setPickingComputer(true)}>
-              Play vs Computer
-            </button>
-          </Empty>
-        ) : (
-          <div className="list">
-            {waiting.map((g) => (
-              <GameRow key={g.id} game={g} uid={uid} />
-            ))}
-            {others.map((g) => (
-              <GameRow key={g.id} game={g} uid={uid} />
-            ))}
-          </div>
-        )}
-      </section>
+      {(!loaded || others.length > 0 || waiting.length === 0) && (
+        <section className="home-section" aria-labelledby="games-heading">
+          <h2 className="home-section-title" id="games-heading">
+            {waiting.length > 0 ? 'Other games' : 'Your games'}
+          </h2>
+          {listError && <Alert>{listError}</Alert>}
+          {!loaded ? (
+            <Spinner />
+          ) : games.length === 0 ? (
+            <Empty title="No games yet" message="No one's online right now? Play the computer instead.">
+              <button className="btn btn--primary" onClick={() => setPickingComputer(true)}>
+                Play vs Computer
+              </button>
+            </Empty>
+          ) : (
+            <div className="list">
+              {others.map((g) => (
+                <GameRow key={g.id} game={g} uid={uid} />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {quickMatching !== null && (
         <QuickMatchModal
@@ -237,10 +269,36 @@ export function HomePage() {
   );
 }
 
-const DIFFICULTY_OPTIONS: { level: BotDifficulty; label: string; blurb: string }[] = [
-  { level: 'easy', label: 'Easy — Cadet Bot', blurb: 'Cadet Bot fires at random. Good for learning the ropes.' },
-  { level: 'medium', label: 'Medium — Officer Bot', blurb: 'Officer Bot hunts down ships once it lands a hit.' },
-  { level: 'hard', label: 'Hard — Admiral Bot', blurb: 'Admiral Bot hunts with parity and never wastes a shot.' },
+/** Links to Profile. No aria-label, so the accessible name ("1234 rating") starts with the visible number. */
+export function RatingBadge({ rating }: { rating: number | undefined }) {
+  return (
+    <Link to="/profile" className="badge home-rating">
+      <span aria-hidden>★</span>
+      <span className="home-rating-value">{rating ?? '–'}</span>
+      <span className="gm-sr-only"> rating</span>
+    </Link>
+  );
+}
+const DIFFICULTY_OPTIONS: {
+  level: BotDifficulty;
+  label: string;
+  blurb: string;
+}[] = [
+  {
+    level: 'easy',
+    label: 'Easy — Cadet Bot',
+    blurb: 'Cadet Bot fires at random. Good for learning the ropes.',
+  },
+  {
+    level: 'medium',
+    label: 'Medium — Officer Bot',
+    blurb: 'Officer Bot hunts down ships once it lands a hit.',
+  },
+  {
+    level: 'hard',
+    label: 'Hard — Admiral Bot',
+    blurb: 'Admiral Bot hunts with parity and never wastes a shot.',
+  },
 ];
 
 function DifficultyModal({ mode, onClose }: { mode: GameMode; onClose: () => void }) {
@@ -266,25 +324,50 @@ function DifficultyModal({ mode, onClose }: { mode: GameMode; onClose: () => voi
       {error && <Alert>{error}</Alert>}
       <div className="stack">
         {DIFFICULTY_OPTIONS.map(({ level, label, blurb }) => (
-          <button
+          <DifficultyButton
             key={level}
-            className="btn btn--secondary btn--block"
-            aria-label={`Play vs computer on ${level}`}
+            label={label}
+            blurb={blurb}
+            busy={busy === level}
             disabled={busy !== null}
-            onClick={() => pick(level)}
-          >
-            {busy === level ? (
-              <span className="spinner" />
-            ) : (
-              <span className="stack" style={{ gap: 2, textAlign: 'left', width: '100%' }}>
-                <b>{label}</b>
-                <span className="muted small">{blurb}</span>
-              </span>
-            )}
-          </button>
+            onPick={() => pick(level)}
+          />
         ))}
       </div>
     </Modal>
+  );
+}
+
+/** Accessible name comes from the content, so it starts with the visible label ("Easy — Cadet Bot …"). */
+export function DifficultyButton({
+  label,
+  blurb,
+  busy,
+  disabled,
+  onPick,
+}: {
+  label: string;
+  blurb: string;
+  busy: boolean;
+  disabled: boolean;
+  onPick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="btn btn--secondary btn--block home-difficulty"
+      disabled={disabled}
+      onClick={onPick}
+    >
+      {busy ? (
+        <span className="spinner" />
+      ) : (
+        <span className="home-difficulty-text">
+          <b>{label}</b>
+          <span className="muted small">{blurb}</span>
+        </span>
+      )}
+    </button>
   );
 }
 

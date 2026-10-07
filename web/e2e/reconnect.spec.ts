@@ -79,7 +79,7 @@ test('game reconnect restores the board without replaying transient effects', as
   await expect(page.getByText('Available')).toBeVisible();
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByRole('button', { name: 'Play vs Computer' }).first().click();
-  await page.getByRole('button', { name: 'Play vs computer on easy' }).click();
+  await page.getByRole('button', { name: /^Easy\b/ }).click();
   await expect(page.getByRole('heading', { name: 'Place your fleet' })).toBeVisible();
   await page.getByRole('button', { name: 'Shuffle' }).click();
   await page.getByRole('button', { name: 'Lock in fleet' }).click();

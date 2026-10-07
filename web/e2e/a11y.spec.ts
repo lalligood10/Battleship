@@ -70,7 +70,7 @@ for (const viewport of viewports) {
     await expect(opener).toBeFocused();
 
     await opener.click();
-    await page.getByRole('button', { name: 'Play vs computer on easy' }).click();
+    await page.getByRole('button', { name: /^Easy\b/ }).click();
     await expect(page.getByRole('heading', { name: 'Place your fleet' })).toBeVisible();
     await expectNoHorizontalOverflow(page);
     await page.getByRole('button', { name: 'Shuffle' }).click();

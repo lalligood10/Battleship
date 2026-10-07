@@ -4,8 +4,9 @@ export function ModeBadge({ mode }: { mode?: GameMode }) {
   const selectedMode = mode ?? 'classic';
   const label = GAME_MODE_OPTIONS.find((item) => item.mode === selectedMode)?.label ?? 'Classic';
   return (
-    <span className={`badge mode-badge mode-badge--${selectedMode}`} aria-label={`${label} game`}>
+    <span className={`badge mode-badge mode-badge--${selectedMode}`}>
       {label}
+      <span className="gm-sr-only"> game</span>
     </span>
   );
 }

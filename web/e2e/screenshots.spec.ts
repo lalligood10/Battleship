@@ -91,7 +91,7 @@ for (const viewport of viewports) {
     await capture(page, 'home', viewport.label);
 
     await page.getByRole('button', { name: 'Play vs Computer' }).first().click();
-    await page.getByRole('button', { name: 'Play vs computer on easy' }).click();
+    await page.getByRole('button', { name: /^Easy\b/ }).click();
     await expect(page.getByRole('heading', { name: 'Place your fleet' })).toBeVisible();
     await capture(page, 'placement', viewport.label);
 
@@ -147,7 +147,7 @@ if (process.env.VISUAL_QA_CAPTURE_MARKERS === '1') {
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
     await page.getByRole('button', { name: 'Play vs Computer' }).first().click();
-    await page.getByRole('button', { name: 'Play vs computer on easy' }).click();
+    await page.getByRole('button', { name: /^Easy\b/ }).click();
     await expect(page.getByRole('heading', { name: 'Place your fleet' })).toBeVisible();
     await page.getByRole('button', { name: 'Shuffle' }).click();
     await page.getByRole('button', { name: 'Lock in fleet' }).click();
