@@ -5,13 +5,13 @@
   gap: 6px;
 }
 .reaction-bar button {
-  min-height: 34px;
+  min-height: var(--tap-min);
   padding: 5px 10px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--card-2);
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   cursor: pointer;
 }
@@ -27,14 +27,14 @@
 }
 .reaction-toast {
   position: fixed;
-  z-index: 21;
+  z-index: var(--z-toast);
   top: calc(env(safe-area-inset-top) + 64px);
   left: 50%;
   transform: translateX(-50%);
   max-width: calc(100vw - 32px);
   padding: 10px 16px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--card);
   color: var(--text);
   box-shadow: var(--shadow);
@@ -46,15 +46,15 @@
 /* In-game chat and bot commentary ----------------------------------------------------------- */
 .game-chat-toggle {
   position: fixed;
-  z-index: 31;
+  z-index: var(--z-chat-toggle);
   right: 0;
   top: 42%;
-  min-height: 44px;
+  min-height: var(--tap-min);
   padding: 10px 14px;
   border: 1px solid var(--border);
   border-right: 0;
-  border-radius: 12px 0 0 12px;
-  background: var(--accent);
+  border-radius: var(--radius) 0 0 var(--radius);
+  background: var(--accent-fill);
   color: var(--accent-text);
   box-shadow: var(--shadow);
   font-weight: 800;
@@ -69,14 +69,14 @@
   height: 20px;
   margin-left: 7px;
   place-items: center;
-  border-radius: 999px;
-  background: var(--danger);
-  color: #fff;
-  font-size: 11px;
+  border-radius: var(--radius-pill);
+  background: var(--danger-fill);
+  color: var(--on-danger);
+  font-size: var(--fs-xs);
 }
 .game-chat {
   position: fixed;
-  z-index: 30;
+  z-index: var(--z-chat-toggle);
   top: 0;
   right: 0;
   width: min(340px, 92vw);
@@ -87,7 +87,7 @@
   background: var(--card);
   box-shadow: -12px 0 30px rgba(0, 0, 0, 0.24);
   transform: translateX(105%);
-  transition: transform 180ms ease;
+  transition: transform var(--dur-med) var(--ease-out);
 }
 .game-chat--open {
   transform: translateX(0);
@@ -162,6 +162,7 @@
 }
 .game-chat__composer input {
   min-width: 0;
+  min-height: var(--tap-min);
 }
 .game-chat__composer > .small {
   text-align: right;
@@ -197,6 +198,6 @@
   }
 }
 .play-heading {
-  font-size: 18px;
+  font-size: var(--fs-lg);
   margin: 0;
 }

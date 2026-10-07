@@ -5,10 +5,10 @@
   max-width: 100%;
   padding: 6px 10px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: var(--card);
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--fs-xs);
   line-height: 1.2;
 }
 
@@ -84,7 +84,7 @@
 
 .turn-timer-picker .gm-choice {
   align-items: center;
-  min-height: 40px;
+  min-height: var(--tap-min);
   gap: 7px;
 }
 

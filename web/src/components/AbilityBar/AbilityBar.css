@@ -198,7 +198,7 @@
 }
 .cell-sonar-label {
   position: absolute;
-  z-index: 5;
+  z-index: var(--z-board-fx);
   top: calc(100% - 1px);
   left: 50%;
   padding: 2px 5px;

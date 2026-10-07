@@ -44,7 +44,7 @@ export function GameModePicker({
                   aria-describedby={descriptionId}
                 />
                 <span className="gm-choice-text">
-                  <b>{option.label}</b>
+                  <b className="game-mode-name">{option.label}</b>
                   <span className="muted small" id={descriptionId}>
                     {option.description}
                   </span>
