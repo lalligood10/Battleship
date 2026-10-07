@@ -208,6 +208,9 @@
     top: auto;
     bottom: calc(88px + env(safe-area-inset-bottom));
   }
+  body:has(.game-chat-toggle) .page {
+    padding-bottom: calc(88px + var(--tap-min) + var(--space-4) + env(safe-area-inset-bottom));
+  }
 }
 .play-heading {
   font-size: var(--fs-lg);
