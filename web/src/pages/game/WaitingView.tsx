@@ -104,7 +104,7 @@ export function WaitingView({ game, uid }: { game: Game; uid: string }) {
       </p>
 
       {isHost && (
-        <button className="btn btn--danger btn--block" onClick={cancel} disabled={busy}>
+        <button className="btn btn--outline-danger" onClick={cancel} disabled={busy}>
           Cancel game
         </button>
       )}

@@ -70,7 +70,7 @@ export function AbandonControls({ game, uid }: { game: Game; uid: string }) {
           </div>
         </div>
       )}
-      <button className="btn btn--danger btn--sm abandon__resign" onClick={() => setConfirming('resign')} disabled={busy}>
+      <button className="btn btn--outline-danger btn--sm abandon__resign" onClick={() => setConfirming('resign')} disabled={busy}>
         Resign
       </button>
 

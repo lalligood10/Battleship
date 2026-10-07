@@ -218,6 +218,18 @@ button:not(.cell) {
   color: var(--on-danger);
   border-color: var(--danger-fill);
 }
+.btn--outline-danger {
+  width: auto;
+  min-width: 160px;
+  min-height: var(--tap-min);
+  align-self: center;
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+.btn--outline-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
 .btn--ghost {
   background: transparent;
   color: var(--accent);

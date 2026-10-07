@@ -914,18 +914,3 @@
     transition: opacity 150ms linear !important;
   }
 }
-
-/* Resign: quiet outline danger action, not the loudest control on the screen. */
-.game-abandon > .stack > .btn--danger {
-  align-self: center;
-  justify-self: center;
-  width: auto;
-  min-width: 160px;
-  min-height: var(--tap-min);
-  background: transparent;
-  color: var(--danger);
-  border: 1px solid var(--danger);
-}
-.game-abandon > .stack > .btn--danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-}
