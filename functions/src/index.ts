@@ -5,6 +5,7 @@
  */
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { isFinishTransition, processGameEnd } from './triggers/gameEnd';
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from './handlers/admin';
@@ -135,6 +136,14 @@ export const onGameWritten = onDocumentWritten('games/{gameId}', async (event) =
   if (!after) return;
   const before = event.data?.before.data() as GameDoc | undefined;
   await deliver(notificationsForChange(event.params.gameId, before, after));
+});
+
+// Phase 5: stats, head-to-head and achievements, once per finished game
+export const onGameFinished = onDocumentUpdated('games/{gameId}', async (event) => {
+  const before = event.data?.before.data() as GameDoc | undefined;
+  const after = event.data?.after.data() as GameDoc | undefined;
+  if (!after || !isFinishTransition(before, after)) return;
+  await processGameEnd(event.params.gameId, after);
 });
 
 // Daily housekeeping (M3)

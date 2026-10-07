@@ -33,6 +33,18 @@ service cloud.firestore {
           && request.resource.data.tokens.size() <= 20;
       }
 
+      // Phase 5 achievement shelf: public, like the profile. Written once by Functions.
+      match /achievements/{achievementId} {
+        allow read: if signedIn();
+        allow write: if false;
+      }
+
+      // Phase 5 daily-challenge run: only the owner sees their shots.
+      match /dailyRuns/{dateKey} {
+        allow read: if isSelf(uid);
+        allow write: if false;
+      }
+
       // Who I've played against (drives the Friends leaderboard).
       match /opponents/{oppUid} {
         allow read: if isSelf(uid);
@@ -94,6 +106,29 @@ service cloud.firestore {
     match /challenges/{challengeId} {
       allow read: if signedIn()
         && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+      allow write: if false;
+    }
+
+    // Phase 5 per-mode stats: public, like the profile.
+    match /playerStats/{uid} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    // Phase 5 head-to-head record: only the two players.
+    match /headToHead/{pairId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.playerUids;
+      allow write: if false;
+    }
+
+    // Phase 5 daily challenge: public definition (no fleet) and public scores.
+    // gameEnds/* and dailyChallengesPrivate/* fall through to the deny-all below.
+    match /dailyChallenges/{dateKey} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /dailyScores/{dateKey}/players/{uid} {
+      allow read: if signedIn();
       allow write: if false;
     }
 
