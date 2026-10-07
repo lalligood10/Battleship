@@ -55,26 +55,5 @@ export function partitionFindings(
   return { unexpected, recorded };
 }
 
-/** Findings on screens other sessions own. Recorded in the sweep report; remove each once it is fixed. */
-export const KNOWN_ISSUES: readonly KnownIssue[] = [
-  {
-    screen: '*',
-    rule: 'aria-required-children',
-    target: 'div[role="row"]:nth-child(1)',
-    owner: 'Session A (Board.tsx)',
-    note: 'The board grid column-label row has role="row" but no cell/columnheader children.',
-  },
-  {
-    screen: '*',
-    rule: 'target-size',
-    target: 'a.badge "Your rating"',
-    owner: 'Session B (HomePage)',
-    note: 'The home rating badge link is about 61×22px.',
-  },
-  {
-    screen: 'dev playtest',
-    rule: 'scrollable-region-focusable',
-    owner: 'Lead (DevPlaytestPage, dev-only)',
-    note: 'The horizontally scrolling tables at 375px are not keyboard-focusable.',
-  },
-];
+/** Findings on screens other sessions own. Recorded in the sweep report, if any remain. */
+export const KNOWN_ISSUES: readonly KnownIssue[] = [];

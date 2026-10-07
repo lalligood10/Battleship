@@ -20,7 +20,7 @@ import {
   simulate,
   simulationSvgMarkup,
 } from './colorVision';
-import { KNOWN_ISSUES, isBlocking, partitionFindings, type Finding } from './findings';
+import { KNOWN_ISSUES, isBlocking, partitionFindings, type Finding, type KnownIssue } from './findings';
 import { MAIN_ID } from './landmarks';
 import { classifyMark, markSignature, marksDifferByShape, type MarkComputedStyle } from './markShape';
 import { INTERACTIVE_SELECTOR, MIN_TARGET_PX, undersizedTargets } from './targetSize';
@@ -223,17 +223,27 @@ describe('sweep findings', () => {
     expect(['minor', 'moderate', 'serious', 'critical', null].map(isBlocking)).toEqual([false, false, true, true, false]);
   });
 
-  it('records known issues owned elsewhere and keeps everything else unexpected', () => {
+  it('partitions findings against supplied known issues', () => {
     const board = finding({ screen: 'game: active', rule: 'aria-required-children', target: '.board--fog > div[role="row"]:nth-child(1)' });
     const mine = finding({});
-    const { unexpected, recorded } = partitionFindings([board, mine], KNOWN_ISSUES);
+    const known: KnownIssue[] = [
+      { screen: '*', rule: 'aria-required-children', target: 'div[role="row"]', owner: 'Board.tsx', note: 'fixture' },
+    ];
+    const { unexpected, recorded } = partitionFindings([board, mine], known);
     expect(unexpected).toEqual([mine]);
     expect(recorded).toHaveLength(1);
-    expect(recorded[0]!.owner).toMatch(/Session A/);
+    expect(recorded[0]!.owner).toBe('Board.tsx');
+  });
+
+  it('keeps the known issues list empty after fixes', () => {
+    expect(KNOWN_ISSUES).toEqual([]);
   });
 
   it('a known issue scoped to one screen does not hide the same rule elsewhere', () => {
     const elsewhere = finding({ screen: 'profile', rule: 'scrollable-region-focusable' });
-    expect(partitionFindings([elsewhere], KNOWN_ISSUES).unexpected).toEqual([elsewhere]);
+    const known: KnownIssue[] = [
+      { screen: 'dev playtest', rule: 'scrollable-region-focusable', owner: 'DevPlaytestPage', note: 'fixture' },
+    ];
+    expect(partitionFindings([elsewhere], known).unexpected).toEqual([elsewhere]);
   });
 });

@@ -407,6 +407,8 @@
   overflow-wrap: anywhere;
 }
 .home-rating {
+  display: inline-flex;
+  align-items: center;
   min-height: var(--tap-min);
   padding: 0 14px;
   border: 1px solid var(--border);
