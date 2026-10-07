@@ -20,9 +20,12 @@ export function AbandonControls({ game, uid }: { game: Game; uid: string }) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
+    if (game.status !== 'placing' && game.status !== 'active') return;
     const t = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(t);
-  }, []);
+  }, [game.status]);
+
+  if (game.status !== 'placing' && game.status !== 'active') return null;
 
   const bot = isBotGame(game);
   const opp = opponentUid(game, uid);
@@ -50,18 +53,23 @@ export function AbandonControls({ game, uid }: { game: Game; uid: string }) {
   return (
     <div className="stack">
       {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
-      {waitingOnOpponent && !bot && (
+      {waitingOnOpponent && !bot && !(game.status === 'active' && game.turnTimerMs != null) && (
         <div className="card card--flat small muted">
-          {canClaim ? (
-            <div className="stack">
-              <span>Your opponent hasn't moved in {Math.round(game.abandonTimeoutMs / 86_400_000)} days.</span>
-              <button className="btn btn--primary btn--sm" disabled={busy} onClick={() => run(() => claimTimeoutWin(game.id))}>
-                Claim the win
-              </button>
-            </div>
-          ) : (
-            <span>If your opponent doesn't move, you can claim the win {formatRemaining(remaining)}.</span>
-          )}
+          <div className="stack" style={{ gap: 4 }}>
+            <h3 className="small" style={{ margin: 0, color: 'var(--text)' }}>
+              Inactive opponent
+            </h3>
+            {canClaim ? (
+              <>
+                <span>Your opponent hasn't moved in {Math.round(game.abandonTimeoutMs / 86_400_000)} days.</span>
+                <button className="btn btn--primary btn--sm" disabled={busy} onClick={() => run(() => claimTimeoutWin(game.id))}>
+                  Claim the win
+                </button>
+              </>
+            ) : (
+              <span>If your opponent doesn't move, you can claim the win {formatRemaining(remaining)}.</span>
+            )}
+          </div>
         </div>
       )}
       <button className="btn btn--danger btn--sm" onClick={() => setConfirming('resign')} disabled={busy}>

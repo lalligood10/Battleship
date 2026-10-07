@@ -1,0 +1,115 @@
+.turn-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.turn-timer-icon {
+  flex: 0 0 auto;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.turn-timer-label {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.turn-timer-countdown {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.turn-timer--mine {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.turn-timer--mine .turn-timer-icon {
+  color: var(--accent);
+}
+
+.turn-timer--urgent {
+  border-color: var(--danger);
+  color: var(--danger);
+  animation: turn-timer-pulse 1.2s ease-in-out infinite;
+}
+
+.turn-timer--urgent .turn-timer-label,
+.turn-timer--urgent .turn-timer-icon {
+  color: var(--danger);
+}
+
+.turn-timer--expired {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.turn-timer-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.turn-timer-picker {
+  margin-top: 14px;
+}
+
+.turn-timer-picker .gm-options {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.turn-timer-picker .gm-option {
+  padding: 9px;
+}
+
+.turn-timer-picker .gm-option--selected {
+  padding: 8px;
+}
+
+.turn-timer-picker .gm-choice {
+  align-items: center;
+  min-height: 40px;
+  gap: 7px;
+}
+
+.turn-timer-picker .gm-radio {
+  width: 18px;
+  height: 18px;
+}
+
+.turn-timer-picker .gm-choice-text {
+  font-size: 14px;
+}
+
+.turn-timer-picker-description {
+  margin: 0;
+  line-height: 1.4;
+}
+
+@keyframes turn-timer-pulse {
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 16%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn-timer--urgent {
+    animation: none;
+  }
+}
