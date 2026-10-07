@@ -55,7 +55,7 @@ for (const viewport of viewports) {
     await expect(play).toBeVisible();
     await expectNoHorizontalOverflow(page);
     await play.click();
-    await page.getByRole('button', { name: 'Play vs computer on easy' }).click();
+    await page.getByRole('button', { name: /^Easy\b/ }).click();
 
     await expect(page.getByRole('heading', { name: 'Place your fleet' })).toBeVisible();
     await expectNoHorizontalOverflow(page);
