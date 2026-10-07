@@ -6,6 +6,7 @@ export const FEEL = {
     botReplyDelayMs: 1000,
     sinkDelayMs: 250,
     sinkBeatMs: 1400,
+    salvoStaggerMs: 220,
     impactHoldMs: 1500,
     sinkHoldMs: 1800,
     carrierSinkHoldMs: 2400,

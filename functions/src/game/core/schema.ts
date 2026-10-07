@@ -15,7 +15,37 @@ export const FLEET_DEFINITION: ShipDefinition[] = SHIP_TYPES.map((id) => ({
 
 export type CellState = 'unknown' | 'miss' | 'hit' | 'sunk';
 export type CorePhase = 'lobby' | 'placement' | 'playing' | 'gameOver';
-export type GameMode = 'classic'; // Salvo and ship abilities are reserved.
+export type GameMode = 'classic' | 'salvo';
+
+export interface GameModeOption {
+  mode: GameMode;
+  label: string;
+  description: string;
+}
+
+export const GAME_MODE_OPTIONS: readonly GameModeOption[] = [
+  {
+    mode: 'classic',
+    label: 'Classic',
+    description: 'One shot per turn. Sink all five enemy ships to win.',
+  },
+  {
+    mode: 'salvo',
+    label: 'Salvo',
+    description: 'Fire one shot for each ship you still have afloat. Lose ships, lose firepower.',
+  },
+] as const;
+
+export function parseGameModeInput(value: unknown): GameMode | null {
+  if (value === undefined) return 'classic';
+  return value === 'classic' || value === 'salvo' ? value : null;
+}
+
+export function gameModeOption(mode: GameMode): GameModeOption {
+  const option = GAME_MODE_OPTIONS.find((item) => item.mode === mode);
+  if (!option) throw new Error(`No game mode option is defined for "${mode}"`);
+  return option;
+}
 export type EndReason = 'all_sunk' | 'resign' | 'timeout';
 
 export interface GameSettings {

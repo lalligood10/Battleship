@@ -8,6 +8,7 @@ import { defaultSettings, type CoreState, type EndReason, type GameMode, type Pl
 export type CoreAction =
   | { type: 'placeFleet'; player: string; fleet: unknown; at?: number }
   | { type: 'fire'; player: string; target: { row: number; col: number }; at: number }
+  | { type: 'fireSalvo'; player: string; targets: { row: number; col: number }[]; at: number }
   | { type: 'resign'; player: string }
   | { type: 'claimTimeout'; claimant: string; now: number };
 
@@ -15,6 +16,9 @@ export type CoreErrorCode =
   | 'not_player'
   | 'wrong_phase'
   | 'not_your_turn'
+  | 'wrong_mode'
+  | 'wrong_shot_count'
+  | 'duplicate_target'
   | 'off_board'
   | 'already_fired'
   | 'not_waiting'
@@ -88,6 +92,26 @@ function otherPlayer(state: CoreState, player: string): string {
   return state.playerIds.find((uid) => uid !== player)!;
 }
 
+export function salvoShotsAllowed(
+  state: {
+    playerIds: readonly string[];
+    settings: { boardSize: number; fleet: readonly unknown[] };
+    shots: Readonly<Record<string, readonly Shot[] | undefined>>;
+  },
+  player: string,
+): number {
+  if (!state.playerIds.includes(player)) return 0;
+  const opponent = state.playerIds.find((uid) => uid !== player);
+  if (!opponent) return 0;
+  const sunkShips = new Set(
+    (state.shots[opponent] ?? []).flatMap((shot) => (shot.sunkShip ? [shot.sunkShip] : [])),
+  );
+  const firedCells = new Set((state.shots[player] ?? []).map((shot) => cellKey(shot.row, shot.col)));
+  const afloatShips = Math.max(0, state.settings.fleet.length - sunkShips.size);
+  const availableTargets = Math.max(0, state.settings.boardSize ** 2 - firedCells.size);
+  return Math.min(afloatShips, availableTargets);
+}
+
 export function reduce(state: CoreState, action: CoreAction): CoreResult {
   const actor = action.type === 'claimTimeout' ? action.claimant : action.player;
   if (!state.playerIds.includes(actor)) return fail('not_player', 'Player is not in this game');
@@ -122,6 +146,7 @@ export function reduce(state: CoreState, action: CoreAction): CoreResult {
   if (action.type === 'fire') {
     if (state.phase !== 'playing') return fail('wrong_phase', 'Shots can only be fired during play');
     if (state.currentTurn !== action.player) return fail('not_your_turn', "It's not your turn");
+    if (state.settings.mode !== 'classic') return fail('wrong_mode', 'Use a Salvo volley in this game type');
     if (!isOnBoard(action.target.row, action.target.col)) return fail('off_board', 'Target is off the board');
     if (shotsToKeySet(state.shots[action.player] ?? []).has(cellKey(action.target.row, action.target.col))) {
       return fail('already_fired', 'You already fired at that cell');
@@ -176,6 +201,97 @@ export function reduce(state: CoreState, action: CoreAction): CoreResult {
 
     next.turnNumber += 1;
     if (hit && isFleetDestroyed(ownerBoard.fleet, new Set(targetBoard.hitCells))) {
+      next.phase = 'gameOver';
+      next.currentTurn = null;
+      next.winner = action.player;
+      next.endReason = 'all_sunk';
+      events.push({ type: 'gameOver', winner: action.player, reason: 'all_sunk' });
+    } else {
+      next.currentTurn = owner;
+      events.push({ type: 'turnChanged', currentTurn: owner, turnNumber: next.turnNumber });
+    }
+    return { ok: true, state: next, events };
+  }
+
+  if (action.type === 'fireSalvo') {
+    if (state.phase !== 'playing') return fail('wrong_phase', 'Shots can only be fired during play');
+    if (state.currentTurn !== action.player) return fail('not_your_turn', "It's not your turn");
+    if (state.settings.mode !== 'salvo') return fail('wrong_mode', 'Salvo volleys are not enabled for this game');
+    const allowed = salvoShotsAllowed(state, action.player);
+    if (action.targets.length !== allowed) {
+      return fail('wrong_shot_count', `Fire exactly ${allowed} shots this turn`);
+    }
+    const targetKeys = action.targets.map((target) => cellKey(target.row, target.col));
+    if (new Set(targetKeys).size !== targetKeys.length) {
+      return fail('duplicate_target', 'A volley cannot target the same cell twice');
+    }
+    if (action.targets.some((target) => !isOnBoard(target.row, target.col))) {
+      return fail('off_board', 'Target is off the board');
+    }
+    const tried = shotsToKeySet(state.shots[action.player] ?? []);
+    if (targetKeys.some((key) => tried.has(key))) {
+      return fail('already_fired', 'You already fired at that cell');
+    }
+
+    const owner = otherPlayer(state, action.player);
+    const ownerBoard = state.boards[owner]!;
+    if (!ownerBoard.fleet) return fail('wrong_phase', 'Opponent fleet is not placed');
+    const next = copyState(state);
+    const targetBoard = next.boards[owner]!;
+    const hits = new Set(ownerBoard.hitCells);
+    const resolvedShots = action.targets.map((target): Shot => {
+      const outcome = resolveShot(ownerBoard.fleet!, hits, target);
+      if (outcome.result !== 'miss') {
+        const key = cellKey(target.row, target.col);
+        hits.add(key);
+        targetBoard.hitCells.push(key);
+      }
+      const placement = outcome.sunkShip
+        ? ownerBoard.fleet!.find((ship) => ship.type === outcome.sunkShip)
+        : undefined;
+      return {
+        row: target.row,
+        col: target.col,
+        result: outcome.result,
+        at: action.at,
+        volley: state.turnNumber,
+        ...(outcome.sunkShip ? { sunkShip: outcome.sunkShip } : {}),
+        ...(placement ? { sunkPlacement: { ...placement } } : {}),
+      };
+    });
+    const recordedShots = [
+      ...resolvedShots.filter((shot) => shot.result !== 'sunk'),
+      ...resolvedShots.filter((shot) => shot.result === 'sunk'),
+    ];
+    next.shots[action.player]!.push(...recordedShots);
+    next.lastProgressAt = action.at;
+
+    const events: CoreEvent[] = [];
+    for (const shot of recordedShots) {
+      const target = { row: shot.row, col: shot.col };
+      events.push(
+        { type: 'shotFired', shooter: action.player, target, turnNumber: state.turnNumber },
+        {
+          type: 'shotResolved',
+          shooter: action.player,
+          target,
+          result: shot.result === 'miss' ? 'miss' : 'hit',
+          turnNumber: state.turnNumber,
+        },
+      );
+      if (shot.sunkShip && shot.sunkPlacement) {
+        events.push({
+          type: 'shipSunk',
+          shooter: action.player,
+          owner,
+          shipId: shot.sunkShip,
+          placement: { ...shot.sunkPlacement },
+        });
+      }
+    }
+
+    next.turnNumber += 1;
+    if (isFleetDestroyed(ownerBoard.fleet, new Set(targetBoard.hitCells))) {
       next.phase = 'gameOver';
       next.currentTurn = null;
       next.winner = action.player;

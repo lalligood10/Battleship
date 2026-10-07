@@ -169,6 +169,7 @@ export interface GameCodeDoc {
 export interface QuickMatchTicketDoc {
   username: string;
   rating: number;
+  mode?: GameMode;
   createdAt: Timestamp;
   /** Filled in by the Function once an opponent is found. */
   gameId: string | null;
@@ -181,6 +182,7 @@ export interface ChallengeDoc {
   toUid: string;
   fromUsername: string;
   toUsername: string;
+  mode?: GameMode;
   status: ChallengeStatus;
   /** Finished game this challenge is a rematch of, if any. */
   sourceGameId: string | null;

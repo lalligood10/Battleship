@@ -17,6 +17,7 @@ export interface BoardProps {
   disabled?: boolean;
   small?: boolean;
   ariaLabel: string;
+  queueNumber?: (c: Coordinate) => number | undefined;
   onCellTap?: (c: Coordinate) => void;
   onDragStart?: (c: Coordinate) => boolean;
   onDragMove?: (c: Coordinate) => void;
@@ -30,7 +31,22 @@ export interface BoardProps {
 const DRAG_THRESHOLD_PX = 6;
 
 export function Board(props: BoardProps) {
-  const { markOf, selected, lastShot, targeting, disabled, small, fog, ariaLabel, overlay, onCellTap, onDragStart, onDragMove, onDragEnd } = props;
+  const {
+    markOf,
+    selected,
+    lastShot,
+    targeting,
+    disabled,
+    small,
+    fog,
+    ariaLabel,
+    overlay,
+    queueNumber,
+    onCellTap,
+    onDragStart,
+    onDragMove,
+    onDragEnd,
+  } = props;
   const gridRef = useRef<HTMLDivElement>(null);
   const [focus, setFocus] = useState<Coordinate>(lastShot ?? { row: 0, col: 0 });
   const drag = useRef<{ start: Coordinate; startX: number; startY: number; dragging: boolean; active: boolean } | null>(null);
@@ -99,10 +115,12 @@ export function Board(props: BoardProps) {
     for (let col = 0; col < BOARD_SIZE; col++) {
       const c = { row, col };
       const mark = markOf(c);
+      const queuedNumber = queueNumber?.(c);
       const isLast = lastShot?.row === row && lastShot?.col === col;
       const interactive = isInteractive(mark, { targeting, disabled });
       const classes = ['cell', `cell--${mark}`];
       if (selected?.(c)) classes.push('cell--selected');
+      if (queuedNumber !== undefined) classes.push('cell--queued');
       if (isLast) classes.push('cell--last');
       if (targeting && mark === 'water' && !disabled) classes.push('cell--target');
       if (!interactive) classes.push('cell--disabled');
@@ -113,10 +131,12 @@ export function Board(props: BoardProps) {
           data-row={row}
           data-col={col}
           role="gridcell"
-          aria-label={`${COLUMN_LABELS[col]}${ROW_LABELS[row]} ${mark}`}
+          aria-label={`${COLUMN_LABELS[col]}${ROW_LABELS[row]} ${mark}${queuedNumber === undefined ? '' : `, queued shot ${queuedNumber}`}`}
           aria-disabled={interactive ? undefined : true}
           tabIndex={focus.row === row && focus.col === col ? 0 : -1}
-        />,
+        >
+          {queuedNumber !== undefined && <span className="cell-queue-number" aria-hidden>{queuedNumber}</span>}
+        </div>,
       );
     }
     rows.push(

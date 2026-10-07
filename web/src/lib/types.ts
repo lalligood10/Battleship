@@ -10,6 +10,7 @@ import type { BotDifficulty } from '@shared/bots';
 import type { ReactionId } from '@shared/reactions';
 import type { GameMode } from '@shared/core/schema';
 
+export type { GameMode } from '@shared/core/schema';
 export type { Coordinate, ShipPlacement, Shot, ShotResult } from '@shared/engine';
 export type { ShipType } from '@shared/config';
 export type { PlayerStats } from '@shared/scoring';
@@ -88,6 +89,7 @@ export interface Challenge {
   toUid: string;
   fromUsername: string;
   toUsername: string;
+  mode: GameMode;
   status: ChallengeStatus;
   sourceGameId: string | null;
   gameId: string | null;

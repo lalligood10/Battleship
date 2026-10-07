@@ -185,6 +185,39 @@ describe('diffGameEvents', () => {
     ]);
   });
 
+  it('groups same-shooter Salvo shots into one turn', () => {
+    const prev = game({ mode: 'salvo', turnNumber: 3, currentTurnUid: 'human', playerUids: ['human', 'bot'] });
+    const next = game({
+      mode: 'salvo',
+      playerUids: ['human', 'bot'],
+      shots: {
+        human: [
+          { row: 0, col: 0, result: 'miss', at: 40, volley: 3 },
+          { row: 0, col: 1, result: 'hit', at: 40, volley: 3 },
+        ],
+        bot: [
+          { row: 2, col: 0, result: 'miss', at: 41, volley: 4 },
+          { row: 2, col: 1, result: 'hit', at: 41, volley: 4 },
+        ],
+      },
+      currentTurnUid: 'human',
+      turnNumber: 5,
+    });
+
+    expect(diffGameEvents(prev, next)).toEqual([
+      { type: 'shotFired', shooter: 'human', target: { row: 0, col: 0 }, turnNumber: 3 },
+      { type: 'shotResolved', shooter: 'human', target: { row: 0, col: 0 }, result: 'miss', turnNumber: 3 },
+      { type: 'shotFired', shooter: 'human', target: { row: 0, col: 1 }, turnNumber: 3 },
+      { type: 'shotResolved', shooter: 'human', target: { row: 0, col: 1 }, result: 'hit', turnNumber: 3 },
+      { type: 'turnChanged', currentTurn: 'bot', turnNumber: 4 },
+      { type: 'shotFired', shooter: 'bot', target: { row: 2, col: 0 }, turnNumber: 4 },
+      { type: 'shotResolved', shooter: 'bot', target: { row: 2, col: 0 }, result: 'miss', turnNumber: 4 },
+      { type: 'shotFired', shooter: 'bot', target: { row: 2, col: 1 }, turnNumber: 4 },
+      { type: 'shotResolved', shooter: 'bot', target: { row: 2, col: 1 }, result: 'hit', turnNumber: 4 },
+      { type: 'turnChanged', currentTurn: 'human', turnNumber: 5 },
+    ]);
+  });
+
   it('emits a turn change without a shot when the active turn changes', () => {
     const prev = game({ status: 'placing', currentTurnUid: null, turnNumber: 0 });
     const next = game({ currentTurnUid: 'two', turnNumber: 1 });

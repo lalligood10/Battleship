@@ -14,8 +14,9 @@ export function diffGameEvents(prev: Game | null, next: Game): CoreEvent[] {
   added.sort((a, b) => a.shot.at - b.shot.at);
 
   const events: CoreEvent[] = [];
-  let shotTurn = Math.max(1, prev.turnNumber);
+  let nextShotTurn = Math.max(1, prev.turnNumber);
   for (const [index, { shooter, shot }] of added.entries()) {
+    const shotTurn = shot.volley ?? nextShotTurn;
     const target = { row: shot.row, col: shot.col };
     events.push({ type: 'shotFired', shooter, target, turnNumber: shotTurn });
     events.push({
@@ -37,14 +38,16 @@ export function diffGameEvents(prev: Game | null, next: Game): CoreEvent[] {
         });
       }
     }
-    if (index < added.length - 1) {
+    const nextShot = added[index + 1];
+    const sameVolley = nextShot?.shooter === shooter && shot.volley !== undefined && nextShot.shot.volley === shot.volley;
+    if (nextShot && !sameVolley) {
       events.push({
         type: 'turnChanged',
-        currentTurn: added[index + 1]!.shooter,
+        currentTurn: nextShot.shooter,
         turnNumber: shotTurn + 1,
       });
     }
-    shotTurn += 1;
+    nextShotTurn = sameVolley ? shotTurn : shotTurn + 1;
   }
 
   if (added.length > 0) {

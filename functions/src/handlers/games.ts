@@ -11,6 +11,7 @@ import {
   isOnBoard,
   shotsToKeySet,
   validateFleet,
+  type Coordinate,
   type Shot,
   type ShotResult,
 } from '../game/engine';
@@ -19,13 +20,14 @@ import { isBotUid } from '../game/bots';
 import { containsChatProfanity } from '../lib/username';
 import { chooseShot } from '../game/ai';
 import { deriveRng } from '../game/core/rng';
-import { reduce } from '../game/core/reducer';
+import { reduce, salvoShotsAllowed } from '../game/core/reducer';
+import { parseGameModeInput, type GameMode } from '../game/core/schema';
 import { isReactionId, REACTION_COOLDOWN_MS } from '../game/reactions';
 import { finishGame } from '../lib/finishGame';
 import { coreStateFromGame } from '../lib/coreAdapter';
 import { db, refs } from '../lib/firestore';
 import { generateJoinCode, normaliseJoinCode } from '../lib/joinCode';
-import type { GameDoc, GamePlayer, PrivateBoardDoc, UserDoc } from '../types';
+import type { GameDoc, GamePlayer, OpponentDoc, PrivateBoardDoc, UserDoc } from '../types';
 import { createBotGameTx } from './bots';
 
 // ---------- shared helpers ----------
@@ -57,6 +59,10 @@ function requireMember(game: GameDoc, uid: string): void {
 function throwCoreError(error: { code: string; message: string }): never {
   if (error.code === 'not_player') throw new HttpsError('permission-denied', 'You are not in this game');
   if (error.code === 'not_your_turn') throw new HttpsError('failed-precondition', "It's not your turn");
+  if (error.code === 'wrong_mode' || error.code === 'wrong_shot_count') {
+    throw new HttpsError('failed-precondition', error.message);
+  }
+  if (error.code === 'duplicate_target') throw new HttpsError('invalid-argument', error.message);
   if (error.code === 'off_board') throw new HttpsError('invalid-argument', 'Target is off the board');
   if (error.code === 'already_fired') {
     throw new HttpsError('failed-precondition', 'You already fired at that cell');
@@ -74,12 +80,12 @@ export function newGameDoc(
   host: UserDoc,
   code: string,
   now: Timestamp,
-  opts: { isQuickMatch: boolean; rematchOf?: string; invitedUid?: string },
+  opts: { isQuickMatch: boolean; mode?: GameMode; rematchOf?: string; invitedUid?: string },
 ): GameDoc {
   return {
     code,
     status: 'waiting',
-    mode: 'classic',
+    mode: opts.mode ?? 'classic',
     hostUid,
     playerUids: [hostUid],
     players: { [hostUid]: playerEntry(host) },
@@ -132,13 +138,15 @@ export interface CreateGameResult {
   code: string;
 }
 
-export async function createGame(uid: string): Promise<CreateGameResult> {
+export async function createGame(uid: string, data?: unknown): Promise<CreateGameResult> {
+  const mode = parseGameModeInput((data as { mode?: unknown } | undefined)?.mode);
+  if (!mode) throw new HttpsError('invalid-argument', 'Choose a game type');
   return db.runTransaction(async (tx) => {
     const host = await requireUser(uid, tx);
     const code = await reserveJoinCode(tx);
     const now = Timestamp.now();
     const gameRef = refs.games().doc();
-    tx.set(gameRef, newGameDoc(uid, host, code, now, { isQuickMatch: false }));
+    tx.set(gameRef, newGameDoc(uid, host, code, now, { isQuickMatch: false, mode }));
     tx.set(refs.gameCode(code), { gameId: gameRef.id, createdAt: now });
     return { gameId: gameRef.id, code };
   });
@@ -213,7 +221,7 @@ export async function requestRematch(uid: string, data: unknown): Promise<Reques
 
     if (game.isBotGame) {
       if (!game.botDifficulty) throw new HttpsError('failed-precondition', 'Bot difficulty is missing');
-      const newGameId = await createBotGameTx(tx, uid, game.botDifficulty);
+      const newGameId = await createBotGameTx(tx, uid, game.botDifficulty, game.mode ?? 'classic');
       tx.update(gameRef, { rematch: { gameId: newGameId, requestedBy: uid } });
       return { gameId: newGameId, status: 'placing' };
     }
@@ -225,6 +233,7 @@ export async function requestRematch(uid: string, data: unknown): Promise<Reques
     const rematchRef = refs.games().doc();
     const rematch = newGameDoc(uid, host, code, now, {
       isQuickMatch: false,
+      mode: game.mode ?? 'classic',
       rematchOf: gameId,
       invitedUid,
     });
@@ -328,15 +337,18 @@ export async function fireShot(uid: string, data: unknown): Promise<FireShotResu
   const input = (data ?? {}) as { gameId?: unknown; row?: unknown; col?: unknown };
   const gameId = requireString(input.gameId, 'gameId');
   const { row, col } = input;
-  if (typeof row !== 'number' || typeof col !== 'number' || !isOnBoard(row, col)) {
-    throw new HttpsError('invalid-argument', 'Target is off the board');
-  }
 
   return db.runTransaction(async (tx) => {
     const game = (await tx.get(refs.game(gameId))).data();
     if (!game) throw new HttpsError('not-found', 'Game not found');
     requireMember(game, uid);
     if (game.status !== 'active') throw new HttpsError('failed-precondition', 'This game is not in progress');
+    if (game.mode === 'salvo') {
+      throw new HttpsError('failed-precondition', 'This game type needs the latest web app');
+    }
+    if (typeof row !== 'number' || typeof col !== 'number' || !isOnBoard(row, col)) {
+      throw new HttpsError('invalid-argument', 'Target is off the board');
+    }
     if (game.currentTurnUid !== uid) throw new HttpsError('failed-precondition', "It's not your turn");
 
     const myShots = game.shots[uid] ?? [];
@@ -519,6 +531,199 @@ export async function fireShot(uid: string, data: unknown): Promise<FireShotResu
     tx.update(refs.game(gameId), gameUpdate);
 
     return { result: outcome.result, sunkShip: outcome.sunkShip, gameOver: false, winnerUid: null };
+  });
+}
+
+export interface FireSalvoResult {
+  gameOver: boolean;
+  winnerUid: string | null;
+}
+
+export async function fireSalvo(uid: string, data: unknown): Promise<FireSalvoResult> {
+  const input = (data ?? {}) as { gameId?: unknown; targets?: unknown };
+  const gameId = requireString(input.gameId, 'gameId');
+  if (
+    !Array.isArray(input.targets) ||
+    input.targets.some(
+      (target) =>
+        typeof target !== 'object' ||
+        target === null ||
+        typeof (target as Record<string, unknown>).row !== 'number' ||
+        typeof (target as Record<string, unknown>).col !== 'number',
+    )
+  ) {
+    throw new HttpsError('invalid-argument', 'Targets must be a list of board coordinates');
+  }
+  const targets = input.targets as Coordinate[];
+
+  return db.runTransaction(async (tx) => {
+    const game = (await tx.get(refs.game(gameId))).data();
+    if (!game) throw new HttpsError('not-found', 'Game not found');
+    requireMember(game, uid);
+    if (game.status !== 'active') throw new HttpsError('failed-precondition', 'This game is not in progress');
+    if (game.currentTurnUid !== uid) throw new HttpsError('failed-precondition', "It's not your turn");
+
+    const opponentUid = opponentOf(game, uid);
+    const [myBoardSnap, opponentBoardSnap] = await Promise.all([
+      tx.get(refs.privateBoard(gameId, uid)),
+      tx.get(refs.privateBoard(gameId, opponentUid)),
+    ]);
+    const myBoard = myBoardSnap.data();
+    const opponentBoard = opponentBoardSnap.data();
+    if (!opponentBoard) throw new HttpsError('internal', 'Opponent board is missing');
+
+    const botOpponent = isBotUid(opponentUid);
+    const [meSnap, oppSnap] = botOpponent
+      ? await Promise.all([tx.get(refs.user(uid)), tx.get(refs.user(opponentUid))])
+      : [null, null];
+
+    const now = Timestamp.now();
+    const initialState = coreStateFromGame(game, {
+      [uid]: myBoard,
+      [opponentUid]: opponentBoard,
+    });
+    const humanResult = reduce(initialState, {
+      type: 'fireSalvo',
+      player: uid,
+      targets,
+      at: now.toMillis(),
+    });
+    if (!humanResult.ok) throwCoreError(humanResult.error);
+    let finalState = humanResult.state;
+    const humanShots = finalState.shots[uid]!.slice(initialState.shots[uid]!.length);
+    const humanHits = humanShots.filter((shot) => shot.result !== 'miss').length;
+    let botShots: Shot[] = [];
+    let botHits = 0;
+
+    if (botOpponent && finalState.phase === 'playing') {
+      const botShotCount = salvoShotsAllowed(finalState, opponentUid);
+      const botHistory = initialState.shots[opponentUid]!;
+      const botShotIndex = botHistory.length;
+      const exclude = new Set<string>();
+      const botTargets: Coordinate[] = [];
+      for (let index = 0; index < botShotCount; index++) {
+        const target = chooseShot({
+          shots: botHistory,
+          boardSize: GAME_CONFIG.BOARD_SIZE,
+          difficulty: game.botDifficulty ?? 'easy',
+          rng:
+            opponentBoard.rngSeed === undefined
+              ? Math.random
+              : deriveRng(opponentBoard.rngSeed, 'shot', botShotIndex + index),
+          exclude,
+        });
+        botTargets.push(target);
+        exclude.add(cellKey(target.row, target.col));
+      }
+      const botResult = reduce(finalState, {
+        type: 'fireSalvo',
+        player: opponentUid,
+        targets: botTargets,
+        at: now.toMillis() + 1,
+      });
+      if (!botResult.ok) throwCoreError(botResult.error);
+      finalState = botResult.state;
+      botShots = finalState.shots[opponentUid]!.slice(botHistory.length);
+      botHits = botShots.filter((shot) => shot.result !== 'miss').length;
+    }
+
+    const gameUpdate: Record<string, unknown> = {
+      updatedAt: now,
+      lastMoveAt: now,
+      currentTurnUid: finalState.currentTurn,
+      turnNumber: finalState.turnNumber,
+    };
+    const addVolley = (shooter: string, shots: Shot[], victim: string) => {
+      if (shots.length === 0) return;
+      gameUpdate[`shots.${shooter}`] = FieldValue.arrayUnion(...shots);
+      gameUpdate[`players.${shooter}.shotsFired`] = FieldValue.increment(shots.length);
+      const hits = shots.filter((shot) => shot.result !== 'miss').length;
+      if (hits > 0) gameUpdate[`players.${shooter}.hits`] = FieldValue.increment(hits);
+      const sunkShips = [...new Set(shots.flatMap((shot) => (shot.sunkShip ? [shot.sunkShip] : [])))];
+      if (sunkShips.length > 0) {
+        gameUpdate[`players.${victim}.sunkShips`] = FieldValue.arrayUnion(...sunkShips);
+      }
+    };
+    addVolley(uid, humanShots, opponentUid);
+    addVolley(opponentUid, botShots, uid);
+
+    if (finalState.phase === 'gameOver') {
+      const winnerUid = finalState.winner!;
+      const loserUid = winnerUid === uid ? opponentUid : uid;
+      let me = meSnap?.data();
+      let opponent = oppSnap?.data();
+      let pairHistory: OpponentDoc | undefined;
+      if (!botOpponent) {
+        const [meDoc, opponentDoc, pairSnap] = await Promise.all([
+          tx.get(refs.user(uid)),
+          tx.get(refs.user(opponentUid)),
+          tx.get(refs.opponent(uid, opponentUid)),
+        ]);
+        me = meDoc.data();
+        opponent = opponentDoc.data();
+        pairHistory = pairSnap.data();
+      }
+      if (!me || !opponent) throw new HttpsError('internal', 'Player profile missing');
+
+      if (humanHits > 0) {
+        tx.update(refs.privateBoard(gameId, opponentUid), {
+          hitCells: [...finalState.boards[opponentUid]!.hitCells],
+          updatedAt: now,
+        });
+      }
+      if (botHits > 0) {
+        tx.update(refs.privateBoard(gameId, uid), {
+          hitCells: [...finalState.boards[uid]!.hitCells],
+          updatedAt: now,
+        });
+      }
+      const players = {
+        ...game.players,
+        [uid]: {
+          ...game.players[uid]!,
+          shotsFired: (game.players[uid]?.shotsFired ?? 0) + humanShots.length,
+          hits: (game.players[uid]?.hits ?? 0) + humanHits,
+        },
+        ...(botShots.length > 0
+          ? {
+              [opponentUid]: {
+                ...game.players[opponentUid]!,
+                shotsFired: (game.players[opponentUid]?.shotsFired ?? 0) + botShots.length,
+                hits: (game.players[opponentUid]?.hits ?? 0) + botHits,
+              },
+            }
+          : {}),
+      };
+      finishGame({
+        tx,
+        gameId,
+        game: { ...game, players },
+        winnerUid,
+        loserUid,
+        reason: 'all_sunk',
+        users: { [uid]: me, [opponentUid]: opponent },
+        fleets: { [uid]: myBoard?.fleet, [opponentUid]: opponentBoard.fleet },
+        pairHistory,
+        extraGameFields: gameUpdate,
+        now,
+      });
+      return { gameOver: true, winnerUid };
+    }
+
+    if (humanHits > 0) {
+      tx.update(refs.privateBoard(gameId, opponentUid), {
+        hitCells: [...finalState.boards[opponentUid]!.hitCells],
+        updatedAt: now,
+      });
+    }
+    if (botHits > 0) {
+      tx.update(refs.privateBoard(gameId, uid), {
+        hitCells: [...finalState.boards[uid]!.hitCells],
+        updatedAt: now,
+      });
+    }
+    tx.update(refs.game(gameId), gameUpdate);
+    return { gameOver: false, winnerUid: null };
   });
 }
 

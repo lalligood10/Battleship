@@ -4,6 +4,7 @@ import { Alert, Spinner, Toast, TopBar } from '../../components/ui';
 import { cancelGame } from '../../lib/api';
 import { errorMessage } from '../../lib/errors';
 import type { Game } from '../../lib/types';
+import { ModeBadge } from '../../components/ModeBadge';
 
 export function WaitingView({ game, uid }: { game: Game; uid: string }) {
   const navigate = useNavigate();
@@ -50,7 +51,7 @@ export function WaitingView({ game, uid }: { game: Game; uid: string }) {
 
   return (
     <div className="page">
-      <TopBar title="Invite a friend" back="/" />
+      <TopBar title="Invite a friend" back="/" right={<ModeBadge mode={game.mode} />} />
       {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
 
       {!game.invitedUid && (

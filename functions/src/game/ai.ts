@@ -24,6 +24,8 @@ export interface AiInput {
   boardSize: number;
   difficulty: BotDifficulty;
   rng: () => number;
+  /** Cells already selected for the current volley, without exposing their results. */
+  exclude?: ReadonlySet<string>;
 }
 
 interface AiState {
@@ -224,7 +226,10 @@ function huntCandidates(state: AiState, n: number, hard: boolean): Coordinate[] 
 export function chooseShot(input: AiInput): Coordinate {
   const { shots, boardSize, difficulty, rng } = input;
   const n = boardSize ?? GAME_CONFIG.BOARD_SIZE;
-  const state = analyse(shots);
+  const analyzed = analyse(shots);
+  const state = input.exclude?.size
+    ? { ...analyzed, tried: new Set([...analyzed.tried, ...input.exclude]) }
+    : analyzed;
 
   if (difficulty !== 'easy' && state.unresolved.length > 0) {
     const targets = targetCandidates(state, difficulty === 'hard');

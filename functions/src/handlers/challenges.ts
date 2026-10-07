@@ -8,6 +8,7 @@ import { Timestamp, type DocumentReference, type Transaction } from 'firebase-ad
 import { HttpsError } from 'firebase-functions/v2/https';
 import { isBotUid } from '../game/bots';
 import { GAME_CONFIG } from '../game/config';
+import { parseGameModeInput, type GameMode } from '../game/core/schema';
 import { db, refs } from '../lib/firestore';
 import type { ChallengeDoc } from '../types';
 import { joinUpdate, newGameDoc, requireUser, reserveJoinCode } from './games';
@@ -59,7 +60,10 @@ async function acceptInTx(
   const code = await reserveJoinCode(tx);
 
   const gameRef = refs.games().doc();
-  const base = newGameDoc(challenge.fromUid, fromUser, code, now, { isQuickMatch: false });
+  const base = newGameDoc(challenge.fromUid, fromUser, code, now, {
+    isQuickMatch: false,
+    mode: challenge.mode ?? 'classic',
+  });
   tx.set(gameRef, { ...base, ...joinUpdate(base, challenge.toUid, toUser, now) });
   tx.set(refs.gameCode(code), { gameId: gameRef.id, createdAt: now });
   tx.update(ref, { status: 'accepted', gameId: gameRef.id, respondedAt: now });
@@ -76,8 +80,10 @@ function acceptedRematch(tx: Transaction, sourceGameId: string) {
 // ---------- createChallenge ----------
 
 export async function createChallenge(uid: string, data: unknown): Promise<CreateChallengeResult> {
-  const input = (data ?? {}) as { opponentUid?: unknown; sourceGameId?: unknown };
+  const input = (data ?? {}) as { opponentUid?: unknown; mode?: unknown; sourceGameId?: unknown };
   const opponentUid = requireId(input.opponentUid, 'opponentUid');
+  const requestedMode = parseGameModeInput(input.mode);
+  if (!requestedMode) throw new HttpsError('invalid-argument', 'Choose a game type');
   const sourceGameId =
     input.sourceGameId === undefined || input.sourceGameId === null ? null : requireId(input.sourceGameId, 'sourceGameId');
   if (opponentUid === uid) throw new HttpsError('invalid-argument', "You can't challenge yourself");
@@ -106,6 +112,7 @@ export async function createChallenge(uid: string, data: unknown): Promise<Creat
       }
       if (source.status !== 'finished') throw new HttpsError('failed-precondition', 'That game is not finished yet');
     }
+    const mode: GameMode = sourceSnap?.data()?.mode ?? requestedMode;
     // Both players already agreed to this rematch: point at the game it started.
     const done = rematched?.docs[0];
     if (done) return { challengeId: done.id, gameId: done.data().gameId };
@@ -115,14 +122,14 @@ export async function createChallenge(uid: string, data: unknown): Promise<Creat
     const staleDocs = [...forward.docs, ...reverse.docs].filter((d) => !live(d));
 
     // They already challenged me: accepting theirs is the same as both agreeing to play.
-    const incoming = reverse.docs.find(live);
+    const incoming = reverse.docs.find((d) => live(d) && (d.data().mode ?? 'classic') === mode);
     if (incoming) {
       const gameId = await acceptInTx(tx, incoming.ref, incoming.data(), now);
       for (const d of staleDocs) tx.update(d.ref, { status: 'expired', respondedAt: now });
       return { challengeId: incoming.id, gameId };
     }
 
-    const mine = forward.docs.find(live);
+    const mine = forward.docs.find((d) => live(d) && (d.data().mode ?? 'classic') === mode);
     if (mine && sourceGameId && mine.data().sourceGameId === sourceGameId) return { challengeId: mine.id, gameId: null };
     if (mine) {
       throw new HttpsError('already-exists', `You already challenged ${opponent.username}`);
@@ -135,6 +142,7 @@ export async function createChallenge(uid: string, data: unknown): Promise<Creat
       toUid: opponentUid,
       fromUsername: me.username,
       toUsername: opponent.username,
+      mode,
       status: 'pending',
       sourceGameId,
       gameId: null,

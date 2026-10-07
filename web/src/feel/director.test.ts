@@ -10,7 +10,7 @@ const sunk = {
   placement: { type: 'destroyer' as const, row: 2, col: 3, horizontal: true },
 };
 
-function resolved(shooter: string, result: 'hit' | 'miss' = 'hit'): CoreEvent {
+function resolved(shooter: string, result: 'hit' | 'miss' = 'hit'): Extract<CoreEvent, { type: 'shotResolved' }> {
   return { type: 'shotResolved', shooter, target, result, turnNumber: 1 };
 }
 
@@ -63,6 +63,41 @@ describe('feel director', () => {
     expect(cues.filter((cue) => cue.type === 'impact')).toHaveLength(0);
     vi.advanceTimersByTime(0);
     expect(director.revealed().target).toBe(1);
+  });
+
+  it('uses one wind-up for a local volley and staggers impacts', () => {
+    const { director, cues } = createDirector();
+    const targets = [target, { row: 2, col: 4 }];
+    director.fireRequested(targets);
+    expect(cues).toEqual([{ type: 'windup', side: 'target', shotKey: 'me:0', target, targets }]);
+    director.handle([
+      resolved('me'),
+      { ...resolved('me'), target: targets[1]! },
+    ]);
+
+    vi.advanceTimersByTime(400);
+    expect(director.revealed()).toEqual({ target: 1, own: 0 });
+    vi.advanceTimersByTime(219);
+    expect(director.revealed()).toEqual({ target: 1, own: 0 });
+    vi.advanceTimersByTime(1);
+    expect(director.revealed()).toEqual({ target: 2, own: 0 });
+    expect(cues.filter((cue) => cue.type === 'windup')).toHaveLength(1);
+    expect(cues.filter((cue) => cue.type === 'impact').map((cue) => cue.shotKey)).toEqual(['me:0', 'me:1']);
+  });
+
+  it('stagger-reveals an incoming bot volley after the first bot-reply delay', () => {
+    const { director, cues } = createDirector(true);
+    director.handle([resolved('bot-easy'), { ...resolved('bot-easy'), target: { row: 2, col: 4 } }]);
+
+    vi.advanceTimersByTime(999);
+    expect(director.revealed().own).toBe(0);
+    vi.advanceTimersByTime(1);
+    expect(director.revealed().own).toBe(1);
+    vi.advanceTimersByTime(219);
+    expect(director.revealed().own).toBe(1);
+    vi.advanceTimersByTime(1);
+    expect(director.revealed().own).toBe(2);
+    expect(cues.filter((cue) => cue.type === 'impact').map((cue) => cue.shotKey)).toEqual(['bot-easy:0', 'bot-easy:1']);
   });
 
   it('adds a wind-up for a shot from another device', () => {

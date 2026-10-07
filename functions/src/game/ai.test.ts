@@ -46,6 +46,24 @@ describe('chooseShot', () => {
     }
   });
 
+  it('excludes cells chosen earlier in the same volley without adding their results to history', () => {
+    const exclude = new Set<string>();
+    const shots: Shot[] = [];
+    for (let i = 0; i < 5; i++) {
+      const target = chooseShot({
+        shots,
+        boardSize: N,
+        difficulty: 'easy',
+        rng: () => 0,
+        exclude,
+      });
+      const key = cellKey(target.row, target.col);
+      expect(exclude.has(key)).toBe(false);
+      exclude.add(key);
+    }
+    expect(shots).toEqual([]);
+  });
+
   it('medium: after a hit, fires orthogonally adjacent until the ship sinks', () => {
     const rng = mulberry32(7);
     const shots: Shot[] = [{ row: 4, col: 4, result: 'hit', at: 0 }];

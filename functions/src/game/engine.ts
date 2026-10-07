@@ -31,6 +31,8 @@ export interface Shot {
   sunkPlacement?: ShipPlacement;
   /** Millisecond timestamp when the shot was resolved. */
   at: number;
+  /** Core turn number for shots in a Salvo volley. Classic shots omit it. */
+  volley?: number;
 }
 
 export const cellKey = (row: number, col: number): string => `${row},${col}`;

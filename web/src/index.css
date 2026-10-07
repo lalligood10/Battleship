@@ -417,6 +417,58 @@ label.field {
   border-radius: 50%;
   background: currentColor;
 }
+.mode-badge {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+.mode-badge--salvo {
+  color: var(--accent);
+}
+.game-mode-picker-section {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.game-mode-picker-label {
+  font-weight: 700;
+}
+.game-mode-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+.game-mode-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 4px;
+  min-width: 0;
+  min-height: 88px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-2);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.game-mode-option > span {
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.game-mode-option--selected {
+  border: 2px solid var(--accent);
+  padding: 9px;
+  background: var(--card);
+}
+.game-mode-option:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
 
 .toast {
   position: fixed;
@@ -793,6 +845,26 @@ label.field {
   outline-offset: -2px;
   z-index: 1;
 }
+.cell--queued {
+  outline: 2px dashed var(--accent);
+  outline-offset: -3px;
+  z-index: 1;
+}
+.cell-queue-number {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 800;
+}
 .cell:focus-visible {
   outline: 3px solid var(--text);
   outline-offset: -3px;
@@ -834,6 +906,30 @@ label.field {
 }
 .cell--last {
   animation: flash 0.6s ease;
+}
+.salvo-status {
+  text-align: center;
+}
+.salvo-action-bar {
+  position: sticky;
+  bottom: calc(70px + env(safe-area-inset-bottom));
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.salvo-action-bar > span {
+  font-weight: 800;
+  white-space: nowrap;
+}
+.salvo-action-bar .btn {
+  flex: 1;
 }
 @keyframes pop {
   from {

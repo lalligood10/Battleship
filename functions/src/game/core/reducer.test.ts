@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOT_PROFILES } from '../bots';
-import { createCoreState, reduce } from './reducer';
+import { createCoreState, reduce, salvoShotsAllowed } from './reducer';
 import { createEventBus, type CoreEvent } from './events';
 import type { CoreState } from './schema';
 
@@ -22,6 +22,16 @@ function placed(seed = 5): CoreState {
   expect(second.ok).toBe(true);
   if (!second.ok) throw new Error(second.error.message);
   return second.state;
+}
+
+function placedSalvo(seed = 5): CoreState {
+  let state = createCoreState({ playerIds: ['one', 'two'], seed, mode: 'salvo' });
+  for (const player of state.playerIds) {
+    const result = reduce(state, { type: 'placeFleet', player, fleet, at: 1 });
+    if (!result.ok) throw new Error(result.error.message);
+    state = result.state;
+  }
+  return state;
 }
 
 function fire(state: CoreState, player: string, row: number, col: number) {
@@ -148,6 +158,210 @@ describe('core reducer', () => {
       'turnChanged',
     ]);
     expect(result.events[2]).toMatchObject({ shipId: 'destroyer', placement: fleet[4] });
+  });
+
+  it('reduces the next volley to four only after a ship is sunk', () => {
+    let state = placedSalvo();
+    const first = state.currentTurn!;
+    const second = state.playerIds.find((uid) => uid !== first)!;
+    const firstTargets = [
+      { row: 4, col: 0 },
+      { row: 4, col: 1 },
+      { row: 9, col: 9 },
+      { row: 9, col: 8 },
+      { row: 9, col: 7 },
+    ];
+    expect(salvoShotsAllowed(state, first)).toBe(5);
+    const firstVolley = reduce(state, { type: 'fireSalvo', player: first, targets: firstTargets, at: 10 });
+    if (!firstVolley.ok) throw new Error(firstVolley.error.message);
+    state = firstVolley.state;
+    expect(state.shots[first]).toHaveLength(5);
+    expect(state.shots[first]!.every((shot) => shot.volley === 1)).toBe(true);
+    expect(state.lastProgressAt).toBe(10);
+    expect(salvoShotsAllowed(state, second)).toBe(4);
+
+    const secondTargets = [
+      { row: 4, col: 0 },
+      { row: 4, col: 1 },
+      { row: 9, col: 9 },
+      { row: 9, col: 8 },
+    ];
+    const secondVolley = reduce(state, { type: 'fireSalvo', player: second, targets: secondTargets, at: 20 });
+    if (!secondVolley.ok) throw new Error(secondVolley.error.message);
+    state = secondVolley.state;
+    expect(state.shots[second]).toHaveLength(4);
+    expect(state.shots[second]!.every((shot) => shot.volley === 2)).toBe(true);
+    expect(state.lastProgressAt).toBe(20);
+    expect(salvoShotsAllowed(state, first)).toBe(4);
+  });
+
+  it('caps the volley to the remaining unfired cells', () => {
+    const state = placedSalvo();
+    const player = state.currentTurn!;
+    const available = [
+      { row: 9, col: 7 },
+      { row: 9, col: 8 },
+      { row: 9, col: 9 },
+    ];
+    const remaining = new Set(available.map((cell) => `${cell.row},${cell.col}`));
+    state.shots[player] = Array.from({ length: state.settings.boardSize ** 2 }, (_, index) => ({
+      row: Math.floor(index / state.settings.boardSize),
+      col: index % state.settings.boardSize,
+      result: 'miss' as const,
+      at: index,
+    })).filter((shot) => !remaining.has(`${shot.row},${shot.col}`));
+
+    expect(state.settings.fleet).toHaveLength(5);
+    expect(salvoShotsAllowed(state, player)).toBe(3);
+    expect(reduce(state, { type: 'fireSalvo', player, targets: available, at: 10 }).ok).toBe(true);
+    for (const count of [4, 5]) {
+      const attempted = Array.from({ length: count }, (_, index) => available[index % available.length]!);
+      expect(reduce(state, { type: 'fireSalvo', player, targets: attempted, at: 10 })).toMatchObject({
+        ok: false,
+        error: { code: 'wrong_shot_count' },
+      });
+    }
+  });
+
+  it('validates Salvo shot counts, duplicate, off-board, and previously fired cells', () => {
+    const state = placedSalvo();
+    const player = state.currentTurn!;
+    const targets = [
+      { row: 9, col: 9 },
+      { row: 9, col: 8 },
+      { row: 9, col: 7 },
+      { row: 9, col: 6 },
+      { row: 9, col: 5 },
+    ];
+
+    expect(reduce(state, { type: 'fireSalvo', player, targets: targets.slice(0, 4), at: 10 })).toMatchObject({
+      ok: false,
+      error: { code: 'wrong_shot_count' },
+    });
+    expect(reduce(state, { type: 'fireSalvo', player, targets: [...targets, { row: 9, col: 4 }], at: 10 })).toMatchObject({
+      ok: false,
+      error: { code: 'wrong_shot_count' },
+    });
+    expect(
+      reduce(state, { type: 'fireSalvo', player, targets: [targets[0]!, targets[0]!, ...targets.slice(2)], at: 10 }),
+    ).toMatchObject({ ok: false, error: { code: 'duplicate_target' } });
+    expect(
+      reduce(state, {
+        type: 'fireSalvo',
+        player,
+        targets: [{ row: 10, col: 0 }, ...targets.slice(1)],
+        at: 10,
+      }),
+    ).toMatchObject({ ok: false, error: { code: 'off_board' } });
+
+    const firstVolley = reduce(state, { type: 'fireSalvo', player, targets, at: 10 });
+    if (!firstVolley.ok) throw new Error(firstVolley.error.message);
+    const other = firstVolley.state.currentTurn!;
+    const replyTargets = [
+      { row: 8, col: 9 },
+      { row: 8, col: 8 },
+      { row: 8, col: 7 },
+      { row: 8, col: 6 },
+      { row: 8, col: 5 },
+    ];
+    const reply = reduce(firstVolley.state, { type: 'fireSalvo', player: other, targets: replyTargets, at: 20 });
+    if (!reply.ok) throw new Error(reply.error.message);
+    expect(
+      reduce(reply.state, { type: 'fireSalvo', player, targets: [{ row: 9, col: 9 }, ...targets.slice(1)], at: 30 }),
+    ).toMatchObject({ ok: false, error: { code: 'already_fired' } });
+  });
+
+  it('rejects Classic and Salvo firing actions in the opposite game mode', () => {
+    const unplacedSalvo = createCoreState({ playerIds: ['one', 'two'], seed: 1, mode: 'salvo' });
+    expect(
+      reduce(unplacedSalvo, { type: 'fireSalvo', player: 'one', targets: [], at: 10 }),
+    ).toMatchObject({ ok: false, error: { code: 'wrong_phase' } });
+    const salvoState = placedSalvo();
+    const wrongTurn = salvoState.playerIds.find((uid) => uid !== salvoState.currentTurn)!;
+    expect(
+      reduce(salvoState, { type: 'fireSalvo', player: wrongTurn, targets: [], at: 10 }),
+    ).toMatchObject({ ok: false, error: { code: 'not_your_turn' } });
+    expect(fire(salvoState, salvoState.currentTurn!, 9, 9)).toMatchObject({
+      ok: false,
+      error: { code: 'wrong_mode' },
+    });
+    const classicState = placed();
+    expect(
+      reduce(classicState, {
+        type: 'fireSalvo',
+        player: classicState.currentTurn!,
+        targets: Array.from({ length: 5 }, (_, index) => ({ row: 9, col: index })),
+        at: 10,
+      }),
+    ).toMatchObject({ ok: false, error: { code: 'wrong_mode' } });
+  });
+
+  it('records non-sinking shots before two sinks while preserving order within each group', () => {
+    const state = placedSalvo();
+    const shooter = state.currentTurn!;
+    const owner = state.playerIds.find((uid) => uid !== shooter)!;
+    state.boards[owner]!.hitCells.push('3,0', '3,1', '4,0');
+    const targets = [
+      { row: 3, col: 2 },
+      { row: 9, col: 9 },
+      { row: 4, col: 1 },
+      { row: 9, col: 8 },
+      { row: 9, col: 7 },
+    ];
+
+    const result = reduce(state, { type: 'fireSalvo', player: shooter, targets, at: 10 });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.state.shots[shooter]!.map(({ row, col, result: shotResult }) => [row, col, shotResult])).toEqual([
+      [9, 9, 'miss'],
+      [9, 8, 'miss'],
+      [9, 7, 'miss'],
+      [3, 2, 'sunk'],
+      [4, 1, 'sunk'],
+    ]);
+    expect(result.events.filter((event) => event.type === 'shotFired').map((event) => event.target)).toEqual([
+      { row: 9, col: 9 },
+      { row: 9, col: 8 },
+      { row: 9, col: 7 },
+      { row: 3, col: 2 },
+      { row: 4, col: 1 },
+    ]);
+    expect(result.events.filter((event) => event.type === 'shipSunk').map((event) => event.shipId)).toEqual([
+      'submarine',
+      'destroyer',
+    ]);
+  });
+
+  it('records every shot when a volley destroys the fleet and emits one gameOver without turnChanged', () => {
+    const state = placedSalvo();
+    const shooter = state.currentTurn!;
+    const owner = state.playerIds.find((uid) => uid !== shooter)!;
+    state.boards[owner]!.hitCells.push(
+      ...fleet.slice(0, 4).flatMap((ship) =>
+        Array.from(
+          { length: ship.type === 'carrier' ? 5 : ship.type === 'battleship' ? 4 : 3 },
+          (_, index) => `${ship.row},${ship.col + index}`,
+        ),
+      ),
+      '4,0',
+    );
+    const result = reduce(state, {
+      type: 'fireSalvo',
+      player: shooter,
+      targets: [
+        { row: 4, col: 1 },
+        { row: 9, col: 9 },
+        { row: 9, col: 8 },
+        { row: 9, col: 7 },
+        { row: 9, col: 6 },
+      ],
+      at: 10,
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.state.shots[shooter]).toHaveLength(5);
+    expect(result.state.phase).toBe('gameOver');
+    expect(result.events.filter((event) => event.type === 'gameOver')).toHaveLength(1);
+    expect(result.events.some((event) => event.type === 'turnChanged')).toBe(false);
+    expect(result.events.at(-1)).toMatchObject({ type: 'gameOver', winner: shooter, reason: 'all_sunk' });
   });
 
   it('ends a game with winner, loser and no turnChanged after the final shot', () => {

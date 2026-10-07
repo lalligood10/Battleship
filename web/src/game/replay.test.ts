@@ -82,6 +82,23 @@ describe('replay timeline', () => {
     expect(replayTimeline(game).map((entry) => entry.shooterUid)).toEqual(['me', 'bob', 'me']);
   });
 
+  it('keeps complete Salvo volleys together when both sides share a timestamp', () => {
+    const game = {
+      ...base,
+      mode: 'salvo' as const,
+      shots: {
+        me: [shot(0, 0, 100, 'miss', { volley: 3 }), shot(0, 1, 100, 'hit', { volley: 3 })],
+        bob: [shot(1, 0, 100, 'miss', { volley: 4 })],
+      },
+    };
+
+    expect(replayTimeline(game).map((entry) => [entry.shooterUid, entry.shot.volley])).toEqual([
+      ['me', 3],
+      ['me', 3],
+      ['bob', 4],
+    ]);
+  });
+
   it('breaks an initial timestamp tie in favor of the player with more shots', () => {
     const game = {
       ...base,

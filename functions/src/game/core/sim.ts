@@ -1,14 +1,15 @@
 import { chooseShot } from '../ai';
 import { BOT_DIFFICULTIES, type BotDifficulty } from '../bots';
-import { cellKey, cellsOf, isFleetDestroyed, randomFleet } from '../engine';
-import { createCoreState, reduce } from './reducer';
+import { cellKey, cellsOf, isFleetDestroyed, randomFleet, type Coordinate } from '../engine';
+import { createCoreState, reduce, salvoShotsAllowed } from './reducer';
 import { deriveRng } from './rng';
-import type { CoreState } from './schema';
+import type { CoreState, GameMode } from './schema';
 
 export interface SimulationOptions {
   randomShotRate?: number;
   illegalActionRate?: number;
   difficulties?: readonly BotDifficulty[];
+  mode?: GameMode;
 }
 
 export interface SimulationResult {
@@ -22,9 +23,10 @@ export function simulateGame(seed: number, opts: SimulationOptions = {}): Simula
   const randomShotRate = opts.randomShotRate ?? 0.5;
   const illegalActionRate = opts.illegalActionRate ?? 0.1;
   const difficulties = opts.difficulties ?? BOT_DIFFICULTIES;
+  const mode = opts.mode ?? 'classic';
   const random = deriveRng(seed, 'simulation');
   const playerIds: [string, string] = ['player-one', 'player-two'];
-  let state = createCoreState({ playerIds, seed, createdAt: 0 });
+  let state = createCoreState({ playerIds, seed, createdAt: 0, mode });
   for (const [index, player] of playerIds.entries()) {
     const placement = reduce(state, {
       type: 'placeFleet',
@@ -37,67 +39,117 @@ export function simulateGame(seed: number, opts: SimulationOptions = {}): Simula
   }
 
   let moves = 0;
+  let turns = 0;
   let illegalActions = 0;
   let previousTurnNumber = state.turnNumber;
   while (state.phase === 'playing') {
     const shooter = state.currentTurn;
     if (!shooter || !state.playerIds.includes(shooter)) throw new Error('A playing game must have one current player');
 
-    if (random() < illegalActionRate) {
-      const previousShot = state.shots[shooter]!.at(-1);
-      const illegal = previousShot
-        ? {
-            type: 'fire' as const,
-            player: shooter,
-            target: { row: previousShot.row, col: previousShot.col },
-            at: moves,
-          }
-        : {
-            type: 'fire' as const,
-            player: state.playerIds.find((uid) => uid !== shooter)!,
-            target: { row: 0, col: 0 },
-            at: moves,
-          };
-      const before = structuredClone(state);
-      const rejected = reduce(state, illegal);
-      if (rejected.ok || !['already_fired', 'not_your_turn'].includes(rejected.error.code)) {
-        throw new Error('Injected illegal action was not rejected');
-      }
-      if (JSON.stringify(state) !== JSON.stringify(before)) throw new Error('Illegal action changed the state');
-      illegalActions++;
-    }
-
-    const tried = new Set(state.shots[shooter]!.map((shot) => cellKey(shot.row, shot.col)));
-    let target: { row: number; col: number };
-    if (random() < randomShotRate) {
-      const available: { row: number; col: number }[] = [];
-      for (let row = 0; row < state.settings.boardSize; row++) {
-        for (let col = 0; col < state.settings.boardSize; col++) {
-          if (!tried.has(cellKey(row, col))) available.push({ row, col });
+    if (mode === 'salvo') {
+      const allowed = salvoShotsAllowed(state, shooter);
+      if (random() < illegalActionRate) {
+        const legalTargets = randomTargets(state, shooter, allowed, random);
+        const illegalTargets =
+          allowed === 1
+            ? []
+            : [legalTargets[0]!, legalTargets[0]!, ...legalTargets.slice(2)];
+        const before = structuredClone(state);
+        const rejected = reduce(state, { type: 'fireSalvo', player: shooter, targets: illegalTargets, at: moves });
+        if (rejected.ok || !['wrong_shot_count', 'duplicate_target'].includes(rejected.error.code)) {
+          throw new Error('Injected illegal Salvo action was not rejected');
         }
+        if (JSON.stringify(state) !== JSON.stringify(before)) throw new Error('Illegal Salvo action changed the state');
+        illegalActions++;
       }
-      if (available.length === 0) throw new Error('No legal shots remain');
-      target = available[Math.floor(random() * available.length)]!;
+
+      const turnNumber = state.turnNumber;
+      const shotCount = state.shots[shooter]!.length;
+      const targets = randomTargets(state, shooter, allowed, random);
+      const result = reduce(state, { type: 'fireSalvo', player: shooter, targets, at: moves + 3 });
+      if (!result.ok) throw new Error(`Legal Salvo volley rejected: ${result.error.message}`);
+      state = result.state;
+      const volley = state.shots[shooter]!.slice(shotCount);
+      if (volley.length !== allowed || volley.some((shot) => shot.volley !== turnNumber)) {
+        throw new Error('Salvo volley length or turn number did not match the start-of-volley allowance');
+      }
+      moves += volley.length;
+      turns++;
     } else {
-      const difficulty = difficulties[moves % difficulties.length] ?? 'easy';
-      target = chooseShot({
-        shots: state.shots[shooter]!,
-        boardSize: state.settings.boardSize,
-        difficulty,
-        rng: deriveRng(seed, 'target', moves),
-      });
+      if (random() < illegalActionRate) {
+        const previousShot = state.shots[shooter]!.at(-1);
+        const illegal = previousShot
+          ? {
+              type: 'fire' as const,
+              player: shooter,
+              target: { row: previousShot.row, col: previousShot.col },
+              at: moves,
+            }
+          : {
+              type: 'fire' as const,
+              player: state.playerIds.find((uid) => uid !== shooter)!,
+              target: { row: 0, col: 0 },
+              at: moves,
+            };
+        const before = structuredClone(state);
+        const rejected = reduce(state, illegal);
+        if (rejected.ok || !['already_fired', 'not_your_turn'].includes(rejected.error.code)) {
+          throw new Error('Injected illegal action was not rejected');
+        }
+        if (JSON.stringify(state) !== JSON.stringify(before)) throw new Error('Illegal action changed the state');
+        illegalActions++;
+      }
+
+      const tried = new Set(state.shots[shooter]!.map((shot) => cellKey(shot.row, shot.col)));
+      let target: Coordinate;
+      if (random() < randomShotRate) {
+        const available: Coordinate[] = [];
+        for (let row = 0; row < state.settings.boardSize; row++) {
+          for (let col = 0; col < state.settings.boardSize; col++) {
+            if (!tried.has(cellKey(row, col))) available.push({ row, col });
+          }
+        }
+        if (available.length === 0) throw new Error('No legal shots remain');
+        target = available[Math.floor(random() * available.length)]!;
+      } else {
+        const difficulty = difficulties[moves % difficulties.length] ?? 'easy';
+        target = chooseShot({
+          shots: state.shots[shooter]!,
+          boardSize: state.settings.boardSize,
+          difficulty,
+          rng: deriveRng(seed, 'target', moves),
+        });
+      }
+
+      const result = reduce(state, { type: 'fire', player: shooter, target, at: moves + 3 });
+      if (!result.ok) throw new Error(`Legal shot rejected: ${result.error.message}`);
+      state = result.state;
+      moves++;
+      turns++;
     }
 
-    const result = reduce(state, { type: 'fire', player: shooter, target, at: moves + 3 });
-    if (!result.ok) throw new Error(`Legal shot rejected: ${result.error.message}`);
-    state = result.state;
-    moves++;
     if (state.turnNumber < previousTurnNumber) throw new Error('Turn number decreased');
     previousTurnNumber = state.turnNumber;
     assertInvariants(state);
   }
 
-  return { state, moves, turns: moves, illegalActions };
+  return { state, moves, turns, illegalActions };
+}
+
+function randomTargets(state: CoreState, player: string, count: number, random: () => number): Coordinate[] {
+  const tried = new Set(state.shots[player]!.map((shot) => cellKey(shot.row, shot.col)));
+  const available: Coordinate[] = [];
+  for (let row = 0; row < state.settings.boardSize; row++) {
+    for (let col = 0; col < state.settings.boardSize; col++) {
+      if (!tried.has(cellKey(row, col))) available.push({ row, col });
+    }
+  }
+  if (available.length < count) throw new Error('Not enough legal targets remain for this volley');
+  const targets: Coordinate[] = [];
+  for (let index = 0; index < count; index++) {
+    targets.push(available.splice(Math.floor(random() * available.length), 1)[0]!);
+  }
+  return targets;
 }
 
 function assertInvariants(state: CoreState): void {
