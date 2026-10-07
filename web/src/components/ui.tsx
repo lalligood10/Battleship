@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { FOCUSABLE_SELECTOR, trapTabIndex } from './focusTrap';
 
 export function Spinner({ label }: { label?: string }) {
   return (
@@ -48,7 +49,11 @@ export function Toast({ message, onDone, ms = 2200 }: { message: string | null; 
     return () => clearTimeout(t);
   }, [message, ms, onDone]);
   if (!message) return null;
-  return <div className="toast">{message}</div>;
+  return (
+    <div className="toast" role="status" aria-live="polite" aria-atomic="true">
+      {message}
+    </div>
+  );
 }
 
 export function Modal({
@@ -68,10 +73,17 @@ export function Modal({
 
   useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const first = dialogRef.current?.querySelector<HTMLElement>('button, input, [href], [tabindex]');
+    const first = dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
     first?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCloseRef.current();
+      if (e.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      const current = focusable.indexOf(document.activeElement as HTMLElement);
+      const next = trapTabIndex(focusable.length, current, e.shiftKey);
+      if (next === null) return;
+      e.preventDefault();
+      focusable[next]?.focus();
     };
     document.addEventListener('keydown', onKey);
     return () => {
