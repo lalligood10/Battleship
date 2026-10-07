@@ -11,7 +11,7 @@
     "lint": "oxlint",
     "test": "vitest run",
     "visual-qa": "playwright test",
-    "a11y-qa": "playwright test e2e/a11y.spec.ts",
+    "a11y-qa": "playwright test e2e/a11y.spec.ts e2e/a11y-sweep.spec.ts e2e/colorblind.spec.ts",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -23,6 +23,7 @@
     "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.63.0",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",

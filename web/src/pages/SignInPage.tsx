@@ -12,7 +12,8 @@ import { auth } from '../lib/firebase';
 
 type Mode = 'signin' | 'signup';
 
-export function SignInPage() {
+/** `embedded` drops the brand header when another page (Join) supplies the page heading. */
+export function SignInPage({ embedded = false }: { embedded?: boolean }) {
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -61,14 +62,18 @@ export function SignInPage() {
   };
 
   return (
-    <div className="page page--center">
-      <div className="center stack" style={{ gap: 4, marginBottom: 8 }}>
-        <div className="brand">Broadside</div>
-        <p className="muted">Sink your friends' fleets. Climb the leaderboard.</p>
-      </div>
+    <div className={embedded ? 'signin signin--embedded' : 'page page--center signin'}>
+      {!embedded && (
+        <header className="signin__hero">
+          <span className="radar-emblem" aria-hidden="true" />
+          <h1 className="brand">Broadside</h1>
+          <p className="signin__tagline">Sink your friends' fleets. Climb the leaderboard.</p>
+        </header>
+      )}
 
-      <form className="card stack" onSubmit={submit}>
-        <div className="segmented" role="tablist">
+      <form className="card stack signin__card" onSubmit={submit} aria-label={embedded ? 'Sign in or create an account' : undefined}>
+        {embedded && <h2 className="panel-title">Have an account?</h2>}
+        <div className="segmented" role="tablist" aria-label="Account">
           <button type="button" role="tab" aria-selected={mode === 'signin'} className={mode === 'signin' ? 'active' : ''} onClick={() => setMode('signin')}>
             Sign in
           </button>
@@ -115,10 +120,8 @@ export function SignInPage() {
           </button>
         )}
 
-        <div className="row" style={{ gap: 8 }}>
-          <hr className="grow" style={{ border: 0, borderTop: '1px solid var(--border)' }} />
-          <span className="muted small">or</span>
-          <hr className="grow" style={{ border: 0, borderTop: '1px solid var(--border)' }} />
+        <div className="signin__divider" role="separator" aria-label="or">
+          <span aria-hidden="true">or</span>
         </div>
 
         <button type="button" className="btn btn--secondary btn--block" onClick={google} disabled={busy}>

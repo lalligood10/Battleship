@@ -51,14 +51,12 @@ export function AbandonControls({ game, uid }: { game: Game; uid: string }) {
   };
 
   return (
-    <div className="stack">
+    <div className="stack abandon">
       {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
       {waitingOnOpponent && !bot && !(game.status === 'active' && game.turnTimerMs != null) && (
-        <div className="card card--flat small muted">
-          <div className="stack" style={{ gap: 4 }}>
-            <h3 className="small" style={{ margin: 0, color: 'var(--text)' }}>
-              Inactive opponent
-            </h3>
+        <div className="card card--flat small muted abandon__notice">
+          <div className="stack abandon__body">
+            <h3 className="panel-title abandon__title">Inactive opponent</h3>
             {canClaim ? (
               <>
                 <span>Your opponent hasn't moved in {Math.round(game.abandonTimeoutMs / 86_400_000)} days.</span>
@@ -72,7 +70,7 @@ export function AbandonControls({ game, uid }: { game: Game; uid: string }) {
           </div>
         </div>
       )}
-      <button className="btn btn--danger btn--sm" onClick={() => setConfirming('resign')} disabled={busy}>
+      <button className="btn btn--danger btn--sm abandon__resign" onClick={() => setConfirming('resign')} disabled={busy}>
         Resign
       </button>
 
