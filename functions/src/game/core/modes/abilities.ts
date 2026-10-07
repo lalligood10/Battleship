@@ -115,31 +115,31 @@ function invalidAbility(message: string) {
 
 export const abilitiesRules: ModeRules = {
   shotsAllowed: () => 1,
-  validateAction(_state, action) {
+  validateAction(state, action) {
     if (action.type === 'salvo') {
       return { code: 'wrong_mode', message: 'Use a shot or ship ability in Abilities mode' };
     }
-    if (action.type === 'fire') return classicRules.validateAction(_state, action);
+    if (action.type === 'fire') return classicRules.validateAction(state, action);
 
     if (!abilityIdIsValid(action.abilityId)) return invalidAbility('Unknown ability');
 
-    const status = abilityStatuses(_state, action.player)[action.abilityId];
+    const status = abilityStatuses(state, action.player)[action.abilityId];
     if (status === 'used') return { code: 'ability_used', message: 'This ability has already been used' };
     if (status === 'lost') return invalidAbility('The ship for this ability is lost');
 
     if (malformedTarget(action)) return invalidAbility('Malformed ability target');
 
-    const owner = otherPlayer(_state, action.player);
-    if (!_state.boards[owner]!.fleet) {
+    const owner = otherPlayer(state, action.player);
+    if (!state.boards[owner]!.fleet) {
       return { code: 'wrong_phase', message: 'Opponent fleet is not placed' };
     }
 
     if (action.abilityId === 'carrier-airstrike') {
-      const cells = airstrikeCells(action.target, _state.settings.boardSize);
+      const cells = airstrikeCells(action.target, state.settings.boardSize);
       if (cells.some((cell) => !isOnBoard(cell.row, cell.col))) {
         return { code: 'off_board', message: 'Target is off the board' };
       }
-      const tried = shotsToKeySet(_state.shots[action.player] ?? []);
+      const tried = shotsToKeySet(state.shots[action.player] ?? []);
       if (cells.every((cell) => tried.has(cellKey(cell.row, cell.col)))) {
         return { code: 'already_fired', message: 'You already fired at those cells' };
       }
@@ -153,7 +153,7 @@ export const abilitiesRules: ModeRules = {
       return null;
     }
 
-    if (!isLegalRelocation(_state, action.player, action.target)) {
+    if (!isLegalRelocation(state, action.player, action.target)) {
       return { code: 'illegal_relocation', message: 'Destroyer cannot be relocated to that placement' };
     }
     return null;
