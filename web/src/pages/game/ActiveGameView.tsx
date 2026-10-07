@@ -33,20 +33,16 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
   const targetMarks = useMemo(() => buildMarks(visibleMyShots), [visibleMyShots]);
   const ownMarks = useMemo(() => buildMarks(visibleTheirShots, board?.fleet), [visibleTheirShots, board]);
   useFeelCue((cue) => {
-    if (cue.type !== 'impact') return;
+    if (cue.type !== 'impact' || cue.sunk) return;
     if (cue.side === 'target') {
       setToast(
-        cue.sunk
-          ? `You sank their ${SHIP_NAMES[cue.sunk.shipId]}!`
-          : cue.result === 'hit'
-            ? `Hit at ${coordLabel(cue.target)}!`
-            : `Miss at ${coordLabel(cue.target)}.`,
+        cue.result === 'hit'
+          ? `Hit at ${coordLabel(cue.target)}!`
+          : `Miss at ${coordLabel(cue.target)}.`,
       );
     } else {
       setToast(
-        cue.sunk
-          ? `${opponentName} sank your ${SHIP_NAMES[cue.sunk.shipId]}!`
-          : `${opponentName} fired at ${coordLabel(cue.target)} — ${cue.result === 'hit' ? 'hit' : 'miss'}`,
+        `${opponentName} fired at ${coordLabel(cue.target)} — ${cue.result === 'hit' ? 'hit' : 'miss'}`,
       );
     }
   });
