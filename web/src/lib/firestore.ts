@@ -28,6 +28,7 @@ export function gameFromSnapshot(snap: DocumentSnapshot<DocumentData>): Game | n
     id: snap.id,
     code: String(d.code ?? ''),
     status: d.status as Game['status'],
+    mode: (d.mode as Game['mode'] | undefined) ?? 'classic',
     hostUid: String(d.hostUid ?? ''),
     playerUids: (d.playerUids as string[] | undefined) ?? [],
     players: (d.players as Game['players'] | undefined) ?? {},

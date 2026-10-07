@@ -9,6 +9,7 @@
     "web": "npm --prefix web run dev:local",
     "web:cloud": "npm --prefix web run dev",
     "test": "npm --prefix functions test && npm --prefix web test",
+    "visual-qa": "npm --prefix web run visual-qa",
     "deploy:backend": "npm --prefix functions exec -- firebase deploy --only functions,firestore",
     "deploy:hosting": "npm --prefix web run build && npm --prefix functions exec -- firebase deploy --only hosting"
   }

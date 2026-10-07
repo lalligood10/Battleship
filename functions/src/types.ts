@@ -25,6 +25,7 @@ import type { ShipType } from './game/config';
 import type { BotDifficulty } from './game/bots';
 import type { PlayerStats } from './game/scoring';
 import type { ReactionId } from './game/reactions';
+import type { GameMode } from './game/core/schema';
 
 export interface UserDoc {
   username: string;
@@ -102,6 +103,7 @@ export interface RatingChange {
 export interface GameDoc {
   code: string;
   status: GameStatus;
+  mode?: GameMode;
   hostUid: string;
   /** Exactly the uids allowed to read this document (used by security rules). */
   playerUids: string[];
@@ -138,6 +140,7 @@ export interface PrivateBoardDoc {
   fleet: ShipPlacement[];
   /** Cell keys ("row,col") of this player's ship cells that have been hit. */
   hitCells: string[];
+  rngSeed?: number;
   updatedAt: Timestamp;
 }
 

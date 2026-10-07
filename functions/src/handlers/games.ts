@@ -8,9 +8,7 @@ import { HttpsError } from 'firebase-functions/v2/https';
 import { GAME_CONFIG } from '../game/config';
 import {
   cellKey,
-  isFleetDestroyed,
   isOnBoard,
-  resolveShot,
   shotsToKeySet,
   validateFleet,
   type Shot,
@@ -20,8 +18,11 @@ import type { ShipType } from '../game/config';
 import { isBotUid } from '../game/bots';
 import { containsChatProfanity } from '../lib/username';
 import { chooseShot } from '../game/ai';
+import { deriveRng } from '../game/core/rng';
+import { reduce } from '../game/core/reducer';
 import { isReactionId, REACTION_COOLDOWN_MS } from '../game/reactions';
 import { finishGame } from '../lib/finishGame';
+import { coreStateFromGame } from '../lib/coreAdapter';
 import { db, refs } from '../lib/firestore';
 import { generateJoinCode, normaliseJoinCode } from '../lib/joinCode';
 import type { GameDoc, GamePlayer, PrivateBoardDoc, UserDoc } from '../types';
@@ -53,6 +54,17 @@ function requireMember(game: GameDoc, uid: string): void {
   if (!game.playerUids.includes(uid)) throw new HttpsError('permission-denied', 'You are not in this game');
 }
 
+function throwCoreError(error: { code: string; message: string }): never {
+  if (error.code === 'not_player') throw new HttpsError('permission-denied', 'You are not in this game');
+  if (error.code === 'not_your_turn') throw new HttpsError('failed-precondition', "It's not your turn");
+  if (error.code === 'off_board') throw new HttpsError('invalid-argument', 'Target is off the board');
+  if (error.code === 'already_fired') {
+    throw new HttpsError('failed-precondition', 'You already fired at that cell');
+  }
+  if (error.code === 'invalid_fleet') throw new HttpsError('invalid-argument', error.message);
+  throw new HttpsError('failed-precondition', 'This game is not in progress');
+}
+
 export function playerEntry(user: UserDoc): GamePlayer {
   return { username: user.username, rating: user.rating, ready: false, sunkShips: [], shotsFired: 0, hits: 0 };
 }
@@ -67,6 +79,7 @@ export function newGameDoc(
   return {
     code,
     status: 'waiting',
+    mode: 'classic',
     hostUid,
     playerUids: [hostUid],
     players: { [hostUid]: playerEntry(host) },
@@ -332,33 +345,43 @@ export async function fireShot(uid: string, data: unknown): Promise<FireShotResu
     }
 
     const opponentUid = opponentOf(game, uid);
-    const opponentBoard = (await tx.get(refs.privateBoard(gameId, opponentUid))).data();
+    const [myBoardSnap, opponentBoardSnap] = await Promise.all([
+      tx.get(refs.privateBoard(gameId, uid)),
+      tx.get(refs.privateBoard(gameId, opponentUid)),
+    ]);
+    const opponentBoard = opponentBoardSnap.data();
     if (!opponentBoard) throw new HttpsError('internal', 'Opponent board is missing');
+    const myBoard = myBoardSnap.data();
 
     const botOpponent = isBotUid(opponentUid);
     // Against a bot the reply shot (and possibly a bot win) is resolved inside this same
     // transaction, so everything it might need must be read now, before any writes.
-    const [meSnap, oppSnap, myBoardSnap] = botOpponent
+    const [meSnap, oppSnap] = botOpponent
       ? await Promise.all([
           tx.get(refs.user(uid)),
           tx.get(refs.user(opponentUid)),
-          tx.get(refs.privateBoard(gameId, uid)),
         ])
-      : [null, null, null];
+      : [null, null];
 
-    const previousHits = new Set(opponentBoard.hitCells);
-    const outcome = resolveShot(opponentBoard.fleet, previousHits, { row, col });
     const now = Timestamp.now();
-    const shot: Shot = { row, col, result: outcome.result, at: now.toMillis() };
-    if (outcome.sunkShip) {
-      shot.sunkShip = outcome.sunkShip;
-      const placement = opponentBoard.fleet.find((s) => s.type === outcome.sunkShip);
-      if (placement) shot.sunkPlacement = placement;
-    }
+    const initialState = coreStateFromGame(game, {
+      [uid]: myBoard,
+      [opponentUid]: opponentBoard,
+    });
+    const humanResult = reduce(initialState, {
+      type: 'fire',
+      player: uid,
+      target: { row, col },
+      at: now.toMillis(),
+    });
+    if (!humanResult.ok) throwCoreError(humanResult.error);
+    const afterHuman = humanResult.state;
+    const shot: Shot = afterHuman.shots[uid]!.at(-1)!;
+    const outcome = { result: shot.result, sunkShip: shot.sunkShip };
 
     const isHit = outcome.result !== 'miss';
-    const newHits = isHit ? new Set([...previousHits, cellKey(row, col)]) : previousHits;
-    const destroyed = isHit && isFleetDestroyed(opponentBoard.fleet, newHits);
+    const newHits = new Set(afterHuman.boards[opponentUid]!.hitCells);
+    const destroyed = afterHuman.phase === 'gameOver' && afterHuman.winner === uid;
 
     // Public game-doc changes common to every outcome. Only results are stored – never positions
     // of un-hit ships – so the opponent's fleet stays secret until the game ends.
@@ -416,27 +439,32 @@ export async function fireShot(uid: string, data: unknown): Promise<FireShotResu
     if (botOpponent) {
       const me = meSnap!.data();
       const opp = oppSnap!.data();
-      const myBoard = myBoardSnap!.data();
       if (!me || !opp || !myBoard) throw new HttpsError('internal', 'Player data missing');
 
       // The bot replies immediately, seeing only its own shot history.
+      const botShotIndex = afterHuman.shots[opponentUid]!.length;
       const botTarget = chooseShot({
-        shots: game.shots[opponentUid] ?? [],
+        shots: afterHuman.shots[opponentUid]!,
         boardSize: GAME_CONFIG.BOARD_SIZE,
         difficulty: game.botDifficulty ?? 'easy',
-        rng: Math.random,
+        rng:
+          opponentBoard.rngSeed === undefined
+            ? Math.random
+            : deriveRng(opponentBoard.rngSeed, 'shot', botShotIndex),
       });
-      const myPreviousHits = new Set(myBoard.hitCells);
-      const botOutcome = resolveShot(myBoard.fleet, myPreviousHits, botTarget);
-      const botShot: Shot = { row: botTarget.row, col: botTarget.col, result: botOutcome.result, at: now.toMillis() + 1 };
-      if (botOutcome.sunkShip) {
-        botShot.sunkShip = botOutcome.sunkShip;
-        const placement = myBoard.fleet.find((s) => s.type === botOutcome.sunkShip);
-        if (placement) botShot.sunkPlacement = placement;
-      }
+      const botResult = reduce(afterHuman, {
+        type: 'fire',
+        player: opponentUid,
+        target: botTarget,
+        at: now.toMillis() + 1,
+      });
+      if (!botResult.ok) throwCoreError(botResult.error);
+      const afterBot = botResult.state;
+      const botShot: Shot = afterBot.shots[opponentUid]!.at(-1)!;
+      const botOutcome = { result: botShot.result, sunkShip: botShot.sunkShip };
       const botHit = botOutcome.result !== 'miss';
-      const myNewHits = botHit ? new Set([...myPreviousHits, cellKey(botTarget.row, botTarget.col)]) : myPreviousHits;
-      const fleetLost = botHit && isFleetDestroyed(myBoard.fleet, myNewHits);
+      const myNewHits = new Set(afterBot.boards[uid]!.hitCells);
+      const fleetLost = afterBot.phase === 'gameOver' && afterBot.winner === opponentUid;
 
       gameUpdate[`shots.${opponentUid}`] = FieldValue.arrayUnion(botShot);
       gameUpdate[`players.${opponentUid}.shotsFired`] = FieldValue.increment(1);

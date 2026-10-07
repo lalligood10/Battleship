@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Alert, Empty, Spinner, TopBar } from '../components/ui';
 import { GameChat } from '../components/GameChat';
 import { errorMessage } from '../lib/errors';
 import { listenGame, listenPrivateBoard } from '../lib/firestore';
 import type { Game, PrivateBoard } from '../lib/types';
+import { diffGameEvents, gameEvents } from '../game/events';
 import { useUid } from '../state/SessionProvider';
 import { ActiveGameView } from './game/ActiveGameView';
 import { PlacementView } from './game/PlacementView';
@@ -18,10 +19,36 @@ export function GamePage() {
   const uid = useUid();
   const navigate = useNavigate();
   const [game, setGame] = useState<Game | null | undefined>(undefined);
+  const previousGame = useRef<Game | null>(null);
   const [board, setBoard] = useState<PrivateBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => listenGame(gameId, setGame, (e) => setError(errorMessage(e))), [gameId]);
+  useEffect(() => {
+    previousGame.current = null;
+    return listenGame(
+      gameId,
+      (next) => {
+        if (next) {
+          gameEvents.emit(diffGameEvents(previousGame.current, next));
+          previousGame.current = next;
+        } else {
+          previousGame.current = null;
+        }
+        setGame(next);
+      },
+      (e) => setError(errorMessage(e)),
+    );
+  }, [gameId]);
+
+  useEffect(() => {
+    if (!(import.meta.env.DEV || searchParams.has('debugEvents'))) return;
+    return gameEvents.subscribe(
+      (event) => {
+        if (event.type === 'shipSunk') console.info(event);
+      },
+      ['shipSunk'],
+    );
+  }, [searchParams]);
 
   const needsBoard = game !== undefined && game !== null && game.status !== 'waiting';
   useEffect(() => {

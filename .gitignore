@@ -8,6 +8,7 @@ ui-debug.log
 pubsub-debug.log
 .firebase/
 *.tsbuildinfo
+coverage/
 
 # Secrets — never commit these (see README "Manual steps")
 ios/Broadside/Config/GoogleService-Info.plist
