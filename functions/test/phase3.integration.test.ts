@@ -425,7 +425,7 @@ describe('turn timeouts', () => {
     }
     await expireTurn(gameId);
     const { pushes, after } = await pushesFor(gameId, async () => {
-      expect(await claimTurnTimeout(second, { gameId })).toEqual({ skipped: false, forfeited: true });
+      expect(await claimTurnTimeout(second, { gameId })).toEqual({ skipped: true, forfeited: true });
     });
 
     expect(after).toMatchObject({

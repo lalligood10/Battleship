@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Board } from '../../components/Board';
 import { AbilityBar } from '../../components/AbilityBar/AbilityBar';
+import { TurnTimer, useServerOffset } from '../../components/TurnTimer';
 import { Alert, Spinner, Toast, TopBar } from '../../components/ui';
 import type { AbilityId, AbilityTarget, Game, PrivateBoard, ShipType } from '../../lib/types';
 import { alreadyShot, buildMarks, coordLabel, markAt } from '../../game/marks';
@@ -10,7 +11,7 @@ import { abilityStatusesForWeb, deriveSonarMarkers, isAbilityPreviewValid } from
 import { sonarPresentation } from '../../game/sonarPresentation';
 import { salvoQueueNumber, salvoQueueReady, toggleSalvoTarget } from '../../game/salvoQueue';
 import { salvoShotsAllowed as getSalvoShotsAllowed } from '@shared/core/reducer';
-import { fireSalvo, fireShot, useAbility as submitAbility } from '../../lib/api';
+import { claimTurnTimeout, fireSalvo, fireShot, useAbility as submitAbility } from '../../lib/api';
 import { errorMessage } from '../../lib/errors';
 import { isMyTurn, opponentUid, shotsBy } from '../../lib/types';
 import { AbandonControls } from './AbandonControls';
@@ -25,6 +26,7 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
   const opp = opponentUid(game, uid) ?? '';
   const opponentName = game.players[opp]?.username ?? 'Opponent';
   const myTurn = isMyTurn(game, uid);
+  const serverOffsetMs = useServerOffset(game.lastMoveAt?.toMillis() ?? null);
   const salvoMode = game.mode === 'salvo';
   const abilitiesMode = game.mode === 'abilities';
   const myShots = shotsBy(game, uid);
@@ -316,6 +318,12 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
           style={{ justifyContent: 'center', fontWeight: 800 }}
         >
           {finished ? 'Game over' : pendingIncoming ? 'Incoming fire…' : myTurn ? 'Your turn — pick a target' : `Waiting for ${opponentName} to fire…`}
+          <TurnTimer
+            turnDeadline={game.status === 'active' ? game.turnDeadline?.toMillis() ?? null : null}
+            serverOffsetMs={serverOffsetMs}
+            isMyTurn={game.currentTurnUid === uid}
+            onExpire={() => void claimTurnTimeout(game.id).catch(() => {})}
+          />
         </div>
         {salvoMode && !finished && (
           <p className="muted small salvo-status">

@@ -159,7 +159,7 @@ describe('Phase 3 timer and guest contract', () => {
   });
 
   it('exposes the timer and guest upgrade callable stubs', async () => {
-    await expectHttpsError(claimTurnTimeout(ALICE, { gameId: 'game-1' }), 'unimplemented');
+    await expectHttpsError(claimTurnTimeout(ALICE, { gameId: 'missing-game' }), 'not-found');
     await expectHttpsError(completeGuestUpgrade(ALICE), 'unimplemented');
   });
 });
