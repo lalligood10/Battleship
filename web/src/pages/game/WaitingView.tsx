@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Alert, Spinner, Toast, TopBar } from '../../components/ui';
 import { cancelGame } from '../../lib/api';
 import { errorMessage } from '../../lib/errors';
 import type { Game } from '../../lib/types';
 import { ModeBadge } from '../../components/ModeBadge';
+import { HeadToHeadCard } from '../../components/HeadToHead';
+import { getHeadToHead, type HeadToHeadDoc } from '../../lib/stats';
+import { isBotUid } from '@shared/bots';
 import { GAME_MODE_OPTIONS } from '@shared/core/schema';
 
 export function WaitingView({ game, uid }: { game: Game; uid: string }) {
@@ -14,6 +17,20 @@ export function WaitingView({ game, uid }: { game: Game; uid: string }) {
   const [toast, setToast] = useState<string | null>(null);
   const link = `${location.origin}/join/${game.code}`;
   const isHost = game.hostUid === uid;
+  const knownOpp = game.invitedUid ?? game.playerUids.find((p) => p !== uid) ?? null;
+  const opp = knownOpp && !isBotUid(knownOpp) ? knownOpp : null;
+  const [h2h, setH2h] = useState<HeadToHeadDoc | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!opp) return;
+    let cancelled = false;
+    getHeadToHead(uid, opp)
+      .then((doc) => !cancelled && setH2h(doc))
+      .catch(() => !cancelled && setH2h(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [uid, opp]);
 
   const copy = async (text: string, what: string) => {
     try {
@@ -86,6 +103,15 @@ export function WaitingView({ game, uid }: { game: Game; uid: string }) {
             {link}
           </p>
         </section>
+      )}
+
+      {opp && h2h !== undefined && (
+        <HeadToHeadCard
+          h2h={h2h}
+          myUid={uid}
+          opponentName={game.players[opp]?.username ?? h2h?.usernames[opp] ?? 'Opponent'}
+          mode={game.mode ?? 'classic'}
+        />
       )}
 
       <div className="waiting__status">

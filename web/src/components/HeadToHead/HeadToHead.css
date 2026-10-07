@@ -1,0 +1,81 @@
+/* Phase 5: head-to-head record. Standing is always spelled out; colour and glyph only reinforce it. */
+.h2h-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text);
+  background: var(--card-2);
+}
+.h2h-chip--lead .h2h-chip__glyph {
+  color: var(--accent);
+}
+.h2h-chip--trail .h2h-chip__glyph {
+  color: var(--amber);
+}
+.h2h-chip--none {
+  color: var(--muted);
+}
+
+.h2h-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border-left: 4px solid var(--accent);
+}
+.h2h-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.h2h-card__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 400;
+}
+.h2h-card__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+.h2h-card__cell dt {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.h2h-card__score {
+  margin: 2px 0 0;
+  font-family: var(--mono);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.h2h-card__standing {
+  margin: 0;
+  font-family: var(--mono);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+.h2h-card__standing--lead {
+  color: var(--accent);
+}
+.h2h-card__standing--trail {
+  color: var(--amber);
+}
+.h2h-card__empty,
+.h2h-card__since {
+  margin: 0;
+}
