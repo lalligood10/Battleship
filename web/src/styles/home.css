@@ -400,6 +400,8 @@
   text-transform: uppercase;
 }
 .home-topbar h1 {
+  font-family: var(--font);
+  font-weight: 700;
   overflow-wrap: anywhere;
 }
 .home-rating {
