@@ -98,7 +98,16 @@ export function HomePage() {
       {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
 
       <section className="card stack">
-        <GameModePicker value={mode} onChange={setMode} />
+        <GameModePicker value={mode} onChange={setMode} heading="Game Modes" />
+      </section>
+
+      <section className="card stack" aria-labelledby="play-heading">
+        <div className="row" style={{ gap: 8 }}>
+          <h2 className="play-heading grow" id="play-heading">
+            Play
+          </h2>
+          <ModeBadge mode={mode} />
+        </div>
         <div className="stack" style={{ gap: 4 }}>
           <button className="btn btn--primary btn--block" onClick={() => setPickingComputer(true)} disabled={busy !== null}>
             {busy === 'bot' ? <span className="spinner" /> : 'Play vs Computer'}

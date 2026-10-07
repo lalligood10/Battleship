@@ -169,9 +169,9 @@ describe('create / join / cancel', () => {
 
     expect((await refs.game(classic.gameId).get()).data()!.mode).toBe('classic');
     expect((await refs.game(salvo.gameId).get()).data()!.mode).toBe('salvo');
-    await expectHttpsError(createGame(ALICE, { mode: 'abilities' }), 'invalid-argument', 'Choose a game type');
+    await expectHttpsError(createGame(ALICE, { mode: 'bogus' }), 'invalid-argument', 'Choose a game type');
     await expectHttpsError(
-      createChallenge(ALICE, { opponentUid: BOB, mode: 'abilities' }),
+      createChallenge(ALICE, { opponentUid: BOB, mode: 'bogus' }),
       'invalid-argument',
       'Choose a game type',
     );
@@ -505,7 +505,7 @@ describe('quick match', () => {
       playerUids: [ALICE, CAROL],
     });
     expect((await refs.quickMatch(BOB).get()).data()!.gameId).toBeNull();
-    await expectHttpsError(joinQuickMatch(BOB, { mode: 'abilities' }), 'invalid-argument', 'Choose a game type');
+    await expectHttpsError(joinQuickMatch(BOB, { mode: 'bogus' }), 'invalid-argument', 'Choose a game type');
   });
 
   it('does not return a matched ticket when the requested mode differs', async () => {
@@ -855,7 +855,7 @@ describe('vs computer', () => {
     expect((await refs.game(classic.gameId).get()).data()!.mode).toBe('classic');
     expect((await refs.game(salvo.gameId).get()).data()!.mode).toBe('salvo');
     await expectHttpsError(
-      createBotGame(ALICE, { difficulty: 'easy', mode: 'abilities' }),
+      createBotGame(ALICE, { difficulty: 'easy', mode: 'bogus' }),
       'invalid-argument',
       'Choose a game type',
     );
@@ -1248,5 +1248,178 @@ describe('mode retention on rematches', () => {
 
     const rematch = await requestRematch(ALICE, { gameId });
     expect((await refs.game(rematch.gameId).get()).data()!.mode).toBe('salvo');
+  });
+});
+
+const GAME_MODES = ['classic', 'salvo', 'abilities'] as const;
+
+describe('mode immutability', () => {
+  async function expectStoredMode(gameId: string, mode: (typeof GAME_MODES)[number]) {
+    expect((await refs.game(gameId).get()).data()!.mode).toBe(mode);
+  }
+
+  it.each(GAME_MODES)('stores %s across every creation path', async (mode) => {
+    await setupPlayers();
+    await setUsername(CAROL, { username: 'Carol' });
+
+    const ticket = await joinQuickMatch(ALICE, { mode });
+    expect(ticket).toEqual({ gameId: null });
+    expect((await refs.quickMatch(ALICE).get()).data()).toMatchObject({ mode, gameId: null });
+    const paired = await joinQuickMatch(CAROL, { mode });
+    expect(paired.gameId).toBeTruthy();
+    expect((await refs.quickMatch(ALICE).get()).data()).toMatchObject({ mode, gameId: paired.gameId });
+    await expectStoredMode(paired.gameId!, mode);
+
+    const human = await createGame(ALICE, { mode });
+    await expectStoredMode(human.gameId, mode);
+    await joinGame(BOB, { code: human.code, mode: mode === 'classic' ? 'abilities' : 'classic' });
+    await expectStoredMode(human.gameId, mode);
+    await placeShips(ALICE, { gameId: human.gameId, ships: FLEET });
+    await placeShips(BOB, { gameId: human.gameId, ships: FLEET });
+    await resign(ALICE, { gameId: human.gameId });
+    await expectStoredMode(human.gameId, mode);
+    const humanRematch = await requestRematch(BOB, { gameId: human.gameId });
+    await expectStoredMode(humanRematch.gameId, mode);
+
+    const bot = await createBotGame(ALICE, { difficulty: 'easy', mode });
+    await expectStoredMode(bot.gameId, mode);
+    await placeShips(ALICE, { gameId: bot.gameId, ships: FLEET });
+    await resign(ALICE, { gameId: bot.gameId });
+    await expectStoredMode(bot.gameId, mode);
+    const botRematch = await requestRematch(ALICE, { gameId: bot.gameId });
+    await expectStoredMode(botRematch.gameId, mode);
+
+    const lastPlayedAt = Timestamp.now();
+    await refs.opponent(ALICE, BOB).set({ username: 'Bob', gamesPlayed: 1, lastPlayedAt });
+    await refs.opponent(BOB, ALICE).set({ username: 'Alice', gamesPlayed: 1, lastPlayedAt });
+    const challenge = await createChallenge(ALICE, { opponentUid: BOB, mode });
+    expect((await refs.challenge(challenge.challengeId).get()).data()!.mode).toBe(mode);
+    const accepted = await respondChallenge(BOB, { challengeId: challenge.challengeId, accept: true });
+    await expectStoredMode(accepted.gameId!, mode);
+
+    const opposite = await createChallenge(BOB, { opponentUid: ALICE, mode });
+    const autoAccepted = await createChallenge(ALICE, { opponentUid: BOB, mode });
+    expect(autoAccepted.challengeId).toBe(opposite.challengeId);
+    expect(autoAccepted.gameId).toBeTruthy();
+    expect((await refs.challenge(opposite.challengeId).get()).data()).toMatchObject({ mode, status: 'accepted' });
+    await expectStoredMode(autoAccepted.gameId!, mode);
+  });
+
+  it('defaults missing modes to Classic on each creation path', async () => {
+    await setupPlayers();
+    const game = await createGame(ALICE);
+    await expectStoredMode(game.gameId, 'classic');
+
+    const bot = await createBotGame(ALICE, { difficulty: 'easy' });
+    await expectStoredMode(bot.gameId, 'classic');
+
+    expect(await joinQuickMatch(ALICE)).toEqual({ gameId: null });
+    expect((await refs.quickMatch(ALICE).get()).data()).toMatchObject({ mode: 'classic', gameId: null });
+
+    await refs.opponent(ALICE, BOB).set({ username: 'Bob', gamesPlayed: 1, lastPlayedAt: Timestamp.now() });
+    const challenge = await createChallenge(ALICE, { opponentUid: BOB });
+    expect((await refs.challenge(challenge.challengeId).get()).data()!.mode).toBe('classic');
+  });
+
+  it.each(['bogus', 'Salvo', 42, null, {}] as unknown[])(
+    'rejects invalid mode %o without writing game, ticket, or challenge documents',
+    async (mode) => {
+      await setupPlayers();
+
+      await expectHttpsError(createGame(ALICE, { mode }), 'invalid-argument', 'Choose a game type');
+      await expectHttpsError(
+        createBotGame(ALICE, { difficulty: 'easy', mode }),
+        'invalid-argument',
+        'Choose a game type',
+      );
+      await expectHttpsError(joinQuickMatch(ALICE, { mode }), 'invalid-argument', 'Choose a game type');
+      await expectHttpsError(
+        createChallenge(ALICE, { opponentUid: BOB, mode }),
+        'invalid-argument',
+        'Choose a game type',
+      );
+
+      expect((await refs.games().get()).size).toBe(0);
+      expect((await refs.quickMatchQueue().get()).size).toBe(0);
+      expect((await refs.challenges().get()).size).toBe(0);
+    },
+  );
+
+  it.each(['salvo', 'abilities'] as const)('inherits the host %s mode when joining by code', async (mode) => {
+    await setupPlayers();
+    const { gameId, code } = await createGame(ALICE, { mode });
+
+    await joinGame(BOB, { code, mode: mode === 'salvo' ? 'abilities' : 'salvo' });
+
+    await expectStoredMode(gameId, mode);
+  });
+
+  it('queues a Salvo seeker but pairs an Abilities seeker with the Abilities ticket', async () => {
+    await setupPlayers();
+    await setUsername(CAROL, { username: 'Carol' });
+
+    await joinQuickMatch(ALICE, { mode: 'classic' });
+    await joinQuickMatch(BOB, { mode: 'abilities' });
+    expect(await joinQuickMatch(CAROL, { mode: 'salvo' })).toEqual({ gameId: null });
+    expect((await refs.quickMatch(CAROL).get()).data()).toMatchObject({ mode: 'salvo', gameId: null });
+    expect((await refs.quickMatch(ALICE).get()).data()!.gameId).toBeNull();
+    expect((await refs.quickMatch(BOB).get()).data()!.gameId).toBeNull();
+
+    const paired = await joinQuickMatch(CAROL, { mode: 'abilities' });
+    expect(paired.gameId).toBeTruthy();
+    await expectStoredMode(paired.gameId!, 'abilities');
+    expect((await refs.quickMatch(BOB).get()).data()).toMatchObject({ mode: 'abilities', gameId: paired.gameId });
+    expect((await refs.quickMatch(ALICE).get()).data()).toMatchObject({ mode: 'classic', gameId: null });
+    expect((await refs.quickMatch(CAROL).get()).exists).toBe(false);
+  });
+
+  it.each(['salvo', 'abilities'] as const)('preserves %s through gameplay, chat, resign, rematch, and cancellation', async (mode) => {
+    await setupPlayers();
+    const { gameId, code } = await createGame(ALICE, { mode });
+    await expectStoredMode(gameId, mode);
+
+    await joinGame(BOB, { code });
+    await expectStoredMode(gameId, mode);
+    await placeShips(ALICE, { gameId, ships: FLEET });
+    await expectStoredMode(gameId, mode);
+    await placeShips(BOB, { gameId, ships: FLEET });
+    await expectStoredMode(gameId, mode);
+
+    const game = (await refs.game(gameId).get()).data()!;
+    const first = game.currentTurnUid!;
+    const second = first === ALICE ? BOB : ALICE;
+    if (mode === 'salvo') {
+      const targets = [9, 8, 7, 6, 5].map((col) => ({ row: 9, col }));
+      await fireSalvo(first, { gameId, targets });
+      await expectStoredMode(gameId, mode);
+      await fireSalvo(second, { gameId, targets });
+      await expectStoredMode(gameId, mode);
+    }
+    // Abilities turn actions arrive with the Abilities mode rules; here only the shared handlers run.
+
+    await sendChatMessage(first, { gameId, text: 'Mode check' });
+    await expectStoredMode(gameId, mode);
+    await resign(second, { gameId });
+    await expectStoredMode(gameId, mode);
+
+    const rematch = await requestRematch(BOB, { gameId });
+    await expectStoredMode(gameId, mode);
+    await expectStoredMode(rematch.gameId, mode);
+    await cancelGame(BOB, { gameId: rematch.gameId });
+    await expectStoredMode(rematch.gameId, mode);
+
+    if (mode === 'abilities') {
+      const lastPlayedAt = Timestamp.now();
+      await refs.opponent(ALICE, BOB).set({ username: 'Bob', gamesPlayed: 1, lastPlayedAt });
+      const challenge = await createChallenge(ALICE, {
+        opponentUid: BOB,
+        mode: 'classic',
+        sourceGameId: gameId,
+      });
+      expect((await refs.challenge(challenge.challengeId).get()).data()!.mode).toBe('abilities');
+      const accepted = await respondChallenge(BOB, { challengeId: challenge.challengeId, accept: true });
+      await expectStoredMode(accepted.gameId!, 'abilities');
+      await expectStoredMode(gameId, 'abilities');
+    }
   });
 });
