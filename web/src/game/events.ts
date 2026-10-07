@@ -15,7 +15,7 @@ export function diffGameEvents(prev: Game | null, next: Game): CoreEvent[] {
 
   const events: CoreEvent[] = [];
   let shotTurn = Math.max(1, prev.turnNumber);
-  for (const { shooter, shot } of added) {
+  for (const [index, { shooter, shot }] of added.entries()) {
     const target = { row: shot.row, col: shot.col };
     events.push({ type: 'shotFired', shooter, target, turnNumber: shotTurn });
     events.push({
@@ -37,19 +37,30 @@ export function diffGameEvents(prev: Game | null, next: Game): CoreEvent[] {
         });
       }
     }
+    if (index < added.length - 1) {
+      events.push({
+        type: 'turnChanged',
+        currentTurn: added[index + 1]!.shooter,
+        turnNumber: shotTurn + 1,
+      });
+    }
     shotTurn += 1;
   }
 
-  if (
+  if (added.length > 0) {
+    if (next.status === 'active' && next.currentTurnUid) {
+      events.push({
+        type: 'turnChanged',
+        currentTurn: next.currentTurnUid,
+        turnNumber: next.turnNumber,
+      });
+    }
+  } else if (
     next.status === 'active' &&
     next.currentTurnUid &&
     (next.currentTurnUid !== prev.currentTurnUid || next.turnNumber !== prev.turnNumber)
   ) {
-    events.push({
-      type: 'turnChanged',
-      currentTurn: next.currentTurnUid,
-      turnNumber: next.turnNumber,
-    });
+    events.push({ type: 'turnChanged', currentTurn: next.currentTurnUid, turnNumber: next.turnNumber });
   }
   if (prev.status !== 'finished' && next.status === 'finished' && next.winnerUid && next.endReason) {
     events.push({ type: 'gameOver', winner: next.winnerUid, reason: next.endReason });

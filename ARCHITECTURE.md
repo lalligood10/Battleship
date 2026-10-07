@@ -26,6 +26,8 @@ push is an additional notification path.
   active-play, results, and replay views.
 - `web/src/components/` contains shared UI, the accessible board, game chat, reactions, and artwork.
 - `web/src/state/` contains the session and active-game providers.
+- `web/src/feel/`, `web/src/audio/`, and `web/src/fx/` contain the cue timeline and its audio and
+  visual-effects consumers.
 - `web/src/lib/api.ts` wraps callable Functions; `web/src/lib/firestore.ts` maps snapshots into
   browser types; `web/src/lib/firebase.ts` initializes Firebase and local emulators.
 - `web/src/game/` contains browser-side board placement, marks, replay, visual effects, and the
@@ -60,27 +62,36 @@ push is an additional notification path.
 `functions/src/game/core/schema.ts` defines classic settings, ship definitions, board cell states,
 phases, and the complete `CoreState`. Persisted `mode` is optional for old documents and defaults to
 `classic`. `reducer.ts` returns a new state and ordered events for fleet placement, shots, resignation,
-and timeout claims without importing Firebase or browser APIs. Its shots retain the existing
+and timeout claims without importing Firebase or browser APIs. Timeout claims use `lastProgressAt`
+and the game's configured abandonment window. Its shots retain the existing
 `result`, `sunkShip`, `sunkPlacement`, and timestamp fields.
 
 `events.ts` defines `shotFired`, `shotResolved`, `shipSunk`, `turnChanged`, and `gameOver` plus an
 isolating event bus. The web's `game/events.ts` derives those events from growth in Firestore shot
 arrays and turn/status changes. GamePage emits each diff from the game listener; a development or
-`?debugEvents` sink listener logs ship-sink events. The existing sound, toast, and strike effects are
-not driven by this new stream.
+`?debugEvents` sink listener logs ship-sink events.
 
 Bot games store a uint32 `rngSeed` on the bot's owner-only private board, not on the public game
 document. Fleet and shot streams derive from that seed using separate labels and shot indices.
 Existing bot boards without a seed continue to use the prior nondeterministic shot selection.
 
-## Current visual effects and sound
+## Phase 1 hooks
 
-`web/src/pages/game/ActiveGameView.tsx` currently owns targeting feedback, strike/incoming-shot
-animations, toast messages, and sound calls. The reusable strike sequences are in
-`web/src/components/art/StrikeOverlay.tsx` and related art components; their CSS animations are in
-`web/src/index.css`. Sound playback and mute preference live in `web/src/lib/sound.ts`.
-`ResultsView.tsx` plays the win/loss sound and result animation. These current consumers are
-intentionally separate from the Phase 0 event bus.
+`GamePage` creates one `FeelDirector` from the first non-null snapshot for a game and subscribes it
+to the core event bus. Initial snapshot history is counted as already revealed, so it produces no
+retroactive effects. In `feel/config.ts`, timing is shared and read-only; audio and haptics settings
+belong to audio work, and `fx` belongs to visual-FX work.
+
+`feel/director.ts` schedules wind-up, impact, sink, and game-over cues and advances board-mark
+reveals only when impacts play. `ActiveGameView` consumes those cues for toasts and revealed marks.
+`audio/` owns cue-to-sound routing and the optional vibration helper; mute preference and sound
+playback remain in `web/src/lib/sound.ts`. `fx/FxLayer.tsx` owns the board strike overlay and
+`FxStage.tsx` wraps the active-game page. A finished game keeps `ActiveGameView` mounted until the
+director settles its final impact and sink hold, then switches to `ResultsView`.
+
+The reusable strike sequences remain in `web/src/components/art/StrikeOverlay.tsx` and related art
+components, with CSS animations in `web/src/index.css`. `ResultsView` owns the result screen and
+animation but no longer plays a second win/loss sound.
 
 ## Verification surfaces
 

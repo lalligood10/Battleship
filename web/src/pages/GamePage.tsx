@@ -7,6 +7,10 @@ import { listenGame, listenPrivateBoard } from '../lib/firestore';
 import type { Game, PrivateBoard } from '../lib/types';
 import { diffGameEvents, gameEvents } from '../game/events';
 import { useUid } from '../state/SessionProvider';
+import { createFeelDirector, type FeelDirector } from '../feel/director';
+import { FeelProvider, useFeelSettled } from '../feel/FeelProvider';
+import { useAudioEngine } from '../audio/useAudioEngine';
+import { isBotGame, opponentUid, shotsBy } from '../lib/types';
 import { ActiveGameView } from './game/ActiveGameView';
 import { PlacementView } from './game/PlacementView';
 import { ResultsView } from './game/ResultsView';
@@ -20,25 +24,64 @@ export function GamePage() {
   const navigate = useNavigate();
   const [game, setGame] = useState<Game | null | undefined>(undefined);
   const previousGame = useRef<Game | null>(null);
+  const [feelDirector, setFeelDirector] = useState<FeelDirector | null>(null);
+  const feelDirectorRef = useRef<{
+    gameId: string;
+    director: FeelDirector;
+    unsubscribe: () => void;
+  } | null>(null);
   const [board, setBoard] = useState<PrivateBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     previousGame.current = null;
-    return listenGame(
+    setGame(undefined);
+    setBoard(null);
+    setError(null);
+    setFeelDirector(null);
+    const disposeDirector = () => {
+      const current = feelDirectorRef.current;
+      if (!current) return;
+      current.unsubscribe();
+      current.director.dispose();
+      feelDirectorRef.current = null;
+    };
+    const unsubscribeGame = listenGame(
       gameId,
       (next) => {
         if (next) {
+          if (feelDirectorRef.current?.gameId !== next.id) {
+            disposeDirector();
+            const opponent = opponentUid(next, uid);
+            const director = createFeelDirector({
+              myUid: uid,
+              botGame: isBotGame(next),
+              initialShots: {
+                target: shotsBy(next, uid).length,
+                own: opponent ? shotsBy(next, opponent).length : 0,
+              },
+            });
+            const unsubscribe = gameEvents.subscribe((event) => director.handle([event]));
+            feelDirectorRef.current = { gameId: next.id, director, unsubscribe };
+            setFeelDirector(director);
+          }
           gameEvents.emit(diffGameEvents(previousGame.current, next));
           previousGame.current = next;
         } else {
           previousGame.current = null;
+          disposeDirector();
+          setFeelDirector(null);
         }
         setGame(next);
       },
       (e) => setError(errorMessage(e)),
     );
-  }, [gameId]);
+    return () => {
+      unsubscribeGame();
+      previousGame.current = null;
+      disposeDirector();
+    };
+  }, [gameId, uid]);
 
   useEffect(() => {
     if (!(import.meta.env.DEV || searchParams.has('debugEvents'))) return;
@@ -85,6 +128,37 @@ export function GamePage() {
     );
   }
 
+  if (!feelDirector) {
+    return (
+      <div className="page">
+        <TopBar title="Game" back="/" />
+        <Spinner label="Loading game…" />
+      </div>
+    );
+  }
+
+  return (
+    <FeelProvider director={feelDirector}>
+      <GamePageContent game={game} uid={uid} board={board} replay={searchParams.get('replay') === '1'} />
+    </FeelProvider>
+  );
+}
+
+function GamePageContent({
+  game,
+  uid,
+  board,
+  replay,
+}: {
+  game: Game;
+  uid: string;
+  board: PrivateBoard | null;
+  replay: boolean;
+}) {
+  const navigate = useNavigate();
+  const settled = useFeelSettled();
+  useAudioEngine();
+
   switch (game.status) {
     case 'waiting':
       return <WaitingView game={game} uid={uid} />;
@@ -109,8 +183,13 @@ export function GamePage() {
         </>
       );
     case 'finished':
-      return searchParams.get('replay') === '1' ? (
+      return replay ? (
         <ReplayView game={game} uid={uid} board={board} />
+      ) : !settled ? (
+        <>
+          <ActiveGameView game={game} uid={uid} board={board} />
+          <GameChat key={game.id} game={game} uid={uid} />
+        </>
       ) : (
         <>
           <ResultsView game={game} uid={uid} board={board} />

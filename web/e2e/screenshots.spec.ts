@@ -1,8 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-const baselineDir = fileURLToPath(new URL('./baselines/', import.meta.url));
+const outputDir = process.env.VISUAL_QA_OUTPUT_DIR
+  ? path.resolve(process.env.VISUAL_QA_OUTPUT_DIR)
+  : fileURLToPath(new URL('./baselines/', import.meta.url));
 const viewports = [
   { label: '375', width: 375, height: 812 },
   { label: '1280', width: 1280, height: 800 },
@@ -23,13 +26,14 @@ async function waitForIdle(page: Page): Promise<void> {
 
 async function capture(page: Page, name: string, width: string): Promise<void> {
   await waitForIdle(page);
+  await mkdir(outputDir, { recursive: true });
   await page.evaluate(async () => {
     window.scrollTo(0, 0);
     await document.fonts.ready;
     await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
   });
   await page.screenshot({
-    path: path.join(baselineDir, `${name}-${width}.png`),
+    path: path.join(outputDir, `${name}-${width}.png`),
     animations: 'disabled',
   });
 }

@@ -1,14 +1,16 @@
 /**
  * Animated strike sequence rendered inside a Board's `.fx` overlay: an inbound jet streaks to the
  * target row, then the cell shows a splash (miss), a burst (hit), or a burst plus a sinking ship
- * (sunk, when the server revealed the placement). Decorative only – no input, no timing logic.
+ * (sunk, when the server revealed the placement). While inbound, a reticle locks onto the target.
+ * Decorative only – no input, no timing logic.
  */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { SHIP_LENGTHS } from '@shared/config';
 import type { Coordinate, ShipPlacement } from '../../lib/types';
 import { Burst } from './Burst';
 import { CarrierStrike } from './CarrierStrike';
 import { Jet } from './Jet';
+import { Reticle } from './Reticle';
 import { Ship } from './Ship';
 import { Splash } from './Splash';
 
@@ -25,13 +27,8 @@ export function StrikeOverlay({
   from: 'left' | 'right';
   sunkPlacement?: ShipPlacement | null;
 }) {
-  // The jet flies once per overlay mount (keyed on the target by the caller) and is removed
-  // after its 1.1s run even though the result phase keeps the overlay alive.
+  // Keep the keyed jet mounted through the result phase until its CSS animation completes.
   const [jetGone, setJetGone] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setJetGone(true), 1100);
-    return () => clearTimeout(t);
-  }, []);
 
   const tx = `${(target.col + 0.5) * 10}%`;
   const ty = `${(target.row + 0.5) * 10}%`;
@@ -49,14 +46,22 @@ export function StrikeOverlay({
           className={`strike-jet-path ${from === 'right' ? 'strike-jet-path--r' : ''}`}
           style={{ ['--tx' as string]: tx, ['--ty' as string]: ty }}
           key={`${target.row},${target.col}`}
+          onAnimationEnd={() => setJetGone(true)}
         >
           <div className={`strike-jet ${from === 'right' ? 'strike-jet--r' : ''}`}>
             <Jet />
           </div>
         </div>
       )}
+      {phase === 'inbound' && (
+        <div className="strike-result strike-reticle" style={{ left: tx, top: ty }}>
+          <Reticle />
+        </div>
+      )}
       {phase === 'miss' && (
         <div className="strike-result" style={{ left: tx, top: ty }}>
+          <span className="strike-ripple" />
+          <span className="strike-ripple strike-ripple--late" />
           <Splash className="strike-splash" />
         </div>
       )}

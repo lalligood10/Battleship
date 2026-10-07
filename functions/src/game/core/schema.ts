@@ -22,6 +22,7 @@ export interface GameSettings {
   mode: GameMode;
   boardSize: number;
   fleet: ShipDefinition[];
+  abandonTimeoutMs: number;
 }
 
 export interface ShipMeta {
@@ -41,6 +42,7 @@ export interface CoreState {
   playerIds: [string, string];
   currentTurn: string | null;
   turnNumber: number;
+  lastProgressAt: number;
   boards: Record<string, PlayerBoard>;
   shots: Record<string, Shot[]>;
   winner: string | null;
@@ -81,6 +83,7 @@ export function defaultSettings(mode: GameMode = 'classic'): GameSettings {
     mode,
     boardSize: GAME_CONFIG.BOARD_SIZE,
     fleet: FLEET_DEFINITION.map((ship) => ({ ...ship })),
+    abandonTimeoutMs: GAME_CONFIG.ABANDON_TIMEOUT_MS,
   };
 }
 
