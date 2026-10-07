@@ -829,8 +829,12 @@
   gap: var(--space-3) var(--space-4);
   border-left: 4px solid var(--amber);
 }
+.home-daily .gm-heading {
+  font-family: var(--font-display);
+  font-weight: 400;
+}
 .home-daily--cleared {
-  border-left-color: var(--radar);
+  border-left-color: var(--accent);
 }
 .home-daily__text {
   display: grid;
@@ -853,7 +857,7 @@
   color: var(--amber);
 }
 .home-daily--cleared .home-daily__glyph {
-  color: var(--radar);
+  color: var(--accent);
 }
 .home-daily__cta {
   flex: 0 0 auto;

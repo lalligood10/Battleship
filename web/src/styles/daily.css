@@ -9,6 +9,8 @@
   gap: 4px;
 }
 .daily-head .game-section__title {
+  font-family: var(--font-display);
+  font-weight: 400;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -43,14 +45,14 @@
 .daily-ship__glyph {
   width: 1em;
   text-align: center;
-  color: var(--radar);
+  color: var(--accent);
 }
 .daily-ship__state {
   font-size: var(--fs-xs);
   font-weight: 600;
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-  color: var(--radar);
+  color: var(--accent);
 }
 .daily-ship--sunk {
   border-style: dashed;
@@ -64,14 +66,14 @@
   color: var(--amber);
 }
 .daily-cleared {
-  border: 1px solid var(--radar);
+  border: 1px solid var(--accent);
 }
 .daily-cleared__title {
   margin: 0;
   font-family: var(--font-display);
   font-size: var(--fs-xl);
   font-weight: 400;
-  color: var(--radar);
+  color: var(--accent);
 }
 .daily-cleared__score {
   margin: 0;
@@ -92,7 +94,7 @@
   background: var(--card-2);
 }
 .daily-top__row--me {
-  border: 2px solid var(--radar);
+  border: 2px solid var(--accent);
 }
 .daily-top__you {
   margin-left: 8px;

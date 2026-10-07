@@ -762,6 +762,10 @@ body:has(.modal-backdrop) .game-chat-toggle {
   justify-content: space-between;
   gap: var(--space-3);
 }
+.ach-shelf__head h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+}
 .ach-shelf__count {
   color: var(--muted);
   font-weight: 600;
@@ -809,11 +813,11 @@ body:has(.modal-backdrop) .game-chat-toggle {
   text-transform: uppercase;
 }
 .ach-item--unlocked {
-  border-color: var(--radar);
+  border-color: var(--accent);
 }
 .ach-item--unlocked .ach-icon,
 .ach-item--unlocked .ach-item__state {
-  color: var(--radar);
+  color: var(--accent);
 }
 .ach-item--locked {
   border-style: dashed;
@@ -858,14 +862,7 @@ body:has(.modal-backdrop) .game-chat-toggle {
 }
 @media (min-width: 640px) {
   .ach-shelf__list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .ach-item {
-    grid-template-columns: 24px minmax(0, 1fr) auto;
-  }
-  .ach-item__state {
-    grid-column: 3;
-    text-align: right;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   }
 }
 /* ===== end Phase 5 ===== */
