@@ -6,6 +6,12 @@ const viewports = [
   { width: 1280, height: 800 },
 ] as const;
 
+function testUsername(viewportWidth: number): string {
+  const digits = `${Date.now().toString().slice(-6)}${viewportWidth % 1000}`;
+  const suffix = digits.replace(/\d/g, (digit) => 'bcdfghjkmn'[Number(digit)]!);
+  return `a11y_${suffix}`;
+}
+
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -43,7 +49,7 @@ for (const viewport of viewports) {
     await page.getByLabel('Email').fill(`a11y-${Date.now()}-${viewport.width}@example.test`);
     await page.getByLabel('Password').fill('broadside-a11y-qa');
     await page.getByRole('button', { name: 'Create account', exact: true }).click();
-    await page.getByLabel('Username').fill(`a11y_${Date.now().toString().slice(-8)}_${viewport.width % 1000}`);
+    await page.getByLabel('Username').fill(testUsername(viewport.width));
     await expect(page.getByText('Available')).toBeVisible();
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Play vs Computer' }).first()).toBeVisible();
