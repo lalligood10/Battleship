@@ -291,7 +291,33 @@ describe('notificationsForChange', () => {
     expect(notificationsForChange('g1', active, resigned)).toEqual([expect.objectContaining({ uid: 'host', title: 'Victory' })]);
 
     const timeout: GameDoc = { ...sunk, endReason: 'timeout' };
-    expect(notificationsForChange('g1', active, timeout)).toEqual([expect.objectContaining({ uid: 'guest', title: 'Game forfeited' })]);
+    expect(notificationsForChange('g1', active, timeout)).toEqual([
+      expect.objectContaining({
+        uid: 'guest',
+        title: 'Game forfeited',
+        body: 'Ann claimed the win after you were inactive.',
+      }),
+    ]);
+  });
+
+  it('uses turn-timer copy for consecutive timeout forfeits', () => {
+    const active: GameDoc = { ...joined, status: 'active', currentTurnUid: 'host' };
+    const timeout: GameDoc = {
+      ...active,
+      status: 'finished',
+      winnerUid: 'host',
+      endReason: 'timeout',
+      currentTurnUid: null,
+      turnTimerMs: 60_000,
+    };
+
+    expect(notificationsForChange('g1', active, timeout)).toEqual([
+      expect.objectContaining({
+        uid: 'guest',
+        title: 'Game forfeited',
+        body: 'You ran out of time on three turns in a row.',
+      }),
+    ]);
   });
 
   it('notifies only the non-requester once when a rematch is requested', () => {

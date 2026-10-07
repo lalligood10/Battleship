@@ -220,7 +220,10 @@ function computeNotifications(gameId: string, before: GameDoc | undefined, after
           uid: loser,
           gameId,
           title: withMode('Game forfeited', after.mode),
-          body: `${name(winner)} claimed the win after you were inactive.`,
+          body:
+            after.turnTimerMs !== null && after.turnTimerMs !== undefined
+              ? 'You ran out of time on three turns in a row.'
+              : `${name(winner)} claimed the win after you were inactive.`,
         });
         break;
       default:
