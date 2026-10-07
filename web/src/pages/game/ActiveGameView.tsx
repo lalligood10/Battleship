@@ -7,6 +7,7 @@ import { alreadyShot, buildMarks, coordLabel, markAt } from '../../game/marks';
 import { cellKey, BOARD_SIZE, SHIP_LENGTHS, SHIP_NAMES, SHIP_TYPES, type Coordinate } from '../../game/placement';
 import { abilityPreview } from '../../components/AbilityBar/abilityPreview';
 import { abilityStatusesForWeb, deriveSonarMarkers, isAbilityPreviewValid } from '../../game/abilities';
+import { sonarPresentation } from '../../game/sonarPresentation';
 import { salvoQueueNumber, salvoQueueReady, toggleSalvoTarget } from '../../game/salvoQueue';
 import { salvoShotsAllowed as getSalvoShotsAllowed } from '@shared/core/reducer';
 import { fireSalvo, fireShot, useAbility as submitAbility } from '../../lib/api';
@@ -94,6 +95,7 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
   useFeelCue((cue) => {
     if (cue.type === 'abilityUsed') {
       if (cue.side === 'target' && cue.abilityId === 'submarine-sonar' && cue.result.abilityId === 'submarine-sonar') {
+        setToast(sonarPresentation(cue.result.center, cue.result.shipPresent).toast);
         setSonarFlashCells(
           abilityPreview('submarine-sonar', cue.result.center, horizontal, BOARD_SIZE).cells,
         );
@@ -356,6 +358,18 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
             overlay={<FxLayer side="target" />}
             onCellTap={onTargetTap}
           />
+          {abilitiesMode && sonarMarkers.length > 0 && (
+            <div className="sonar-history" aria-label="Sonar results">
+              {sonarMarkers.map((marker, index) => (
+                <p
+                  key={`${index}-${marker.center.row}-${marker.center.col}`}
+                  className={`sonar-history__item${marker.shipPresent ? ' sonar-history__item--detected' : ''}`}
+                >
+                  {sonarPresentation(marker.center, marker.shipPresent).line}
+                </p>
+              ))}
+            </div>
+          )}
           {!finished && myTurn && !pendingIncoming && !selectedAbility && (
             salvoMode ? (
               <div className="salvo-action-bar">

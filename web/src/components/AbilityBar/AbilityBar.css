@@ -138,6 +138,12 @@
   .ability-option__label {
     font-size: 14px;
   }
+  .ability-bar__hint {
+    flex-basis: 100%;
+  }
+  .ability-bar__actions {
+    margin-left: 0;
+  }
 }
 
 /* Board cells covered by the aimed ability. Applied by the board alongside `.cell`. */
@@ -159,10 +165,23 @@
   z-index: 1;
 }
 .cell.sonar-marker--detected {
-  outline-color: var(--success);
+  outline: 2px solid var(--success);
+  background-color: color-mix(in srgb, var(--success) 18%, var(--water));
 }
 .cell.sonar-marker--clear {
-  outline-color: var(--muted);
+  outline: 1px dashed var(--muted);
+}
+.sonar-history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.sonar-history__item {
+  color: var(--muted);
+  font-size: 12px;
+}
+.sonar-history__item--detected {
+  color: var(--success);
 }
 .cell.sonar-flash {
   animation: sonar-flash 800ms ease-out;
