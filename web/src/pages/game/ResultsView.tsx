@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Jet } from '../../components/art/Jet';
 import { Ship } from '../../components/art/Ship';
 import { useNavigate } from 'react-router-dom';
@@ -8,7 +8,6 @@ import { buildMarks, markAt } from '../../game/marks';
 import { hasReplay } from '../../game/replay';
 import { requestRematch } from '../../lib/api';
 import { errorMessage } from '../../lib/errors';
-import { play } from '../../lib/sound';
 import { isBotGame, opponentUid, rematchState, shotsBy, type Game, type PrivateBoard } from '../../lib/types';
 import { Reactions } from '../../components/Reactions';
 
@@ -29,13 +28,6 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
     const t = setTimeout(() => setFxDone(true), 2700);
     return () => clearTimeout(t);
   }, []);
-
-  const played = useRef(false);
-  useEffect(() => {
-    if (played.current) return;
-    played.current = true;
-    play(won ? 'win' : 'lose');
-  }, [won]);
 
   const theirBoard = useMemo(() => buildMarks(shotsBy(game, uid), game.revealedFleets?.[opp] ?? [], true), [game, uid, opp]);
   const myBoard = useMemo(

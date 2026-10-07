@@ -14,11 +14,11 @@ const fleet = [
 
 function placed(seed = 5): CoreState {
   let state = createCoreState({ playerIds: ['one', 'two'], seed });
-  const first = reduce(state, { type: 'placeFleet', player: 'one', fleet });
+  const first = reduce(state, { type: 'placeFleet', player: 'one', fleet, at: 1 });
   expect(first.ok).toBe(true);
   if (!first.ok) throw new Error(first.error.message);
   state = first.state;
-  const second = reduce(state, { type: 'placeFleet', player: 'two', fleet });
+  const second = reduce(state, { type: 'placeFleet', player: 'two', fleet, at: 2 });
   expect(second.ok).toBe(true);
   if (!second.ok) throw new Error(second.error.message);
   return second.state;
@@ -184,7 +184,7 @@ describe('core reducer', () => {
     ]);
   });
 
-  it('supports resign and timeout endings', () => {
+  it('supports resign and a valid timeout claim after the opponent stalls', () => {
     const state = placed();
     const resign = reduce(state, { type: 'resign', player: state.currentTurn! });
     expect(resign).toMatchObject({
@@ -192,11 +192,86 @@ describe('core reducer', () => {
       state: { phase: 'gameOver', endReason: 'resign' },
       events: [{ type: 'gameOver', reason: 'resign' }],
     });
-    const timeout = reduce(state, { type: 'claimTimeout', claimant: state.playerIds[1] });
+    const claimant = state.playerIds.find((uid) => uid !== state.currentTurn)!;
+    const timeout = reduce(state, {
+      type: 'claimTimeout',
+      claimant,
+      now: state.lastProgressAt + state.settings.abandonTimeoutMs,
+    });
     expect(timeout).toMatchObject({
       ok: true,
-      state: { phase: 'gameOver', winner: state.playerIds[1], endReason: 'timeout' },
+      state: { phase: 'gameOver', winner: claimant, endReason: 'timeout' },
+      events: [{ type: 'gameOver', winner: claimant, reason: 'timeout' }],
     });
+  });
+
+  it('tracks progress timestamps from creation, placements, and shots', () => {
+    const state = createCoreState({ playerIds: ['one', 'two'], seed: 1, createdAt: 100 });
+    expect(state.lastProgressAt).toBe(100);
+    const first = reduce(state, { type: 'placeFleet', player: 'one', fleet, at: 200 });
+    if (!first.ok) throw new Error(first.error.message);
+    expect(first.state.lastProgressAt).toBe(200);
+    const second = reduce(first.state, { type: 'placeFleet', player: 'two', fleet, at: 300 });
+    if (!second.ok) throw new Error(second.error.message);
+    expect(second.state.lastProgressAt).toBe(300);
+    const shot = reduce(second.state, {
+      type: 'fire',
+      player: second.state.currentTurn!,
+      target: { row: 9, col: 9 },
+      at: 400,
+    });
+    if (!shot.ok) throw new Error(shot.error.message);
+    expect(shot.state.lastProgressAt).toBe(400);
+  });
+
+  it('rejects premature timeout claims after checking who is waiting', () => {
+    const state = placed();
+    const claimant = state.playerIds.find((uid) => uid !== state.currentTurn)!;
+    const premature = reduce(state, {
+      type: 'claimTimeout',
+      claimant,
+      now: state.lastProgressAt + state.settings.abandonTimeoutMs - 1,
+    });
+    expect(premature).toMatchObject({ ok: false, error: { code: 'too_early' } });
+
+    const ownTurn = reduce(state, {
+      type: 'claimTimeout',
+      claimant: state.currentTurn!,
+      now: state.lastProgressAt + state.settings.abandonTimeoutMs,
+    });
+    expect(ownTurn).toMatchObject({ ok: false, error: { code: 'not_waiting' } });
+  });
+
+  it('rejects a placement claim before the claimant has placed a fleet', () => {
+    const state = createCoreState({ playerIds: ['one', 'two'], seed: 1 });
+    const result = reduce(state, {
+      type: 'claimTimeout',
+      claimant: 'one',
+      now: state.settings.abandonTimeoutMs,
+    });
+    expect(result).toMatchObject({ ok: false, error: { code: 'not_waiting' } });
+  });
+
+  it('rejects timeout claims against a bot opponent', () => {
+    const state = createCoreState({ playerIds: ['human', BOT_PROFILES.easy.uid], seed: 1 });
+    const result = reduce(state, {
+      type: 'claimTimeout',
+      claimant: 'human',
+      now: state.settings.abandonTimeoutMs,
+    });
+    expect(result).toMatchObject({ ok: false, error: { code: 'not_waiting' } });
+  });
+
+  it('allows a placement timeout claim when only the claimant has placed', () => {
+    const initial = createCoreState({ playerIds: ['one', 'two'], seed: 1, createdAt: 10 });
+    const placedOnce = reduce(initial, { type: 'placeFleet', player: 'one', fleet, at: 20 });
+    if (!placedOnce.ok) throw new Error(placedOnce.error.message);
+    const result = reduce(placedOnce.state, {
+      type: 'claimTimeout',
+      claimant: 'one',
+      now: 20 + placedOnce.state.settings.abandonTimeoutMs,
+    });
+    expect(result).toMatchObject({ ok: true, state: { phase: 'gameOver', winner: 'one', endReason: 'timeout' } });
   });
 
   it('rejects illegal moves without mutating deep-frozen state', () => {

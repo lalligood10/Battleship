@@ -24,12 +24,13 @@ export function simulateGame(seed: number, opts: SimulationOptions = {}): Simula
   const difficulties = opts.difficulties ?? BOT_DIFFICULTIES;
   const random = deriveRng(seed, 'simulation');
   const playerIds: [string, string] = ['player-one', 'player-two'];
-  let state = createCoreState({ playerIds, seed });
+  let state = createCoreState({ playerIds, seed, createdAt: 0 });
   for (const [index, player] of playerIds.entries()) {
     const placement = reduce(state, {
       type: 'placeFleet',
       player,
       fleet: randomFleet(deriveRng(seed, 'fleet', index)),
+      at: index + 1,
     });
     if (!placement.ok) throw new Error(`Generated fleet rejected: ${placement.error.message}`);
     state = placement.state;
@@ -87,7 +88,7 @@ export function simulateGame(seed: number, opts: SimulationOptions = {}): Simula
       });
     }
 
-    const result = reduce(state, { type: 'fire', player: shooter, target, at: moves });
+    const result = reduce(state, { type: 'fire', player: shooter, target, at: moves + 3 });
     if (!result.ok) throw new Error(`Legal shot rejected: ${result.error.message}`);
     state = result.state;
     moves++;

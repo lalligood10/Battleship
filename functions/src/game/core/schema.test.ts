@@ -15,7 +15,12 @@ describe('core schema helpers', () => {
 
   it('provides classic defaults and derives the owner view from opponent shots', () => {
     const state = createCoreState({ playerIds: ['one', 'two'], seed: 1 });
-    expect(defaultSettings()).toMatchObject({ mode: 'classic', boardSize: 10, fleet: expect.any(Array) });
+    expect(defaultSettings()).toMatchObject({
+      mode: 'classic',
+      boardSize: 10,
+      fleet: expect.any(Array),
+      abandonTimeoutMs: expect.any(Number),
+    });
     state.shots.two = [
       { row: 0, col: 0, result: 'miss', at: 1 },
       { row: 1, col: 1, result: 'hit', at: 2 },

@@ -57,6 +57,7 @@ describe('diffGameEvents', () => {
     expect(diffGameEvents(prev, next)).toEqual([
       { type: 'shotFired', shooter: 'one', target: { row: 0, col: 1 }, turnNumber: 4 },
       { type: 'shotResolved', shooter: 'one', target: { row: 0, col: 1 }, result: 'miss', turnNumber: 4 },
+      { type: 'turnChanged', currentTurn: 'two', turnNumber: 5 },
       { type: 'shotFired', shooter: 'two', target: { row: 3, col: 2 }, turnNumber: 5 },
       { type: 'shotResolved', shooter: 'two', target: { row: 3, col: 2 }, result: 'hit', turnNumber: 5 },
       {
@@ -83,6 +84,103 @@ describe('diffGameEvents', () => {
     expect(diffGameEvents(prev, next).map((event) => event.type)).toEqual([
       'shotFired',
       'shotResolved',
+      'gameOver',
+    ]);
+  });
+
+  it('keeps the intermediate turn change in a human and bot exchange', () => {
+    const prev = game({ turnNumber: 3, currentTurnUid: 'human', playerUids: ['human', 'bot'] });
+    const next = game({
+      playerUids: ['human', 'bot'],
+      isBotGame: true,
+      shots: {
+        human: [{ row: 0, col: 1, result: 'miss', at: 40 }],
+        bot: [{ row: 3, col: 2, result: 'hit', at: 41 }],
+      },
+      currentTurnUid: 'human',
+      turnNumber: 5,
+    });
+
+    expect(diffGameEvents(prev, next)).toEqual([
+      { type: 'shotFired', shooter: 'human', target: { row: 0, col: 1 }, turnNumber: 3 },
+      { type: 'shotResolved', shooter: 'human', target: { row: 0, col: 1 }, result: 'miss', turnNumber: 3 },
+      { type: 'turnChanged', currentTurn: 'bot', turnNumber: 4 },
+      { type: 'shotFired', shooter: 'bot', target: { row: 3, col: 2 }, turnNumber: 4 },
+      { type: 'shotResolved', shooter: 'bot', target: { row: 3, col: 2 }, result: 'hit', turnNumber: 4 },
+      { type: 'turnChanged', currentTurn: 'human', turnNumber: 5 },
+    ]);
+  });
+
+  it('keeps the intermediate turn change when a bot reply wins', () => {
+    const prev = game({ turnNumber: 3, currentTurnUid: 'human', playerUids: ['human', 'bot'] });
+    const next = game({
+      status: 'finished',
+      playerUids: ['human', 'bot'],
+      isBotGame: true,
+      shots: {
+        human: [{ row: 0, col: 1, result: 'miss', at: 40 }],
+        bot: [
+          {
+            row: 3,
+            col: 2,
+            result: 'sunk',
+            sunkShip: 'destroyer',
+            sunkPlacement: { type: 'destroyer', row: 3, col: 1, horizontal: true },
+            at: 41,
+          },
+        ],
+      },
+      currentTurnUid: null,
+      turnNumber: 5,
+      winnerUid: 'bot',
+      endReason: 'all_sunk',
+    });
+
+    expect(diffGameEvents(prev, next)).toEqual([
+      { type: 'shotFired', shooter: 'human', target: { row: 0, col: 1 }, turnNumber: 3 },
+      { type: 'shotResolved', shooter: 'human', target: { row: 0, col: 1 }, result: 'miss', turnNumber: 3 },
+      { type: 'turnChanged', currentTurn: 'bot', turnNumber: 4 },
+      { type: 'shotFired', shooter: 'bot', target: { row: 3, col: 2 }, turnNumber: 4 },
+      { type: 'shotResolved', shooter: 'bot', target: { row: 3, col: 2 }, result: 'hit', turnNumber: 4 },
+      {
+        type: 'shipSunk',
+        shooter: 'bot',
+        owner: 'human',
+        shipId: 'destroyer',
+        placement: { type: 'destroyer', row: 3, col: 1, horizontal: true },
+      },
+      { type: 'gameOver', winner: 'bot', reason: 'all_sunk' },
+    ]);
+  });
+
+  it('does not emit a turn change after a human shot wins', () => {
+    const prev = game({ turnNumber: 3, currentTurnUid: 'human', playerUids: ['human', 'bot'] });
+    const next = game({
+      status: 'finished',
+      playerUids: ['human', 'bot'],
+      shots: {
+        human: [
+          {
+            row: 4,
+            col: 0,
+            result: 'sunk',
+            sunkShip: 'destroyer',
+            sunkPlacement: { type: 'destroyer', row: 4, col: 0, horizontal: true },
+            at: 40,
+          },
+        ],
+        bot: [],
+      },
+      currentTurnUid: null,
+      turnNumber: 4,
+      winnerUid: 'human',
+      endReason: 'all_sunk',
+    });
+
+    expect(diffGameEvents(prev, next).map((event) => event.type)).toEqual([
+      'shotFired',
+      'shotResolved',
+      'shipSunk',
       'gameOver',
     ]);
   });

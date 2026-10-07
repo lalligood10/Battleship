@@ -10,12 +10,16 @@ export function coreStateFromGame(
   const botBoard = Object.values(boards).find((board) => board?.rngSeed !== undefined);
 
   return {
-    settings: defaultSettings(game.mode ?? 'classic'),
+    settings: {
+      ...defaultSettings(game.mode ?? 'classic'),
+      abandonTimeoutMs: game.abandonTimeoutMs,
+    },
     seed: botBoard?.rngSeed ?? 0,
     phase: phaseFromStatus(game.status),
     playerIds: [first, second],
     currentTurn: game.currentTurnUid,
     turnNumber: game.turnNumber,
+    lastProgressAt: (game.lastMoveAt ?? game.createdAt)?.toMillis() ?? 0,
     boards: Object.fromEntries(
       game.playerUids.map((uid) => [
         uid,
