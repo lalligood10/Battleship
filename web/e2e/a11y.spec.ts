@@ -95,8 +95,18 @@ for (const viewport of viewports) {
     await expect(grid.locator('[data-row="1"][data-col="1"]')).toHaveAttribute('aria-label', /^B2 (hit|miss|sunk)$/);
     await expect(grid.locator('[data-row="1"][data-col="1"]')).toHaveAttribute('aria-disabled', 'true');
 
-    const toast = page.locator('.toast');
-    if (await toast.count()) await expect(toast).toHaveAttribute('role', 'status');
+    const toastRegions = page.locator('.toast-region');
+    await expect(toastRegions.first()).toBeAttached();
+    expect(
+      await toastRegions.evaluateAll((regions) =>
+        regions.every(
+          (region) =>
+            region.getAttribute('role') === 'status' &&
+            region.getAttribute('aria-live') === 'polite' &&
+            region.getAttribute('aria-atomic') === 'true',
+        ),
+      ),
+    ).toBe(true);
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole('button', { name: 'Resign' }).click();

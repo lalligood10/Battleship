@@ -282,7 +282,7 @@ for (const theme of themes) {
       await sweep.audit(guest, 'game: placement');
       await lockIn(guest);
       await lockIn(host);
-      await expect(host.locator('.alert[role="status"]').filter({ hasText: /Your turn|Waiting for/ })).toBeVisible();
+      await expect(host.getByRole('status').filter({ hasText: /Your turn|Waiting for/ })).toBeVisible();
       await sweep.audit(host, 'game: active');
 
       // R15: chat takes focus on open; Escape closes it and returns focus to the toggle.
