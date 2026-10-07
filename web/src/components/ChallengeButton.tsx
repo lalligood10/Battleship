@@ -54,7 +54,7 @@ export function ChallengeButton({ opponentUid, opponentName }: { opponentUid: st
 
   return (
     <>
-      <span className="stack" style={{ gap: 2, alignItems: 'flex-end' }}>
+      <span className="challenge-button">
         <button
           type="button"
           className={`btn btn--sm ${theyAsked ? 'btn--primary' : 'btn--secondary'}`}
@@ -68,7 +68,7 @@ export function ChallengeButton({ opponentUid, opponentName }: { opponentUid: st
           {busy ? <span className="spinner" /> : theyAsked ? 'Accept' : sent ? 'Sent' : 'Challenge'}
         </button>
         {error && (
-          <span className="small" role="alert" style={{ color: 'var(--danger)', maxWidth: 160, textAlign: 'right' }}>
+          <span className="small challenge-error challenge-error--inline" role="alert">
             {error}
           </span>
         )}
@@ -76,13 +76,18 @@ export function ChallengeButton({ opponentUid, opponentName }: { opponentUid: st
       {choosingMode && (
         <Modal title={`Challenge ${opponentName}`} onClose={() => setChoosingMode(false)}>
           {error && (
-            <span className="small" role="alert" style={{ color: 'var(--danger)' }}>
+            <span className="small challenge-error" role="alert">
               {error}
             </span>
           )}
           <GameModePicker value={mode} onChange={setMode} />
           <TurnTimerPicker value={turnTimerMs} onChange={setTurnTimerMs} />
-          <button type="button" className="btn btn--primary btn--block" disabled={busy} onClick={() => void sendChallenge()}>
+          <button
+            type="button"
+            className="btn btn--primary btn--block"
+            disabled={busy}
+            onClick={() => void sendChallenge()}
+          >
             {busy ? <span className="spinner" /> : 'Send challenge'}
           </button>
         </Modal>

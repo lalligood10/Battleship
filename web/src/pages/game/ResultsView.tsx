@@ -14,6 +14,8 @@ import { Reactions } from '../../components/Reactions';
 import { MuteToggle } from '../../audio/MuteToggle';
 import { ModeBadge } from '../../components/ModeBadge';
 import { PushOptIn } from '../../components/PushOptIn';
+import { ShotHeatmapPanel } from '../../components/Heatmap/Heatmap';
+import { formatAccuracy, resultStats } from '../../game/resultStats';
 
 export function ResultsView({ game, uid, board }: { game: Game; uid: string; board: PrivateBoard | null }) {
   const navigate = useNavigate();
@@ -23,7 +25,7 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
   const botGame = isBotGame(game);
   const change = game.ratingChanges?.[uid];
   const me = game.players[uid];
-  const accuracy = me && me.shotsFired > 0 ? `${Math.round((me.hits / me.shotsFired) * 100)}%` : '–';
+  const stats = useMemo(() => resultStats(game, uid), [game, uid]);
 
   const [fxDone, setFxDone] = useState(() => !shouldPlayResultFx(game.finishedAt?.toMillis() ?? null, Date.now()));
   const [rematchBusy, setRematchBusy] = useState(false);
@@ -34,7 +36,10 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
     return () => clearTimeout(t);
   }, [fxDone]);
 
-  const theirBoard = useMemo(() => buildMarks(shotsBy(game, uid), game.revealedFleets?.[opp] ?? [], true), [game, uid, opp]);
+  const theirBoard = useMemo(
+    () => buildMarks(shotsBy(game, uid), game.revealedFleets?.[opp] ?? [], true),
+    [game, uid, opp],
+  );
   const myBoard = useMemo(
     () => buildMarks(shotsBy(game, opp), game.revealedFleets?.[uid] ?? board?.fleet ?? [], true),
     [game, opp, uid, board],
@@ -77,7 +82,7 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
   }
 
   return (
-    <div className="page page--wide">
+    <div className="page page--wide results-page">
       <TopBar
         title="Game over"
         back="/"
@@ -88,7 +93,11 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
           </div>
         }
       />
-      <div className="card result-hero stack" role="presentation" onClick={() => setFxDone(true)}>
+      <div
+        className={`card result-hero stack ${won ? 'result-hero--win' : 'result-hero--lose'}`}
+        role="presentation"
+        onClick={() => setFxDone(true)}
+      >
         {!fxDone && (
           <div className="fx" aria-hidden>
             {won ? (
@@ -108,64 +117,84 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
         <h2 className="title">{won ? 'Victory!' : 'Defeat'}</h2>
         <p className="muted">{reason}</p>
         {botGame && <p className="muted small">Played against {opponentName} (computer) — rating unaffected.</p>}
-        <div className="stat-grid" style={{ marginTop: 8 }}>
+        <div className="result-headline" aria-label="Your results" role="group">
+          <div className="stat">
+            <b>{formatAccuracy(stats.accuracy)}</b>
+            <span>Accuracy</span>
+          </div>
+          <div className="stat">
+            <b>{stats.turns}</b>
+            <span>Turns taken</span>
+          </div>
+          <div className="stat">
+            <b>{stats.shotsFired}</b>
+            <span>Shots fired</span>
+          </div>
+          <div className="stat">
+            <b>{stats.shipsLost}</b>
+            <span>Ships lost</span>
+          </div>
+        </div>
+        <div className="result-rating">
           {botGame ? (
-            <div className="stat">
-              <b>Unrated</b>
-              <span>Rating</span>
-            </div>
+            <span className="result-rating-item">
+              <span className="result-rating-label">Rating</span> <b>Unrated</b>
+            </span>
           ) : (
             <>
-              <div className="stat">
-                <b>{change?.after ?? me?.rating ?? '–'}</b>
-                <span>Rating</span>
-              </div>
-              <div className="stat">
+              <span className="result-rating-item">
+                <span className="result-rating-label">Rating</span> <b>{change?.after ?? me?.rating ?? '–'}</b>
+              </span>
+              <span className="result-rating-item">
+                <span className="result-rating-label">Change</span>{' '}
                 <b className={change && change.delta >= 0 ? 'delta-up' : 'delta-down'}>
                   {change ? (change.delta >= 0 ? `+${change.delta}` : change.delta) : '–'}
                 </b>
-                <span>Change</span>
-              </div>
+              </span>
             </>
           )}
-          <div className="stat">
-            <b>{accuracy}</b>
-            <span>Accuracy</span>
-          </div>
         </div>
       </div>
 
-      <section className="stack">
-        <h3 style={{ fontSize: 15 }} className="muted">
-          {opponentName}'s fleet
-        </h3>
-        <Board ariaLabel="Opponent's revealed board" small disabled markOf={(c) => markAt(theirBoard, c)} />
-      </section>
-      <section className="stack">
-        <h3 style={{ fontSize: 15 }} className="muted">
-          Your fleet
-        </h3>
-        <Board ariaLabel="Your board" small disabled markOf={(c) => markAt(myBoard, c)} />
-      </section>
+      <div className="results-grid">
+        <section className="results-fleets" aria-labelledby="fleets-heading">
+          <h2 className="results-heading" id="fleets-heading">
+            Fleets revealed
+          </h2>
+          <div className="results-boards">
+            <div className="results-board">
+              <h3 className="panel-title">{opponentName}'s fleet</h3>
+              <Board ariaLabel="Opponent's revealed board" small disabled markOf={(c) => markAt(theirBoard, c)} />
+            </div>
+            <div className="results-board">
+              <h3 className="panel-title">Your fleet</h3>
+              <Board ariaLabel="Your board" small disabled markOf={(c) => markAt(myBoard, c)} />
+            </div>
+          </div>
+        </section>
+        <ShotHeatmapPanel game={game} uid={uid} opponentUid={opp} opponentName={opponentName} />
+      </div>
 
       <Reactions game={game} uid={uid} />
-      {hasReplay(game) && (
-        <button className="btn btn--secondary btn--block" onClick={() => navigate(`/game/${game.id}?replay=1`)}>
-          Watch replay
-        </button>
-      )}
-      <PushOptIn uid={uid} gameFinished={game.status === 'finished'} />
-      {game.status === 'finished' && (
-        <>
-          {rematchError && <Alert onDismiss={() => setRematchError(null)}>{rematchError}</Alert>}
-          <button className="btn btn--secondary btn--block" onClick={playRematch} disabled={rematchBusy}>
-            {rematchBusy ? <span className="spinner" /> : rematchLabel}
+      <div className="results-actions">
+        {hasReplay(game) && (
+          <button className="btn btn--secondary btn--block" onClick={() => navigate(`/game/${game.id}?replay=1`)}>
+            Watch replay
           </button>
-        </>
-      )}
-      <button className="btn btn--primary btn--block" onClick={() => navigate('/')}>
-        Back to home
-      </button>
+        )}
+        <PushOptIn uid={uid} gameFinished={game.status === 'finished'} />
+        {game.status === 'finished' && (
+          <>
+            {rematchError && <Alert onDismiss={() => setRematchError(null)}>{rematchError}</Alert>}
+            <button className="btn btn--secondary btn--block" onClick={playRematch} disabled={rematchBusy}>
+              {rematchBusy ? <span className="spinner" /> : rematchLabel}
+            </button>
+          </>
+        )}
+        <button className="btn btn--primary btn--block" onClick={() => navigate('/')}>
+          Back to home
+        </button>
+      </div>
     </div>
   );
 }

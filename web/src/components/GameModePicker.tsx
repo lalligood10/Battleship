@@ -28,7 +28,7 @@ export function GameModePicker({
         </span>
       )}
       <div className="gm-options" role="radiogroup" aria-labelledby={labelId}>
-        {GAME_MODE_OPTIONS.map((option) => {
+        {GAME_MODE_OPTIONS.map((option, index) => {
           const selected = value === option.mode;
           const descriptionId = `${id}-${option.mode}-description`;
           return (
@@ -43,6 +43,11 @@ export function GameModePicker({
                   onChange={() => onChange(option.mode)}
                   aria-describedby={descriptionId}
                 />
+                {heading && (
+                  <span className="gm-code" aria-hidden>
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                )}
                 <span className="gm-choice-text">
                   <b className="game-mode-name">{option.label}</b>
                   <span className="muted small" id={descriptionId}>

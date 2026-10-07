@@ -53,13 +53,13 @@ export function PushOptIn({ uid, gameFinished }: { uid: string; gameFinished: bo
   };
 
   return (
-    <div className="card stack">
-      <div className="stack" style={{ gap: 4 }}>
-        <b>Get notified when it's your turn?</b>
+    <div className="card stack push-optin">
+      <div className="push-optin-text">
+        <b className="push-optin-title">Get notified when it's your turn?</b>
         <span className="muted small">We'll only alert you about your games.</span>
       </div>
       {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
-      <div className="row" style={{ gap: 8 }}>
+      <div className="push-optin-actions">
         <button className="btn btn--primary" onClick={enable} disabled={busy}>
           {busy ? <span className="spinner" /> : 'Enable'}
         </button>
