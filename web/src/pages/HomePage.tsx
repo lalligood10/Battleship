@@ -40,11 +40,9 @@ export function HomePage() {
   const [mode, setMode] = useGameMode();
   const modeLabel = GAME_MODE_OPTIONS.find((option) => option.mode === mode)?.label ?? 'Classic';
   const isGuest = profile?.isGuest === true;
-  const resumeCheckedFor = useRef<string | null>(null);
 
   useEffect(() => {
-    if (isGuest || resumeCheckedFor.current === uid) return;
-    resumeCheckedFor.current = uid;
+    if (isGuest) return;
     let cancelled = false;
     const ticketRef = doc(db(), 'quickMatch', uid);
     void getDoc(ticketRef)

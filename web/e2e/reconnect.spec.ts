@@ -125,3 +125,30 @@ test('game reconnect restores the board without replaying transient effects', as
   expect(fxState.sinkBanners).toBe(0);
   console.info(`ResultsView reopen .result-hero .fx: ${resultFxOnReopen}`);
 });
+
+test('Quick Match resumes after reload and cancellation stays closed', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'Create account' }).click();
+  await page.getByLabel('Email').fill(`quick-match-resume-${Date.now()}@example.test`);
+  await page.getByLabel('Password').fill('broadside-reconnect');
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Pick a username' })).toBeVisible();
+  await page.getByLabel('Username').fill(`qmr${Date.now().toString().slice(-10)}`);
+  await expect(page.getByText('Available')).toBeVisible();
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+
+  const quickMatchButton = page.getByRole('button', { name: /^Quick Match ·/ });
+  const searchingModal = page.getByText(/^Looking for a .+ opponent…$/);
+  await expect(quickMatchButton).toBeVisible();
+  await quickMatchButton.click();
+  await expect(searchingModal).toBeVisible();
+
+  await page.reload();
+  await expect(searchingModal).toBeVisible({ timeout: 10_000 });
+
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(searchingModal).toHaveCount(0);
+  await page.reload();
+  await expect(quickMatchButton).toBeVisible();
+  await expect(searchingModal).toHaveCount(0);
+});
