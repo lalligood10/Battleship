@@ -14,4 +14,21 @@ export function modeRules(mode: GameMode): ModeRules {
   return rulesByMode[mode];
 }
 
-export type { AbilityAction, AbilityId, CoreError, CoreErrorCode, FireAction, ModeAction, ModeRules, SalvoAction } from './types';
+export { ABILITY_DEFINITIONS } from './types';
+export type {
+  AbilityAction,
+  AbilityDefinition,
+  AbilityId,
+  AbilityLogEntry,
+  AbilityResult,
+  AbilityStatus,
+  AirstrikeTarget,
+  CoreError,
+  CoreErrorCode,
+  FireAction,
+  ModeAction,
+  ModeRules,
+  RelocateTarget,
+  SalvoAction,
+  SonarTarget,
+} from './types';

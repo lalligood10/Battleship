@@ -1,5 +1,6 @@
 import { GAME_CONFIG, SHIP_LENGTHS, SHIP_TYPES, type ShipType } from '../config';
 import type { Coordinate, ShipPlacement, Shot } from '../engine';
+import type { AbilityLogEntry } from './modes/types';
 
 export interface ShipDefinition {
   id: ShipType;
@@ -21,6 +22,7 @@ export interface GameModeOption {
   mode: GameMode;
   label: string;
   description: string;
+  howToPlay: string;
 }
 
 export const GAME_MODE_OPTIONS: readonly GameModeOption[] = [
@@ -28,16 +30,19 @@ export const GAME_MODE_OPTIONS: readonly GameModeOption[] = [
     mode: 'classic',
     label: 'Classic',
     description: 'One shot per turn. Sink all five enemy ships to win.',
+    howToPlay: 'Tap a cell on the enemy board to fire. Hits stay marked; find and finish every ship before they find yours.',
   },
   {
     mode: 'salvo',
     label: 'Salvo',
     description: 'Fire one shot for each ship you still have afloat. Lose ships, lose firepower.',
+    howToPlay: 'Tap cells to queue your volley, tap again to remove one, then press Fire when the count is full. All shots land together.',
   },
   {
     mode: 'abilities',
     label: 'Abilities',
     description: 'Use one ship power instead of a normal shot. Each power works once per game.',
+    howToPlay: 'Carrier airstrike hits 3 cells in a line, submarine sonar scans a 3×3 area, destroyer relocates once if undamaged. A power is lost if its ship sinks.',
   },
 ] as const;
 
@@ -82,6 +87,8 @@ export interface CoreState {
   shots: Record<string, Shot[]>;
   winner: string | null;
   endReason: EndReason | null;
+  /** Public ability uses, in order. Empty outside Abilities games. */
+  abilityLog: AbilityLogEntry[];
 }
 
 export function phaseFromStatus(status: string): CorePhase {

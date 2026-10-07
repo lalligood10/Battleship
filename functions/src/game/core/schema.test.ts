@@ -4,7 +4,7 @@ import { cellStates, defaultSettings, GAME_MODE_OPTIONS, parseGameModeInput, pha
 
 describe('core schema helpers', () => {
   it('exposes all game modes and defaults omitted mode input to Classic', () => {
-    expect(GAME_MODE_OPTIONS).toEqual([
+    expect(GAME_MODE_OPTIONS.map(({ mode, label, description }) => ({ mode, label, description }))).toEqual([
       {
         mode: 'classic',
         label: 'Classic',
@@ -21,6 +21,7 @@ describe('core schema helpers', () => {
         description: 'Use one ship power instead of a normal shot. Each power works once per game.',
       },
     ]);
+    expect(GAME_MODE_OPTIONS.every((option) => option.howToPlay.length > 0)).toBe(true);
     expect(parseGameModeInput(undefined)).toBe('classic');
     expect(parseGameModeInput('classic')).toBe('classic');
     expect(parseGameModeInput('salvo')).toBe('salvo');

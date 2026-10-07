@@ -38,6 +38,7 @@ export function createCoreState(input: {
     shots: { [first]: [], [second]: [] },
     winner: null,
     endReason: null,
+    abilityLog: [],
   };
 }
 

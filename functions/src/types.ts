@@ -1,3 +1,4 @@
+import type { AbilityLogEntry } from './game/core/modes/types';
 /**
  * Firestore document shapes shared by every Cloud Function.
  *
@@ -104,6 +105,8 @@ export interface GameDoc {
   code: string;
   status: GameStatus;
   mode?: GameMode;
+  /** Public ability uses in Abilities games. */
+  abilityLog?: AbilityLogEntry[];
   hostUid: string;
   /** Exactly the uids allowed to read this document (used by security rules). */
   playerUids: string[];

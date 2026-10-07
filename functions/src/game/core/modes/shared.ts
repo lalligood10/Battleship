@@ -13,6 +13,7 @@ export function copyState(state: CoreState): CoreState {
       hitCells: [...board.hitCells],
       shipMeta: Object.fromEntries(Object.entries(board.shipMeta).map(([type, meta]) => [type, meta ? { ...meta } : meta])),
     }])),
+    abilityLog: (state.abilityLog ?? []).map((entry) => structuredClone(entry)),
     shots: Object.fromEntries(Object.entries(state.shots).map(([uid, shots]) => [uid, shots.map((shot) => ({
       ...shot,
       ...(shot.sunkPlacement ? { sunkPlacement: { ...shot.sunkPlacement } } : {}),
