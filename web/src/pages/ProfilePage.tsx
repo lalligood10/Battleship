@@ -3,11 +3,13 @@ import { EmailAuthProvider, GoogleAuthProvider, linkWithCredential, linkWithPopu
 import { Link } from 'react-router-dom';
 import { accuracyPercentage, winPercentage } from '@shared/scoring';
 import { ChallengeButton } from '../components/ChallengeButton';
+import { ModeStats } from '../components/ModeStats';
 import { Alert, Empty, Spinner, TopBar } from '../components/ui';
 import { adminStatus, checkUsername, completeGuestUpgrade, setUsername } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { auth } from '../lib/firebase';
 import { fetchHistory } from '../lib/firestore';
+import { getPlayerStats, type PlayerStatsDoc } from '../lib/stats';
 import { disablePush, enablePush, pushAvailable, pushState, type PushState } from '../lib/push';
 import { hasReplay } from '../game/replay';
 import { isBotGame, opponentUid, type Game } from '../lib/types';
@@ -22,6 +24,8 @@ export function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [upgradeNotice, setUpgradeNotice] = useState<string | null>(null);
+  const [modeStats, setModeStats] = useState<PlayerStatsDoc | null | undefined>(undefined);
+  const [modeStatsError, setModeStatsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!uid) return;
@@ -29,6 +33,17 @@ export function ProfilePage() {
     fetchHistory(uid)
       .then((g) => !cancelled && setHistory(g))
       .catch((e: unknown) => !cancelled && setError(errorMessage(e)));
+    return () => {
+      cancelled = true;
+    };
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) return;
+    let cancelled = false;
+    getPlayerStats(uid)
+      .then((doc) => !cancelled && setModeStats(doc))
+      .catch((e: unknown) => !cancelled && setModeStatsError(errorMessage(e)));
     return () => {
       cancelled = true;
     };
@@ -72,6 +87,10 @@ export function ProfilePage() {
         <Stat label="Accuracy" value={`${accuracyPercentage(s)}%`} />
         <Stat label="Best streak" value={s.longestStreak} />
       </div>
+
+      <ModeStats stats={modeStats} error={modeStatsError} />
+
+      {/* Phase 5: achievement shelf mounts here */}
 
       <section className="card stack" aria-labelledby="profile-appearance">
         <h2 id="profile-appearance" className="panel-title">
