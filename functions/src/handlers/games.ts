@@ -583,7 +583,7 @@ export async function fireSalvo(uid: string, data: unknown): Promise<FireSalvoRe
       [opponentUid]: opponentBoard,
     });
     const humanResult = reduce(initialState, {
-      type: 'fireSalvo',
+      type: 'salvo',
       player: uid,
       targets,
       at: now.toMillis(),
@@ -616,7 +616,7 @@ export async function fireSalvo(uid: string, data: unknown): Promise<FireSalvoRe
         exclude.add(cellKey(target.row, target.col));
       }
       const botResult = reduce(finalState, {
-        type: 'fireSalvo',
+        type: 'salvo',
         player: opponentUid,
         targets: botTargets,
         at: now.toMillis() + 1,

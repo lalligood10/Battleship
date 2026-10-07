@@ -11,6 +11,6 @@ describe('stored game mode', () => {
   it('defaults invalid or missing storage values to Classic', () => {
     expect(parseStoredGameMode(null)).toBe('classic');
     expect(parseStoredGameMode('')).toBe('classic');
-    expect(parseStoredGameMode('abilities')).toBe('classic');
+    expect(parseStoredGameMode('abilities')).toBe('abilities');
   });
 });

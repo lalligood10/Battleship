@@ -1,6 +1,7 @@
 import type { ShipPlacement } from '../engine';
 import type { ShipType } from '../config';
 import type { EndReason } from './schema';
+import type { AbilityId } from './modes';
 
 export type CoreEvent =
   | { type: 'shotFired'; shooter: string; target: { row: number; col: number }; turnNumber: number }
@@ -12,6 +13,8 @@ export type CoreEvent =
       turnNumber: number;
     }
   | { type: 'shipSunk'; shooter: string; owner: string; shipId: ShipType; placement: ShipPlacement }
+  | { type: 'salvoResolved'; shooter: string; targets: { row: number; col: number }[]; results: ('miss' | 'hit' | 'sunk')[]; turnNumber: number }
+  | { type: 'abilityUsed'; player: string; abilityId: AbilityId; result: unknown; turnNumber: number }
   | { type: 'turnChanged'; currentTurn: string; turnNumber: number }
   | { type: 'gameOver'; winner: string; reason: EndReason };
 

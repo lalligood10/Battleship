@@ -55,7 +55,7 @@ export function simulateGame(seed: number, opts: SimulationOptions = {}): Simula
             ? []
             : [legalTargets[0]!, legalTargets[0]!, ...legalTargets.slice(2)];
         const before = structuredClone(state);
-        const rejected = reduce(state, { type: 'fireSalvo', player: shooter, targets: illegalTargets, at: moves });
+        const rejected = reduce(state, { type: 'salvo', player: shooter, targets: illegalTargets, at: moves });
         if (rejected.ok || !['wrong_shot_count', 'duplicate_target'].includes(rejected.error.code)) {
           throw new Error('Injected illegal Salvo action was not rejected');
         }
@@ -66,7 +66,7 @@ export function simulateGame(seed: number, opts: SimulationOptions = {}): Simula
       const turnNumber = state.turnNumber;
       const shotCount = state.shots[shooter]!.length;
       const targets = randomTargets(state, shooter, allowed, random);
-      const result = reduce(state, { type: 'fireSalvo', player: shooter, targets, at: moves + 3 });
+      const result = reduce(state, { type: 'salvo', player: shooter, targets, at: moves + 3 });
       if (!result.ok) throw new Error(`Legal Salvo volley rejected: ${result.error.message}`);
       state = result.state;
       const volley = state.shots[shooter]!.slice(shotCount);

@@ -15,7 +15,7 @@ export const FLEET_DEFINITION: ShipDefinition[] = SHIP_TYPES.map((id) => ({
 
 export type CellState = 'unknown' | 'miss' | 'hit' | 'sunk';
 export type CorePhase = 'lobby' | 'placement' | 'playing' | 'gameOver';
-export type GameMode = 'classic' | 'salvo';
+export type GameMode = 'classic' | 'salvo' | 'abilities';
 
 export interface GameModeOption {
   mode: GameMode;
@@ -34,11 +34,16 @@ export const GAME_MODE_OPTIONS: readonly GameModeOption[] = [
     label: 'Salvo',
     description: 'Fire one shot for each ship you still have afloat. Lose ships, lose firepower.',
   },
+  {
+    mode: 'abilities',
+    label: 'Abilities',
+    description: 'Use one ship power instead of a normal shot. Each power works once per game.',
+  },
 ] as const;
 
 export function parseGameModeInput(value: unknown): GameMode | null {
   if (value === undefined) return 'classic';
-  return value === 'classic' || value === 'salvo' ? value : null;
+  return value === 'classic' || value === 'salvo' || value === 'abilities' ? value : null;
 }
 
 export function gameModeOption(mode: GameMode): GameModeOption {

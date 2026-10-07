@@ -3,7 +3,7 @@ import { createCoreState } from './reducer';
 import { cellStates, defaultSettings, GAME_MODE_OPTIONS, parseGameModeInput, phaseFromStatus } from './schema';
 
 describe('core schema helpers', () => {
-  it('exposes only Classic and Salvo and defaults omitted mode input to Classic', () => {
+  it('exposes all game modes and defaults omitted mode input to Classic', () => {
     expect(GAME_MODE_OPTIONS).toEqual([
       {
         mode: 'classic',
@@ -15,12 +15,17 @@ describe('core schema helpers', () => {
         label: 'Salvo',
         description: 'Fire one shot for each ship you still have afloat. Lose ships, lose firepower.',
       },
+      {
+        mode: 'abilities',
+        label: 'Abilities',
+        description: 'Use one ship power instead of a normal shot. Each power works once per game.',
+      },
     ]);
     expect(parseGameModeInput(undefined)).toBe('classic');
     expect(parseGameModeInput('classic')).toBe('classic');
     expect(parseGameModeInput('salvo')).toBe('salvo');
     expect(parseGameModeInput(null)).toBeNull();
-    expect(parseGameModeInput('abilities')).toBeNull();
+    expect(parseGameModeInput('abilities')).toBe('abilities');
   });
 
   it('maps persisted statuses to core phases', () => {

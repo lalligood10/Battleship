@@ -172,7 +172,7 @@ describe('core reducer', () => {
       { row: 9, col: 7 },
     ];
     expect(salvoShotsAllowed(state, first)).toBe(5);
-    const firstVolley = reduce(state, { type: 'fireSalvo', player: first, targets: firstTargets, at: 10 });
+    const firstVolley = reduce(state, { type: 'salvo', player: first, targets: firstTargets, at: 10 });
     if (!firstVolley.ok) throw new Error(firstVolley.error.message);
     state = firstVolley.state;
     expect(state.shots[first]).toHaveLength(5);
@@ -186,7 +186,7 @@ describe('core reducer', () => {
       { row: 9, col: 9 },
       { row: 9, col: 8 },
     ];
-    const secondVolley = reduce(state, { type: 'fireSalvo', player: second, targets: secondTargets, at: 20 });
+    const secondVolley = reduce(state, { type: 'salvo', player: second, targets: secondTargets, at: 20 });
     if (!secondVolley.ok) throw new Error(secondVolley.error.message);
     state = secondVolley.state;
     expect(state.shots[second]).toHaveLength(4);
@@ -213,10 +213,10 @@ describe('core reducer', () => {
 
     expect(state.settings.fleet).toHaveLength(5);
     expect(salvoShotsAllowed(state, player)).toBe(3);
-    expect(reduce(state, { type: 'fireSalvo', player, targets: available, at: 10 }).ok).toBe(true);
+    expect(reduce(state, { type: 'salvo', player, targets: available, at: 10 }).ok).toBe(true);
     for (const count of [4, 5]) {
       const attempted = Array.from({ length: count }, (_, index) => available[index % available.length]!);
-      expect(reduce(state, { type: 'fireSalvo', player, targets: attempted, at: 10 })).toMatchObject({
+      expect(reduce(state, { type: 'salvo', player, targets: attempted, at: 10 })).toMatchObject({
         ok: false,
         error: { code: 'wrong_shot_count' },
       });
@@ -234,27 +234,27 @@ describe('core reducer', () => {
       { row: 9, col: 5 },
     ];
 
-    expect(reduce(state, { type: 'fireSalvo', player, targets: targets.slice(0, 4), at: 10 })).toMatchObject({
+    expect(reduce(state, { type: 'salvo', player, targets: targets.slice(0, 4), at: 10 })).toMatchObject({
       ok: false,
       error: { code: 'wrong_shot_count' },
     });
-    expect(reduce(state, { type: 'fireSalvo', player, targets: [...targets, { row: 9, col: 4 }], at: 10 })).toMatchObject({
+    expect(reduce(state, { type: 'salvo', player, targets: [...targets, { row: 9, col: 4 }], at: 10 })).toMatchObject({
       ok: false,
       error: { code: 'wrong_shot_count' },
     });
     expect(
-      reduce(state, { type: 'fireSalvo', player, targets: [targets[0]!, targets[0]!, ...targets.slice(2)], at: 10 }),
+      reduce(state, { type: 'salvo', player, targets: [targets[0]!, targets[0]!, ...targets.slice(2)], at: 10 }),
     ).toMatchObject({ ok: false, error: { code: 'duplicate_target' } });
     expect(
       reduce(state, {
-        type: 'fireSalvo',
+        type: 'salvo',
         player,
         targets: [{ row: 10, col: 0 }, ...targets.slice(1)],
         at: 10,
       }),
     ).toMatchObject({ ok: false, error: { code: 'off_board' } });
 
-    const firstVolley = reduce(state, { type: 'fireSalvo', player, targets, at: 10 });
+    const firstVolley = reduce(state, { type: 'salvo', player, targets, at: 10 });
     if (!firstVolley.ok) throw new Error(firstVolley.error.message);
     const other = firstVolley.state.currentTurn!;
     const replyTargets = [
@@ -264,22 +264,22 @@ describe('core reducer', () => {
       { row: 8, col: 6 },
       { row: 8, col: 5 },
     ];
-    const reply = reduce(firstVolley.state, { type: 'fireSalvo', player: other, targets: replyTargets, at: 20 });
+    const reply = reduce(firstVolley.state, { type: 'salvo', player: other, targets: replyTargets, at: 20 });
     if (!reply.ok) throw new Error(reply.error.message);
     expect(
-      reduce(reply.state, { type: 'fireSalvo', player, targets: [{ row: 9, col: 9 }, ...targets.slice(1)], at: 30 }),
+      reduce(reply.state, { type: 'salvo', player, targets: [{ row: 9, col: 9 }, ...targets.slice(1)], at: 30 }),
     ).toMatchObject({ ok: false, error: { code: 'already_fired' } });
   });
 
   it('rejects Classic and Salvo firing actions in the opposite game mode', () => {
     const unplacedSalvo = createCoreState({ playerIds: ['one', 'two'], seed: 1, mode: 'salvo' });
     expect(
-      reduce(unplacedSalvo, { type: 'fireSalvo', player: 'one', targets: [], at: 10 }),
+      reduce(unplacedSalvo, { type: 'salvo', player: 'one', targets: [], at: 10 }),
     ).toMatchObject({ ok: false, error: { code: 'wrong_phase' } });
     const salvoState = placedSalvo();
     const wrongTurn = salvoState.playerIds.find((uid) => uid !== salvoState.currentTurn)!;
     expect(
-      reduce(salvoState, { type: 'fireSalvo', player: wrongTurn, targets: [], at: 10 }),
+      reduce(salvoState, { type: 'salvo', player: wrongTurn, targets: [], at: 10 }),
     ).toMatchObject({ ok: false, error: { code: 'not_your_turn' } });
     expect(fire(salvoState, salvoState.currentTurn!, 9, 9)).toMatchObject({
       ok: false,
@@ -288,7 +288,7 @@ describe('core reducer', () => {
     const classicState = placed();
     expect(
       reduce(classicState, {
-        type: 'fireSalvo',
+        type: 'salvo',
         player: classicState.currentTurn!,
         targets: Array.from({ length: 5 }, (_, index) => ({ row: 9, col: index })),
         at: 10,
@@ -309,7 +309,7 @@ describe('core reducer', () => {
       { row: 9, col: 7 },
     ];
 
-    const result = reduce(state, { type: 'fireSalvo', player: shooter, targets, at: 10 });
+    const result = reduce(state, { type: 'salvo', player: shooter, targets, at: 10 });
     if (!result.ok) throw new Error(result.error.message);
     expect(result.state.shots[shooter]!.map(({ row, col, result: shotResult }) => [row, col, shotResult])).toEqual([
       [9, 9, 'miss'],
@@ -345,7 +345,7 @@ describe('core reducer', () => {
       '4,0',
     );
     const result = reduce(state, {
-      type: 'fireSalvo',
+      type: 'salvo',
       player: shooter,
       targets: [
         { row: 4, col: 1 },

@@ -15,7 +15,7 @@ describe('challengeFromSnapshot', () => {
     expect(challengeFromSnapshot(snapshot({ mode: 'salvo' }))?.mode).toBe('salvo');
   });
 
-  it('defaults unsupported persisted modes to Classic', () => {
-    expect(challengeFromSnapshot(snapshot({ mode: 'abilities' }))?.mode).toBe('classic');
+  it('reads supported Abilities mode', () => {
+    expect(challengeFromSnapshot(snapshot({ mode: 'abilities' }))?.mode).toBe('abilities');
   });
 });
