@@ -459,7 +459,11 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
           />
         )}
 
-        {game.status === 'active' && <AbandonControls game={game} uid={uid} />}
+        {game.status === 'active' && (
+          <div className="game-abandon">
+            <AbandonControls game={game} uid={uid} />
+          </div>
+        )}
         <Toast message={toast} onDone={() => setToast(null)} />
       </div>
     </FxStage>

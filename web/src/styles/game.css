@@ -298,9 +298,9 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(70% 55% at 30% 35%, color-mix(in srgb, var(--sea-label) 10%, transparent), transparent 75%),
-    radial-gradient(60% 50% at 75% 70%, color-mix(in srgb, var(--sea-label) 7%, transparent), transparent 75%),
-    color-mix(in srgb, var(--sea-2) 75%, var(--sea-label));
+    repeating-linear-gradient(0deg, color-mix(in srgb, black 30%, transparent) 0 1px, transparent 1px 3px),
+    radial-gradient(60% 50% at 30% 35%, color-mix(in srgb, var(--radar) 5%, transparent), transparent 75%),
+    color-mix(in srgb, var(--sea) 80%, black);
   opacity: 0;
   transition: opacity 0.35s ease-out;
 }
@@ -312,7 +312,11 @@
   opacity: 1;
 }
 .board--fog .cell--target:hover::before {
-  opacity: 0.6;
+  opacity: 0.7;
+}
+.board--fog .cell--target:hover:not(.cell--selected) {
+  outline: 1px solid color-mix(in srgb, var(--radar) 70%, transparent);
+  outline-offset: -1px;
 }
 .board--fog .cell--selected::before {
   opacity: 0.35;
@@ -909,4 +913,19 @@
   .board--fog .cell::before {
     transition: opacity 150ms linear !important;
   }
+}
+
+/* Resign: quiet outline danger action, not the loudest control on the screen. */
+.game-abandon > .stack > .btn--danger {
+  align-self: center;
+  justify-self: center;
+  width: auto;
+  min-width: 160px;
+  min-height: var(--tap-min);
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+.game-abandon > .stack > .btn--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
