@@ -22,6 +22,7 @@ import type {
   AirstrikeTarget,
   SonarTarget,
 } from './core/modes/types';
+import { airstrikeCells, sonarCells } from './core/modes/abilities';
 
 export interface AiInput {
   /** The bot's own previous shots, in order. */
@@ -258,23 +259,6 @@ export interface AbilityAiInput extends AiInput {
   opponentShots: Shot[];
 }
 
-function airstrikeCells(target: AirstrikeTarget): Coordinate[] {
-  return Array.from({ length: 3 }, (_, index) => ({
-    row: target.row + (target.horizontal ? 0 : index),
-    col: target.col + (target.horizontal ? index : 0),
-  }));
-}
-
-function sonarCells(center: SonarTarget, boardSize: number): Coordinate[] {
-  const cells: Coordinate[] = [];
-  for (let row = Math.max(0, center.row - 1); row <= Math.min(boardSize - 1, center.row + 1); row++) {
-    for (let col = Math.max(0, center.col - 1); col <= Math.min(boardSize - 1, center.col + 1); col++) {
-      cells.push({ row, col });
-    }
-  }
-  return cells;
-}
-
 function chooseAirstrike(
   shots: Shot[],
   unresolved: Coordinate[],
@@ -287,7 +271,7 @@ function chooseAirstrike(
     for (let col = 0; col < boardSize; col++) {
       for (const horizontal of [true, false]) {
         const target = { row, col, horizontal };
-        const cells = airstrikeCells(target);
+        const cells = airstrikeCells(target, boardSize);
         if (cells.some((cell) => !isOnBoard(cell.row, cell.col))) continue;
         if (cells.filter((cell) => !tried.has(cellKey(cell.row, cell.col))).length < 2) continue;
         const touchesHit = unresolved.some((hit) =>

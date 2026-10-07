@@ -102,7 +102,7 @@ describe('Abilities game callables', () => {
     const updated = (await refs.game(gameId).get()).data()!;
     expect(updated.shots[actor]).toHaveLength(3);
     expect(updated.players[actor]).toMatchObject({ shotsFired: 3, hits: 2 });
-    expect(updated.players[actor]?.sunkShips).toContain('destroyer');
+    expect(updated.players[opponent]?.sunkShips).toContain('destroyer');
     expect(updated.abilityLog).toHaveLength(1);
     expect(updated.abilityLog![0]).toMatchObject({
       player: actor,
@@ -110,8 +110,8 @@ describe('Abilities game callables', () => {
         abilityId: 'carrier-airstrike',
         cells: [
           { row: 8, col: 0, result: 'hit' },
-          { row: 8, col: 1, result: 'sunk' },
           { row: 8, col: 2, result: 'miss' },
+          { row: 8, col: 1, result: 'sunk' },
         ],
       },
     });

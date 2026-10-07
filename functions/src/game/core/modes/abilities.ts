@@ -5,12 +5,14 @@ import {
   placementProblem,
   shotsToKeySet,
   type Coordinate,
+  type Shot,
   type ShipPlacement,
 } from '../../engine';
 import type { CoreEvent } from '../events';
-import type { CoreState } from '../schema';
+import type { AbilityLogEntry } from './types';
 import { classicRules } from './classic';
 import { copyState, finishTurn, otherPlayer, resolveTargets, shotEvents } from './shared';
+import type { CoreState } from '../schema';
 import {
   ABILITY_DEFINITIONS,
   type AbilityId,
@@ -40,7 +42,15 @@ export function sonarCells(center: SonarTarget, boardSize: number): Coordinate[]
   return cells;
 }
 
-export function isLegalRelocation(state: CoreState, player: string, target: RelocateTarget): boolean {
+export function isLegalRelocation(
+  state: {
+    boards: Readonly<Record<string, { fleet: readonly ShipPlacement[] | null } | undefined>>;
+    shots: Readonly<Record<string, readonly Pick<Shot, 'row' | 'col'>[] | undefined>>;
+    playerIds: readonly string[];
+  },
+  player: string,
+  target: RelocateTarget,
+): boolean {
   const fleet = state.boards[player]?.fleet;
   if (!fleet) return false;
   if (
@@ -67,14 +77,23 @@ export function isLegalRelocation(state: CoreState, player: string, target: Relo
     col: target.col,
     horizontal: target.horizontal,
   };
-  if (placementProblem(candidate, fleet) !== null) return false;
+  if (placementProblem(candidate, [...fleet]) !== null) return false;
 
-  const opponent = otherPlayer(state, player);
-  const tried = shotsToKeySet(state.shots[opponent] ?? []);
+  const opponent = state.playerIds.find((uid) => uid !== player)!;
+  const tried = new Set((state.shots[opponent] ?? []).map((shot) => cellKey(shot.row, shot.col)));
   return cellsOf(candidate).every((cell) => !tried.has(cellKey(cell.row, cell.col)));
 }
 
-export function abilityStatuses(state: CoreState, player: string): Record<AbilityId, AbilityStatus> {
+export function abilityStatuses(
+  state: {
+    abilityLog: readonly AbilityLogEntry[];
+    boards: Readonly<Record<
+      string,
+      { fleet: readonly ShipPlacement[] | null; hitCells: readonly string[] } | undefined
+    >>;
+  },
+  player: string,
+): Record<AbilityId, AbilityStatus> {
   const statuses = {} as Record<AbilityId, AbilityStatus>;
   const fleet = state.boards[player]?.fleet;
   if (!fleet) {

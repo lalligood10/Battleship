@@ -66,7 +66,7 @@ function throwCoreError(error: { code: string; message: string }): never {
   if (error.code === 'not_player') throw new HttpsError('permission-denied', 'You are not in this game');
   if (error.code === 'not_your_turn') throw new HttpsError('failed-precondition', "It's not your turn");
   if (error.code === 'invalid_ability') {
-    throw new HttpsError('failed-precondition', 'This ability is unavailable because its ship has been lost');
+    throw new HttpsError('failed-precondition', error.message);
   }
   if (error.code === 'ability_used') {
     throw new HttpsError('failed-precondition', 'This ability has already been used');
