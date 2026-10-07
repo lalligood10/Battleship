@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Board } from '../../components/Board';
-import { Alert, Icon, Spinner, Toast, TopBar } from '../../components/ui';
+import { Alert, Spinner, Toast, TopBar } from '../../components/ui';
 import { alreadyShot, buildMarks, coordLabel, markAt } from '../../game/marks';
 import { SHIP_LENGTHS, SHIP_NAMES, SHIP_TYPES, type Coordinate } from '../../game/placement';
 import { fireShot } from '../../lib/api';
 import { errorMessage } from '../../lib/errors';
-import { isMuted, setMuted } from '../../lib/sound';
 import { isMyTurn, opponentUid, shotsBy, type Game, type PrivateBoard, type ShipType } from '../../lib/types';
 import { AbandonControls } from './AbandonControls';
+import { MuteToggle } from '../../audio/MuteToggle';
+import { useAmbientOcean } from '../../audio/useAmbientOcean';
 import { useFeelCue, useFeelDirector, useRevealed } from '../../feel/FeelProvider';
 import { FxLayer } from '../../fx/FxLayer';
 import { FxStage } from '../../fx/FxStage';
@@ -23,8 +24,8 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [muted, setMutedState] = useState(isMuted);
   const director = useFeelDirector();
+  useAmbientOcean();
   const revealed = useRevealed();
   const visibleMyShots = useMemo(() => myShots.slice(0, revealed.target), [myShots, revealed.target]);
   const visibleTheirShots = useMemo(() => theirShots.slice(0, revealed.own), [theirShots, revealed.own]);
@@ -78,12 +79,6 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
     }
   };
 
-  const toggleMute = () => {
-    const next = !muted;
-    setMuted(next);
-    setMutedState(next);
-  };
-
   const mySunk = game.players[uid]?.sunkShips ?? [];
   const theirSunk = game.players[opp]?.sunkShips ?? [];
   const finished = game.status === 'finished';
@@ -94,11 +89,7 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
         <TopBar
           title={`vs ${opponentName}`}
           back="/"
-          right={
-            <button className="btn btn--ghost btn--icon" onClick={toggleMute} aria-label={muted ? 'Unmute sounds' : 'Mute sounds'}>
-              <Icon name={muted ? 'muted' : 'sound'} />
-            </button>
-          }
+          right={<MuteToggle />}
         />
 
         <div
