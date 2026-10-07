@@ -1,3 +1,4 @@
+import { getAuth } from 'firebase-admin/auth';
 import { FieldPath, Timestamp } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { EMPTY_STATS, SCORING_CONFIG, weekId } from '../game/scoring';
@@ -38,6 +39,18 @@ export async function setUsername(uid: string, data: unknown): Promise<SetUserna
   if (!validation.ok) throw new HttpsError('invalid-argument', validation.reason);
   const { username, lower } = validation;
 
+  const existingProfile = (await refs.user(uid).get()).exists;
+  let isGuest = false;
+  if (!existingProfile) {
+    try {
+      isGuest = (await getAuth().getUser(uid)).providerData.length === 0;
+    } catch (err) {
+      if ((err as { code?: string }).code !== 'auth/user-not-found') {
+        throw new HttpsError('unavailable', "Couldn't verify your account. Please try again.");
+      }
+    }
+  }
+
   await db.runTransaction(async (tx) => {
     const [claimSnap, userSnap] = await Promise.all([tx.get(refs.username(lower)), tx.get(refs.user(uid))]);
     const claim = claimSnap.data();
@@ -54,7 +67,8 @@ export async function setUsername(uid: string, data: unknown): Promise<SetUserna
         usernameLower: lower,
         rating: SCORING_CONFIG.INITIAL_RATING,
         stats: EMPTY_STATS,
-        leaderboardVisible: true,
+        ...(isGuest ? { isGuest: true } : {}),
+        leaderboardVisible: !isGuest,
         suspended: false,
         createdAt: now,
         updatedAt: now,

@@ -1,4 +1,4 @@
-import { deleteDoc, doc, onSnapshot } from 'firebase/firestore';
+import { deleteDoc, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Alert, Empty, Modal, Spinner } from '../components/ui';
@@ -23,6 +23,7 @@ import { useSession, useUid } from '../state/SessionProvider';
 import { GAME_CONFIG } from '@shared/config';
 import { GAME_MODE_OPTIONS, type GameMode } from '@shared/core/schema';
 import { useGameMode } from '../state/gameMode';
+import { quickMatchResume } from '../state/resume';
 
 export function HomePage() {
   const uid = useUid();
@@ -32,10 +33,42 @@ export function HomePage() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState<'create' | 'join' | 'quick' | 'bot' | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [quickMatching, setQuickMatching] = useState(false);
+  const [quickMatching, setQuickMatching] = useState<GameMode | null>(null);
   const [pickingComputer, setPickingComputer] = useState(false);
   const [mode, setMode] = useGameMode();
   const modeLabel = GAME_MODE_OPTIONS.find((option) => option.mode === mode)?.label ?? 'Classic';
+  const isGuest = profile?.isGuest === true;
+  const resumeCheckedFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (isGuest || resumeCheckedFor.current === uid) return;
+    resumeCheckedFor.current = uid;
+    let cancelled = false;
+    const ticketRef = doc(db(), 'quickMatch', uid);
+    void getDoc(ticketRef)
+      .then((snap) => {
+        if (cancelled || !snap.exists()) return;
+        const data = snap.data();
+        const resume = quickMatchResume(
+          {
+            mode: data.mode,
+            gameId: data.gameId,
+            createdAtMs: data.createdAt?.toMillis?.() ?? null,
+          },
+          Date.now(),
+        );
+        if (resume.kind === 'matched') {
+          void deleteDoc(ticketRef).catch(() => undefined);
+          navigate(`/game/${resume.gameId}`);
+        } else if (resume.kind === 'searching') {
+          setQuickMatching(resume.mode);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [isGuest, navigate, uid]);
 
   const create = async () => {
     setBusy('create');
@@ -70,7 +103,7 @@ export function HomePage() {
     try {
       const { gameId } = await api.joinQuickMatch(mode);
       if (gameId) navigate(`/game/${gameId}`);
-      else setQuickMatching(true);
+      else setQuickMatching(mode);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -139,9 +172,15 @@ export function HomePage() {
             {busy === 'join' ? <span className="spinner" /> : 'Join'}
           </button>
         </form>
-        <button className="btn btn--ghost btn--sm" onClick={quickMatch} disabled={busy !== null}>
-          {busy === 'quick' ? <span className="spinner" /> : `Quick Match · ${modeLabel}`}
-        </button>
+        {isGuest ? (
+          <Link to="/profile" className="muted small center">
+            Create an account to use Quick Match
+          </Link>
+        ) : (
+          <button className="btn btn--ghost btn--sm" onClick={quickMatch} disabled={busy !== null}>
+            {busy === 'quick' ? <span className="spinner" /> : `Quick Match · ${modeLabel}`}
+          </button>
+        )}
       </section>
 
       {(incomingChallenges.length > 0 || outgoingChallenges.length > 0) && (
@@ -181,12 +220,12 @@ export function HomePage() {
         )}
       </section>
 
-      {quickMatching && (
+      {quickMatching !== null && (
         <QuickMatchModal
           uid={uid}
-          mode={mode}
-          modeLabel={modeLabel}
-          onClose={() => setQuickMatching(false)}
+          mode={quickMatching}
+          modeLabel={GAME_MODE_OPTIONS.find((option) => option.mode === quickMatching)?.label ?? 'Classic'}
+          onClose={() => setQuickMatching(null)}
           onPlayComputer={() => setPickingComputer(true)}
         />
       )}
