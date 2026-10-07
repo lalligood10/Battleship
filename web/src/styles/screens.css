@@ -750,3 +750,119 @@
 body:has(.modal-backdrop) .game-chat-toggle {
   visibility: hidden;
 }
+
+/* ===== Phase 5 (Session B): achievement shelf + results unlock strip ===== */
+.ach-shelf {
+  display: grid;
+  gap: var(--space-3);
+}
+.ach-shelf__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.ach-shelf__head h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+}
+.ach-shelf__count {
+  color: var(--muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ach-shelf__list,
+.ach-unlocks__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ach-item {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  gap: 4px 12px;
+  min-height: var(--tap-min);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-2);
+}
+.ach-item__body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.ach-item__label {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+.ach-item__desc {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.ach-item__state {
+  grid-column: 2;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+.ach-item--unlocked {
+  border-color: var(--accent);
+}
+.ach-item--unlocked .ach-icon,
+.ach-item--unlocked .ach-item__state {
+  color: var(--accent);
+}
+.ach-item--locked {
+  border-style: dashed;
+}
+.ach-item--locked .ach-icon,
+.ach-item--locked .ach-item__state,
+.ach-item--locked .ach-item__label {
+  color: var(--muted);
+}
+.ach-unlocks {
+  display: grid;
+  gap: 8px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--amber);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.ach-unlocks__title {
+  margin: 0;
+  color: var(--amber);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+.ach-unlock {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ach-unlock .ach-icon {
+  flex: 0 0 auto;
+  color: var(--amber);
+}
+.ach-unlock b {
+  font-family: var(--font-display);
+  font-weight: 400;
+}
+.ach-unlock__desc {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+@media (min-width: 640px) {
+  .ach-shelf__list {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+}
+/* ===== end Phase 5 ===== */

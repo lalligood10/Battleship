@@ -6,6 +6,7 @@ import { HomeBanner } from '../components/art/HomeBanner';
 import { GameModePicker } from '../components/GameModePicker';
 import { ModeBadge } from '../components/ModeBadge';
 import { TurnTimerPicker } from '../components/TurnTimerPicker';
+import { DailyCard } from './DailyPage';
 import * as api from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { db } from '../lib/firebase';
@@ -140,6 +141,8 @@ export function HomePage() {
       )}
 
       <HomeBanner />
+
+      <DailyCard uid={uid} />
 
       <div className="home-console">
         <section className="card home-panel home-missions">

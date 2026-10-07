@@ -4,6 +4,7 @@ import { MAIN_ID } from './a11y/landmarks';
 import { Alert, Spinner, TabBar } from './components/ui';
 import { isConfigured } from './lib/firebase';
 import { AdminPage } from './pages/AdminPage';
+import { DailyPage } from './pages/DailyPage';
 import { GamePage } from './pages/GamePage';
 import { HomePage } from './pages/HomePage';
 import { JoinPage } from './pages/JoinPage';
@@ -92,6 +93,7 @@ function Shell() {
           <Route path="/game/:gameId" element={<GamePage />} />
           <Route path="/leaderboards" element={<LeaderboardsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/daily" element={<DailyPage />} />
           <Route path="/admin" element={<AdminPage />} />
           {import.meta.env.DEV && DevPlaytestPage && (
             <Route

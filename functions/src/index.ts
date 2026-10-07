@@ -11,6 +11,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from './handlers/admin';
 import * as bots from './handlers/bots';
 import * as challenges from './handlers/challenges';
+import * as daily from './handlers/daily';
 import * as games from './handlers/games';
 import * as guests from './handlers/guests';
 import * as quickMatch from './handlers/quickMatch';
@@ -112,6 +113,10 @@ export const cancelQuickMatch = active(quickMatch.cancelQuickMatch);
 export const createChallenge = authed(challenges.createChallenge);
 export const respondChallenge = authed(challenges.respondChallenge);
 export const cancelChallenge = authed(challenges.cancelChallenge);
+
+// Phase 5 daily challenge (guests included)
+export const getDailyChallenge = authed((uid, data) => daily.getDailyChallenge(uid, data));
+export const fireDailyShot = authed((uid, data) => daily.fireDailyShot(uid, data));
 
 export const onChallengeCreated = onDocumentCreated('challenges/{challengeId}', async (event) => {
   const challenge = event.data?.data() as ChallengeDoc | undefined;

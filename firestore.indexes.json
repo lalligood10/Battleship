@@ -108,6 +108,14 @@
         { "fieldPath": "uid", "order": "ASCENDING" },
         { "fieldPath": "at", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "players",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "shots", "order": "ASCENDING" },
+        { "fieldPath": "completedAtMs", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
