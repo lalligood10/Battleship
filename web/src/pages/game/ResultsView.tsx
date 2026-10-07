@@ -6,6 +6,7 @@ import { Board } from '../../components/Board';
 import { Alert, Icon, TopBar } from '../../components/ui';
 import { buildMarks, markAt } from '../../game/marks';
 import { hasReplay } from '../../game/replay';
+import { shouldPlayResultFx } from '../../game/resultFx';
 import { requestRematch } from '../../lib/api';
 import { errorMessage } from '../../lib/errors';
 import { isBotGame, opponentUid, rematchState, shotsBy, type Game, type PrivateBoard } from '../../lib/types';
@@ -24,13 +25,14 @@ export function ResultsView({ game, uid, board }: { game: Game; uid: string; boa
   const me = game.players[uid];
   const accuracy = me && me.shotsFired > 0 ? `${Math.round((me.hits / me.shotsFired) * 100)}%` : '–';
 
-  const [fxDone, setFxDone] = useState(false);
+  const [fxDone, setFxDone] = useState(() => !shouldPlayResultFx(game.finishedAt?.toMillis() ?? null, Date.now()));
   const [rematchBusy, setRematchBusy] = useState(false);
   const [rematchError, setRematchError] = useState<string | null>(null);
   useEffect(() => {
+    if (fxDone) return;
     const t = setTimeout(() => setFxDone(true), 2700);
     return () => clearTimeout(t);
-  }, []);
+  }, [fxDone]);
 
   const theirBoard = useMemo(() => buildMarks(shotsBy(game, uid), game.revealedFleets?.[opp] ?? [], true), [game, uid, opp]);
   const myBoard = useMemo(

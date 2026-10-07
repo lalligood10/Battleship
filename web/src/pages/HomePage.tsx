@@ -5,6 +5,7 @@ import { Alert, Empty, Modal, Spinner } from '../components/ui';
 import { HomeBanner } from '../components/art/HomeBanner';
 import { GameModePicker } from '../components/GameModePicker';
 import { ModeBadge } from '../components/ModeBadge';
+import { TurnTimerPicker } from '../components/TurnTimerPicker';
 import * as api from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { db } from '../lib/firebase';
@@ -31,6 +32,7 @@ export function HomePage() {
   const navigate = useNavigate();
   const { games, loaded, error: listError, incomingChallenges, outgoingChallenges } = useActiveGames();
   const [code, setCode] = useState('');
+  const [turnTimerMs, setTurnTimerMs] = useState<number | null>(null);
   const [busy, setBusy] = useState<'create' | 'join' | 'quick' | 'bot' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [quickMatching, setQuickMatching] = useState<GameMode | null>(null);
@@ -74,7 +76,7 @@ export function HomePage() {
     setBusy('create');
     setError(null);
     try {
-      const { gameId } = await api.createGame(mode);
+      const { gameId } = await api.createGame(mode, turnTimerMs);
       navigate(`/game/${gameId}`);
     } catch (err) {
       setError(errorMessage(err));
@@ -149,9 +151,12 @@ export function HomePage() {
             Instant game · Easy, Medium or Hard · unrated
           </p>
         </div>
-        <button className="btn btn--secondary btn--block" onClick={create} disabled={busy !== null}>
-          {busy === 'create' ? <span className="spinner" /> : 'Start a game with a friend'}
-        </button>
+        <div className="stack">
+          <TurnTimerPicker value={turnTimerMs} onChange={setTurnTimerMs} />
+          <button className="btn btn--secondary btn--block" onClick={create} disabled={busy !== null}>
+            {busy === 'create' ? <span className="spinner" /> : 'Start a game with a friend'}
+          </button>
+        </div>
         <form className="row" onSubmit={join}>
           <input
             className="input input--code grow"

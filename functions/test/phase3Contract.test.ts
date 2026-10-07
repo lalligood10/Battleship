@@ -158,8 +158,8 @@ describe('Phase 3 timer and guest contract', () => {
     expect(game.ratingChanges?.[BOB]).toBeDefined();
   });
 
-  it('exposes the timer and guest upgrade callable stubs', async () => {
+  it('checks the timer and guest upgrade callables', async () => {
     await expectHttpsError(claimTurnTimeout(ALICE, { gameId: 'missing-game' }), 'not-found');
-    await expectHttpsError(completeGuestUpgrade(ALICE), 'unimplemented');
+    await expectHttpsError(completeGuestUpgrade(ALICE), 'failed-precondition');
   });
 });
