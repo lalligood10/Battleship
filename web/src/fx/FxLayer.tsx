@@ -66,6 +66,7 @@ export function FxLayer({ side }: { side: Side }) {
 
   useFeelCue((cue) => {
     if (cue.type === 'gameOver' || cue.side !== side) return;
+    if (cue.type === 'abilityUsed') return;
     if (cue.type === 'windup') {
       clearTimer();
       const targets = cue.targets ?? [cue.target];

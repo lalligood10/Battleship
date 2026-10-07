@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Alert, Spinner, TabBar } from './components/ui';
 import { isConfigured } from './lib/firebase';
@@ -13,6 +14,8 @@ import { UsernamePage } from './pages/UsernamePage';
 import { ActiveGamesProvider, useActiveGames } from './state/ActiveGamesProvider';
 import { SessionProvider, useSession } from './state/SessionProvider';
 import { useTheme } from './state/theme';
+
+const DevPlaytestPage = import.meta.env.DEV ? lazy(() => import('./pages/DevPlaytestPage')) : null;
 
 export default function App() {
   useTheme();
@@ -85,6 +88,16 @@ function Shell() {
           <Route path="/leaderboards" element={<LeaderboardsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/admin" element={<AdminPage />} />
+          {import.meta.env.DEV && DevPlaytestPage && (
+            <Route
+              path="/dev/playtest"
+              element={
+                <Suspense fallback={<Spinner label="Loading playtest analytics…" />}>
+                  <DevPlaytestPage />
+                </Suspense>
+              }
+            />
+          )}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         {!hideTabs && <TabBarWithBadge />}

@@ -153,9 +153,52 @@
     inset 0 0 0 999px color-mix(in srgb, var(--danger) 35%, transparent);
   cursor: not-allowed;
 }
+.cell.sonar-marker {
+  outline: 1px dashed var(--muted);
+  outline-offset: -4px;
+  z-index: 1;
+}
+.cell.sonar-marker--detected {
+  outline-color: var(--success);
+}
+.cell.sonar-marker--clear {
+  outline-color: var(--muted);
+}
+.cell.sonar-flash {
+  animation: sonar-flash 800ms ease-out;
+}
+@keyframes sonar-flash {
+  0% {
+    background-color: color-mix(in srgb, var(--accent) 72%, var(--water));
+    box-shadow: inset 0 0 0 3px var(--accent);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+.cell-sonar-label {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% - 1px);
+  left: 50%;
+  padding: 2px 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
 @media (prefers-reduced-motion: reduce) {
   .ability-option,
-  .ability-bar__rotate {
+  .ability-bar__rotate,
+  .cell.sonar-flash {
     transition: none;
+    animation: none;
   }
 }

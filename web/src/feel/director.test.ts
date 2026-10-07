@@ -85,6 +85,58 @@ describe('feel director', () => {
     expect(cues.filter((cue) => cue.type === 'impact').map((cue) => cue.shotKey)).toEqual(['me:0', 'me:1']);
   });
 
+  it('staggers an airstrike volley and attaches its sink to the final impact', () => {
+    const { director, cues } = createDirector();
+    const targets = [target, { row: 2, col: 4 }, { row: 2, col: 5 }];
+    director.fireRequested(targets);
+    director.handle([
+      resolved('me'),
+      { ...resolved('me'), target: targets[1]! },
+      { ...resolved('me'), target: targets[2]! },
+      {
+        type: 'shipSunk',
+        shooter: 'me',
+        owner: 'opponent',
+        shipId: sunk.shipId,
+        placement: sunk.placement,
+      },
+    ]);
+
+    vi.advanceTimersByTime(400);
+    expect(director.revealed().target).toBe(1);
+    vi.advanceTimersByTime(220);
+    expect(director.revealed().target).toBe(2);
+    vi.advanceTimersByTime(220);
+    expect(director.revealed().target).toBe(3);
+    const impacts = cues.filter((cue): cue is Extract<FeelCue, { type: 'impact' }> => cue.type === 'impact');
+    expect(impacts).toHaveLength(3);
+    expect(impacts[2]!.sunk).toEqual(sunk);
+    expect(impacts.slice(0, 2).every((cue) => cue.sunk === undefined)).toBe(true);
+  });
+
+  it('routes sonar abilities to the board owner relative to the viewer', () => {
+    const { director, cues } = createDirector();
+    const result = { abilityId: 'submarine-sonar' as const, center: target, shipPresent: true };
+    director.handle([
+      {
+        type: 'abilityUsed',
+        player: 'opponent',
+        abilityId: 'submarine-sonar',
+        result,
+        turnNumber: 3,
+      },
+    ]);
+    expect(cues).toEqual([
+      {
+        type: 'abilityUsed',
+        side: 'own',
+        player: 'opponent',
+        abilityId: 'submarine-sonar',
+        result,
+      },
+    ]);
+  });
+
   it('stagger-reveals an incoming bot volley after the first bot-reply delay', () => {
     const { director, cues } = createDirector(true);
     director.handle([resolved('bot-easy'), { ...resolved('bot-easy'), target: { row: 2, col: 4 } }]);

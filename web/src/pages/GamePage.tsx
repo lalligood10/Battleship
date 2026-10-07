@@ -11,6 +11,7 @@ import { createFeelDirector, type FeelDirector } from '../feel/director';
 import { FeelProvider, useFeelSettled } from '../feel/FeelProvider';
 import { useAudioEngine } from '../audio/useAudioEngine';
 import { isBotGame, opponentUid, shotsBy } from '../lib/types';
+import { startGameAnalytics } from '../analytics';
 import { ActiveGameView } from './game/ActiveGameView';
 import { PlacementView } from './game/PlacementView';
 import { ResultsView } from './game/ResultsView';
@@ -158,6 +159,17 @@ function GamePageContent({
   const navigate = useNavigate();
   const settled = useFeelSettled();
   useAudioEngine();
+  const startedAt = game.startedAt?.toMillis() ?? game.createdAt?.toMillis() ?? 0;
+
+  useEffect(() => {
+    if (game.status !== 'active') return;
+    return startGameAnalytics({
+      gameId: game.id,
+      mode: game.mode ?? 'classic',
+      myUid: uid,
+      startedAt,
+    });
+  }, [game.id, game.status, game.mode, uid, startedAt]);
 
   switch (game.status) {
     case 'waiting':

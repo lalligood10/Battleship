@@ -257,6 +257,15 @@ export function createFeelDirector(opts: {
           case 'gameOver':
             handleGameOver(event, time);
             break;
+          case 'abilityUsed':
+            emit({
+              type: 'abilityUsed',
+              side: event.player === opts.myUid ? 'target' : 'own',
+              player: event.player,
+              abilityId: event.abilityId,
+              result: event.result,
+            });
+            break;
           case 'shotFired':
           case 'turnChanged':
             break;
