@@ -820,3 +820,49 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ===== Phase 5 (Session B): daily-challenge entry card ===== */
+.home-daily {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  border-left: 4px solid var(--amber);
+}
+.home-daily--cleared {
+  border-left-color: var(--radar);
+}
+.home-daily__text {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.home-daily__text .home-hint {
+  text-align: left;
+}
+.home-daily__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.home-daily__glyph {
+  color: var(--amber);
+}
+.home-daily--cleared .home-daily__glyph {
+  color: var(--radar);
+}
+.home-daily__cta {
+  flex: 0 0 auto;
+  min-height: var(--tap-min);
+  min-width: 120px;
+}
+@media (max-width: 420px) {
+  .home-daily__cta {
+    flex: 1 1 100%;
+  }
+}
+/* ===== end Phase 5 ===== */
