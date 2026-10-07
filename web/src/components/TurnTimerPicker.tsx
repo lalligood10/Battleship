@@ -2,23 +2,22 @@ import { useId } from 'react';
 import { TURN_TIMER_CHOICES } from '../game/turnTimer';
 import './TurnTimer.css';
 
-export function TurnTimerPicker({
-  value,
-  onChange,
-}: {
-  value: number | null;
-  onChange: (ms: number | null) => void;
-}) {
+export function TurnTimerPicker({ value, onChange }: { value: number | null; onChange: (ms: number | null) => void }) {
   const id = useId();
   const labelId = `${id}-label`;
   const descriptionId = `${id}-description`;
 
   return (
-    <div className="gm-picker turn-timer-picker">
-      <span className="muted small game-mode-picker-label" id={labelId}>
+    <div className="gm-picker turn-timer-picker home-timer">
+      <span className="home-timer-label" id={labelId}>
         Turn timer
       </span>
-      <div className="gm-options" role="radiogroup" aria-labelledby={labelId} aria-describedby={descriptionId}>
+      <div
+        className="gm-options home-timer-options"
+        role="radiogroup"
+        aria-labelledby={labelId}
+        aria-describedby={descriptionId}
+      >
         {TURN_TIMER_CHOICES.map((option) => {
           const selected = value === option.value;
           return (
@@ -33,7 +32,7 @@ export function TurnTimerPicker({
                   onChange={() => onChange(option.value)}
                 />
                 <span className="gm-choice-text">
-                  <b>{option.label}</b>
+                  <b className="mono">{option.label}</b>
                 </span>
               </label>
             </div>

@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Board } from '../../components/Board';
 import { AbilityBar } from '../../components/AbilityBar/AbilityBar';
 import { TurnTimer, useServerOffset } from '../../components/TurnTimer';
+import { StatusBar } from '../../components/StatusBar';
 import { Alert, Spinner, Toast, TopBar } from '../../components/ui';
-import type { AbilityId, AbilityTarget, Game, PrivateBoard, ShipType } from '../../lib/types';
+import type { AbilityId, AbilityTarget, Game, PrivateBoard } from '../../lib/types';
 import { alreadyShot, buildMarks, coordLabel, markAt } from '../../game/marks';
-import { cellKey, BOARD_SIZE, SHIP_LENGTHS, SHIP_NAMES, SHIP_TYPES, type Coordinate } from '../../game/placement';
+import { cellKey, BOARD_SIZE, SHIP_TYPES, type Coordinate } from '../../game/placement';
+import { focusReturnTarget, type FocusContext } from '../../game/boardNav';
 import { abilityPreview } from '../../components/AbilityBar/abilityPreview';
 import { abilityStatusesForWeb, deriveSonarMarkers, isAbilityPreviewValid } from '../../game/abilities';
 import { sonarPresentation } from '../../game/sonarPresentation';
@@ -51,6 +53,8 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
   const [enemyAim, setEnemyAim] = useState<Coordinate | null>(null);
   const [ownAim, setOwnAim] = useState<Coordinate | null>(null);
   const [sonarFlashCells, setSonarFlashCells] = useState<Coordinate[]>([]);
+  const [enemyFocus, setEnemyFocus] = useState<{ cell: Coordinate; id: number } | null>(null);
+  const [ownFocus, setOwnFocus] = useState<{ cell: Coordinate; id: number } | null>(null);
   const director = useFeelDirector();
   useAmbientOcean();
   const revealed = useRevealed();
@@ -207,6 +211,9 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
         setError(errorMessage(err));
       } finally {
         setBusy(false);
+        const cell = focusReturnTarget(focusContext(document.activeElement), [coordinate]);
+        if (cell && abilityId === 'destroyer-relocate') setOwnFocus({ cell, id: Date.now() });
+        else if (cell) setEnemyFocus({ cell, id: Date.now() });
       }
     },
     [abilitiesMode, abilityDisabled, horizontal, game, uid, board, myShots, director],
@@ -293,10 +300,21 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
       setError(errorMessage(err));
     } finally {
       setBusy(false);
+      const context = focusContext(document.activeElement);
+      const focus = focusReturnTarget(context, targets);
+      if (focus) setEnemyFocus({ cell: focus, id: Date.now() });
     }
   };
 
   const finished = game.status === 'finished';
+  const turnText = finished
+    ? 'Game over'
+    : pendingIncoming
+      ? 'Incoming fire…'
+      : myTurn
+        ? 'Your turn — pick a target'
+        : `Waiting for ${opponentName} to fire…`;
+  const tone = finished ? 'over' : myTurn && !pendingIncoming ? 'mine' : 'theirs';
 
   return (
     <FxStage>
@@ -305,38 +323,37 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
           title={`vs ${opponentName}`}
           back="/"
           right={
-            <div className="row" style={{ gap: 8 }}>
+            <div className="row game-topbar-actions">
               <ModeBadge mode={game.mode} />
               <MuteToggle />
             </div>
           }
         />
 
-        <div
-          className={`alert ${!finished && myTurn && !pendingIncoming ? 'alert--success' : 'alert--info'}`}
-          role="status"
-          style={{ justifyContent: 'center', fontWeight: 800 }}
-        >
-          {finished ? 'Game over' : pendingIncoming ? 'Incoming fire…' : myTurn ? 'Your turn — pick a target' : `Waiting for ${opponentName} to fire…`}
-          <TurnTimer
-            turnDeadline={game.status === 'active' ? game.turnDeadline?.toMillis() ?? null : null}
-            serverOffsetMs={serverOffsetMs}
-            isMyTurn={game.currentTurnUid === uid}
-            onExpire={() => void claimTurnTimeout(game.id).catch(() => {})}
-          />
-        </div>
-        {salvoMode && !finished && (
-          <p className="muted small salvo-status">
-            {myTurn ? `You fire ${salvoShotsAllowed}` : `${opponentName} fires ${opponentSalvoShotsAllowed} next turn`}
-          </p>
-        )}
+        <StatusBar
+          turnText={turnText}
+          tone={tone}
+          timer={
+            <TurnTimer
+              turnDeadline={game.status === 'active' ? game.turnDeadline?.toMillis() ?? null : null}
+              serverOffsetMs={serverOffsetMs}
+              isMyTurn={game.currentTurnUid === uid}
+              onExpire={() => void claimTurnTimeout(game.id).catch(() => {})}
+            />
+          }
+          enemyName={opponentName}
+          enemySunk={theirSunk}
+          ownSunk={mySunk}
+          salvo={
+            salvoMode && !finished
+              ? { mine: myTurn, shots: myTurn ? salvoShotsAllowed : opponentSalvoShotsAllowed }
+              : null
+          }
+        />
         {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
 
         <section className="stack">
-          <div className="row row--between">
-            <h2 style={{ fontSize: 16 }}>{opponentName}'s waters</h2>
-            <FleetStatus sunk={theirSunk} />
-          </div>
+          <h2 className="game-section__title">{opponentName}'s waters</h2>
           <Board
             ariaLabel="Opponent's board"
             targeting
@@ -365,6 +382,7 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
             onEscape={abilitiesMode ? () => setSelectedAbility(null) : undefined}
             overlay={<FxLayer side="target" />}
             onCellTap={onTargetTap}
+            focusRequest={enemyFocus}
           />
           {abilitiesMode && sonarMarkers.length > 0 && (
             <div className="sonar-history" aria-label="Sonar results">
@@ -384,6 +402,7 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
                 <span>Queued {queuedTargets.length} / {salvoShotsAllowed}</span>
                 <button
                   className="btn btn--primary"
+                  data-fire-control
                   disabled={!salvoQueueReady(queuedTargets, salvoShotsAllowed) || busy}
                   onClick={fire}
                 >
@@ -391,7 +410,7 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
                 </button>
               </div>
             ) : (
-              <button className="btn btn--primary btn--block" disabled={!target || busy} onClick={fire}>
+              <button className="btn btn--primary btn--block" data-fire-control disabled={!target || busy} onClick={fire}>
                 {busy ? <span className="spinner" /> : target ? `Fire at ${coordLabel(target)}` : 'Tap a square to aim'}
               </button>
             )
@@ -399,10 +418,7 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
         </section>
 
         <section className="stack">
-          <div className="row row--between">
-            <h2 style={{ fontSize: 16 }}>Your fleet</h2>
-            <FleetStatus sunk={mySunk} />
-          </div>
+          <h2 className="game-section__title">Your fleet</h2>
           {board ? (
             <Board
               ariaLabel="Your board"
@@ -421,6 +437,7 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
               onEscape={abilitiesMode ? () => setSelectedAbility(null) : undefined}
               onCellTap={abilitiesMode ? onOwnTargetTap : undefined}
               overlay={<FxLayer side="own" />}
+              focusRequest={ownFocus}
             />
           ) : (
             <Spinner />
@@ -442,7 +459,11 @@ export function ActiveGameView({ game, uid, board }: { game: Game; uid: string; 
           />
         )}
 
-        {game.status === 'active' && <AbandonControls game={game} uid={uid} />}
+        {game.status === 'active' && (
+          <div className="game-abandon">
+            <AbandonControls game={game} uid={uid} />
+          </div>
+        )}
         <Toast message={toast} onDone={() => setToast(null)} />
       </div>
     </FxStage>
@@ -454,18 +475,9 @@ function abilityTargetFor(abilityId: AbilityId, c: Coordinate, horizontal: boole
   return { row: c.row, col: c.col, horizontal };
 }
 
-function FleetStatus({ sunk }: { sunk: ShipType[] }) {
-  return (
-    <div className="fleet-legend" aria-label={`${sunk.length} of ${SHIP_TYPES.length} ships sunk`}>
-      {SHIP_TYPES.map((t) => (
-        <span key={t} className={`fleet-chip${sunk.includes(t) ? ' sunk' : ''}`} style={{ padding: '2px 6px', fontSize: 11 }} title={SHIP_NAMES[t]}>
-          <span className="pips" aria-hidden>
-            {Array.from({ length: SHIP_LENGTHS[t] }, (_, i) => (
-              <i key={i} style={{ width: 5, height: 5 }} />
-            ))}
-          </span>
-        </span>
-      ))}
-    </div>
-  );
+function focusContext(activeElement: Element | null): FocusContext {
+  if (!activeElement || activeElement === document.body) return 'none';
+  if (activeElement.closest('[data-fire-control]')) return 'fire-control';
+  if (activeElement.closest('[role="grid"]')) return 'board';
+  return 'elsewhere';
 }

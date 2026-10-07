@@ -40,32 +40,39 @@ export function JoinPage() {
 
   if (!ready) {
     return (
-      <>
-        <div className="page" style={{ paddingBottom: 0, flex: 0 }}>
-          <Alert kind="info">
-            You've been invited to a game (code <b className="mono">{code.toUpperCase()}</b>). Sign in, create an
-            account, or play as a guest to join.
-          </Alert>
-          <section className="card stack" style={{ marginTop: 12 }}>
-            <h2 style={{ fontSize: 18 }}>Play as guest</h2>
-            <p className="muted" style={{ margin: 0 }}>
-              No account needed — pick a name and play. You can save your account later.
-            </p>
-            {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
-            <button className="btn btn--primary btn--block" onClick={() => void playAsGuest()} disabled={guestBusy}>
-              {guestBusy ? <span className="spinner" /> : 'Play as guest'}
-            </button>
-          </section>
-        </div>
-        <SignInPage />
-      </>
+      <div className="page join">
+        <header className="join__hero">
+          <span className="radar-emblem radar-emblem--sm" aria-hidden="true" />
+          <h1 className="brand">Broadside</h1>
+        </header>
+        <section className="card join__invite" aria-labelledby="join-invite-title">
+          <h2 id="join-invite-title" className="panel-title">
+            You've been invited to a game
+          </h2>
+          <p className="join__code" aria-label={`Code ${code.toUpperCase().split('').join(' ')}`}>
+            {code.toUpperCase()}
+          </p>
+          <p className="muted small">Sign in, create an account, or play as a guest to join.</p>
+        </section>
+        <section className="card stack join__guest" aria-labelledby="join-guest-title">
+          <h2 id="join-guest-title" className="screen-heading">
+            Play as guest
+          </h2>
+          <p className="muted">No account needed — pick a name and play. You can save your account later.</p>
+          {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
+          <button className="btn btn--primary btn--block" onClick={() => void playAsGuest()} disabled={guestBusy}>
+            {guestBusy ? <span className="spinner" /> : 'Play as guest'}
+          </button>
+        </section>
+        <SignInPage embedded />
+      </div>
     );
   }
 
   return (
-    <div className="page page--center">
+    <div className="page page--center join">
       {error ? (
-        <div className="card stack">
+        <div className="card stack join__error">
           <Alert>{error}</Alert>
           <button className="btn btn--primary" onClick={() => navigate('/', { replace: true })}>
             Back to home

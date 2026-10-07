@@ -1,0 +1,916 @@
+
+
+/* Board ------------------------------------------------------------------------------------- */
+/* Board console frame. */
+.board-shell {
+  position: relative;
+  width: fit-content;
+  margin: 0 auto;
+  padding: var(--space-2);
+  border: 1px solid var(--grid-line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--sea);
+  box-shadow:
+    inset 0 0 16px color-mix(in srgb, var(--radar) 10%, transparent),
+    inset 0 0 22px rgba(0, 0, 0, 0.45);
+}
+.board-shell--sm {
+  padding: var(--space-1);
+}
+.board-sea {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.board-sea > span {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.board-sea > .console-scanlines {
+  background: repeating-linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--radar) 5%, transparent) 0 1px,
+    transparent 1px 4px
+  );
+}
+.board-sea > .console-corners {
+  inset: var(--space-2);
+  background:
+    linear-gradient(var(--radar), var(--radar)) left top / 18px 2px,
+    linear-gradient(var(--radar), var(--radar)) left top / 2px 18px,
+    linear-gradient(var(--radar), var(--radar)) right top / 18px 2px,
+    linear-gradient(var(--radar), var(--radar)) right top / 2px 18px,
+    linear-gradient(var(--radar), var(--radar)) left bottom / 18px 2px,
+    linear-gradient(var(--radar), var(--radar)) left bottom / 2px 18px,
+    linear-gradient(var(--radar), var(--radar)) right bottom / 18px 2px,
+    linear-gradient(var(--radar), var(--radar)) right bottom / 2px 18px;
+  background-repeat: no-repeat;
+  opacity: 0.55;
+}
+
+.board {
+  --cell: min(calc((100vw - 32px - 24px - 18px) / 10), 44px);
+  display: grid;
+  grid-template-columns: 24px repeat(10, var(--cell));
+  grid-template-rows: 20px repeat(10, var(--cell));
+  gap: 0;
+  user-select: none;
+  touch-action: none;
+  width: fit-content;
+  margin: 0 auto;
+}
+.board--sm {
+  --cell: min(calc((100vw - 32px - 24px - 18px) / 10), 32px);
+}
+.board .label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--sea-label);
+}
+.cell {
+  position: relative;
+  width: var(--cell);
+  height: var(--cell);
+  border: 1px solid var(--grid-line);
+  background: var(--sea);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.board > [role='row']:nth-child(even) > .cell:nth-child(even),
+.board > [role='row']:nth-child(odd) > .cell:nth-child(odd) {
+  background: var(--sea-2);
+}
+.cell--ship {
+  background: var(--ship) !important;
+}
+.cell--ship-invalid {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0 4px,
+      color-mix(in srgb, var(--ship-invalid) 40%, transparent) 4px 6px
+    ),
+    var(--sea) !important;
+  outline: 2px solid var(--ship-invalid);
+  outline-offset: -2px;
+}
+.cell--selected {
+  outline: 2px solid var(--radar);
+  outline-offset: -2px;
+  z-index: 1;
+}
+.cell--ship-invalid.cell--selected:not(.cell--carry) {
+  outline-color: var(--ship-invalid);
+}
+.cell--carry {
+  outline: 2px dashed var(--radar);
+  outline-offset: -3px;
+  box-shadow: inset 0 0 10px color-mix(in srgb, var(--ship) 70%, transparent);
+  z-index: 1;
+}
+.cell--ship-invalid.cell--carry {
+  box-shadow:
+    inset 0 0 0 2px var(--ship-invalid),
+    inset 0 0 10px color-mix(in srgb, var(--ship) 70%, transparent);
+}
+.cell--queued {
+  outline: 2px dashed var(--radar);
+  outline-offset: -3px;
+  z-index: 1;
+}
+.cell-queue-number {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  min-width: 14px;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--radar);
+  color: var(--sea);
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 800;
+}
+.cell:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: -3px;
+  box-shadow: inset 0 0 0 2px var(--focus-ring-inner);
+  z-index: 2;
+}
+.cell--miss::after {
+  content: '';
+  display: block;
+  width: 36%;
+  height: 36%;
+  border-radius: 50%;
+  border: 2px solid var(--mark-miss);
+  box-sizing: border-box;
+}
+.cell--hit {
+  background: var(--mark-hit-fill) !important;
+}
+.cell--hit::after,
+.cell--sunk::after {
+  content: '✕';
+  display: grid;
+  width: 70%;
+  height: 70%;
+  place-items: center;
+  color: var(--mark-hit-glyph);
+  font-family: var(--mono);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  line-height: 1;
+  animation: pop 0.3s ease;
+}
+.cell--sunk {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0 4px,
+      color-mix(in srgb, var(--mark-sunk-glyph) 24%, transparent) 4px 6px
+    ),
+    var(--mark-sunk-fill) !important;
+}
+.cell--sunk::after {
+  color: var(--mark-sunk-glyph);
+}
+.cell--revealed {
+  background: var(--ship) !important;
+  opacity: 0.55;
+}
+.cell--target:hover {
+  filter: brightness(1.1);
+}
+.cell--disabled {
+  cursor: default;
+}
+.cell--last {
+  outline: 2px solid var(--radar);
+  outline-offset: -2px;
+  animation: flash 0.6s ease;
+}
+.salvo-status {
+  text-align: center;
+}
+.salvo-action-bar {
+  position: sticky;
+  bottom: calc(70px + env(safe-area-inset-bottom));
+  z-index: var(--z-board-fx);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.salvo-action-bar > span {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.salvo-action-bar .btn {
+  flex: 1;
+}
+@keyframes pop {
+  from {
+    transform: scale(0.2);
+  }
+}
+@keyframes flash {
+  0%,
+  100% {
+    box-shadow: none;
+  }
+  50% {
+    box-shadow: 0 0 0 3px var(--radar) inset;
+  }
+}
+
+/* Living water: one shimmer layer over the 10×10 area (transform-only drift, no per-cell work).
+   z-index 0 keeps it under the selected cell (z 1) and the focus ring (z 2). */
+.board-water {
+  position: absolute;
+  left: 24px;
+  top: 20px;
+  width: calc(var(--cell) * 10);
+  height: calc(var(--cell) * 10);
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.board-water::before,
+.board-water::after {
+  content: '';
+  position: absolute;
+  inset: -40%;
+  will-change: transform;
+}
+.board-water::before {
+  background:
+    repeating-linear-gradient(112deg, color-mix(in srgb, var(--sea-label) 7%, transparent) 0 3px, transparent 3px 26px),
+    repeating-linear-gradient(64deg, color-mix(in srgb, var(--sea-label) 5%, transparent) 0 2px, transparent 2px 34px);
+  animation: water-drift 16s linear infinite;
+}
+.board-water::after {
+  background:
+    radial-gradient(40% 30% at 30% 40%, color-mix(in srgb, var(--sea-label) 8%, transparent), transparent 70%),
+    radial-gradient(35% 25% at 72% 66%, color-mix(in srgb, var(--sea-label) 6%, transparent), transparent 70%);
+  animation: water-glint 7s ease-in-out infinite alternate;
+}
+@keyframes water-drift {
+  to {
+    transform: translate3d(26px, -26px, 0);
+  }
+}
+@keyframes water-glint {
+  from {
+    transform: translate3d(-6%, 3%, 0);
+    opacity: 0.5;
+  }
+  to {
+    transform: translate3d(6%, -3%, 0);
+    opacity: 1;
+  }
+}
+/* Fog of war on unexplored opponent water. It sits inside each cell, so outlines (selected,
+   focus) still paint on top, labels are untouched, and hit testing still lands on the cell. */
+.board--fog .cell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, color-mix(in srgb, black 30%, transparent) 0 1px, transparent 1px 3px),
+    radial-gradient(60% 50% at 30% 35%, color-mix(in srgb, var(--radar) 5%, transparent), transparent 75%),
+    color-mix(in srgb, var(--sea) 80%, black);
+  opacity: 0;
+  transition: opacity 0.35s ease-out;
+}
+.board--fog > [role='row']:nth-child(odd) > .cell:nth-child(3n)::before {
+  background-position: 30% 60%;
+  background-size: 160% 140%;
+}
+.board--fog .cell--water::before {
+  opacity: 1;
+}
+.board--fog .cell--target:hover::before {
+  opacity: 0.7;
+}
+.board--fog .cell--target:hover:not(.cell--selected) {
+  outline: 1px solid color-mix(in srgb, var(--radar) 70%, transparent);
+  outline-offset: -1px;
+}
+.board--fog .cell--selected::before {
+  opacity: 0.35;
+}
+.fleet-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.fleet-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  padding: 5px 9px;
+  min-height: var(--tap-min);
+  border-radius: var(--radius-sm);
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.fleet-chip__head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.fleet-chip.active {
+  border-color: var(--radar);
+  color: var(--text);
+}
+.fleet-chip.sunk {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.fleet-chip.invalid {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.fleet-chip__issue {
+  max-width: 100%;
+  color: var(--danger);
+  font-size: var(--fs-xs);
+  letter-spacing: normal;
+  line-height: 1.15;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+
+.placement-hint {
+  margin: 0;
+}
+
+.placement-issues {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--fs-sm);
+}
+
+.placement-issues--ready {
+  color: var(--success);
+}
+
+.placement-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.placement-topbar-actions,
+.game-topbar-actions {
+  gap: var(--space-2);
+}
+
+.game-section__title {
+  margin: 0;
+  font-size: var(--fs-md);
+}
+.fleet-chip .pips {
+  display: inline-flex;
+  gap: 2px;
+}
+.fleet-chip .pips i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: currentColor;
+  display: inline-block;
+}
+
+/* Placement settle / invalid shake */
+.cell--ship {
+  animation: settle 0.25s ease-out;
+}
+.cell--ship-invalid {
+  animation: shake 0.3s ease;
+}
+@keyframes settle {
+  from {
+    transform: scale(0.7);
+    opacity: 0.4;
+  }
+}
+@keyframes shake {
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
+
+/* Board strike overlay */
+.board {
+  position: relative;
+}
+/* The jet rides a full-width track: percentages in translateX resolve against the track width
+   (= board width), so --tx lands the nose on the target column. --tx/--ty come from the component. */
+.strike-jet-path {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--ty);
+  height: 0;
+  z-index: var(--z-board-fx);
+  animation: strike-l 1.1s ease-in-out forwards;
+}
+.strike-jet-path--r {
+  animation-name: strike-r;
+}
+.strike-jet {
+  position: absolute;
+  width: 12%;
+  margin-left: calc(var(--tx) - 6%);
+  color: var(--sea-label);
+}
+.strike-jet svg {
+  display: block;
+  width: 100%;
+  transform: translateY(-50%);
+}
+.strike-jet--r svg {
+  transform: translateY(-50%) scaleX(-1);
+}
+@keyframes strike-l {
+  0% {
+    transform: translateX(calc(-1 * var(--tx) - 20%));
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  55% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(calc(100% - var(--tx) + 20%));
+    opacity: 0;
+  }
+}
+@keyframes strike-r {
+  0% {
+    transform: translateX(calc(100% - var(--tx) + 20%));
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  55% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(calc(-1 * var(--tx) - 20%));
+    opacity: 0;
+  }
+}
+.strike-result {
+  position: absolute;
+  width: 10%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-board-fx);
+}
+.strike-splash {
+  width: 70%;
+  color: var(--mark-miss);
+  animation: ring 0.6s ease-out forwards;
+}
+@keyframes ring {
+  from {
+    transform: scale(0.2);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+.strike-burst {
+  width: 80%;
+  color: var(--mark-hit-fill);
+  animation: pop 0.3s ease, fade-out 0.5s ease forwards;
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+.sink-ship {
+  position: absolute;
+  height: 10%;
+  transform-origin: center;
+  z-index: var(--z-board-fx);
+}
+.sink-ship .sink-anim {
+  width: 100%;
+  height: 100%;
+  color: var(--ship);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--sea-label) 55%, transparent));
+  animation: sink 1.3s ease-in forwards;
+}
+.sink-ship svg {
+  width: 100%;
+  height: 100%;
+}
+@keyframes sink {
+  0% {
+    transform: scale(0.9) translateY(0);
+    opacity: 0;
+  }
+  18% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+  40% {
+    transform: rotate(-8deg) translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(14deg) translateY(60%);
+    opacity: 0;
+  }
+}
+/* Wind-up reticle: tightens onto the target over the 400ms wind-up, then pulses until impact. */
+.strike-reticle svg {
+  width: 135%;
+  flex: none;
+  color: var(--radar);
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.45));
+  animation: reticle-lock 0.4s cubic-bezier(0.2, 0.7, 0.3, 1) both, reticle-pulse 0.5s ease-in-out 0.4s infinite alternate;
+}
+@keyframes reticle-lock {
+  from {
+    transform: scale(2.4) rotate(-60deg);
+    opacity: 0;
+  }
+  45% {
+    opacity: 1;
+  }
+  to {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+@keyframes reticle-pulse {
+  to {
+    transform: scale(0.88);
+  }
+}
+/* Miss: water ripple rings spreading out under the splash. */
+.strike-ripple {
+  position: absolute;
+  inset: 0;
+  border: 2px solid color-mix(in srgb, var(--sea-label) 75%, transparent);
+  border-radius: 50%;
+  opacity: 0;
+  animation: ripple 0.9s ease-out forwards;
+}
+.strike-ripple--late {
+  animation-delay: 0.22s;
+}
+@keyframes ripple {
+  from {
+    transform: scale(0.3);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+/* Debris / spray particles; --dx/--dy/--s are in cell units (--cell comes from .board). */
+.fx-particles {
+  position: absolute;
+  width: 0;
+  height: 0;
+  z-index: var(--z-board-fx);
+}
+.fx-particle {
+  position: absolute;
+  left: calc(var(--cell) * var(--s) * -0.5);
+  top: calc(var(--cell) * var(--s) * -0.5);
+  width: calc(var(--cell) * var(--s));
+  height: calc(var(--cell) * var(--s));
+  border-radius: 2px;
+  opacity: 0;
+  animation-name: debris;
+  animation-timing-function: cubic-bezier(0.15, 0.7, 0.35, 1);
+  animation-fill-mode: both;
+}
+.fx-particle--t0 {
+  background: var(--mark-hit-fill);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--mark-hit-fill) 80%, transparent);
+}
+.fx-particle--t1 {
+  background: var(--ship);
+}
+.fx-particle--t2 {
+  background: color-mix(in srgb, var(--sea-label) 90%, transparent);
+  border-radius: 50%;
+}
+@keyframes debris {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0) scale(1);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(calc(var(--cell) * var(--dx)), calc(var(--cell) * var(--dy)), 0) rotate(var(--r)) scale(0.5);
+    opacity: 0;
+  }
+}
+/* Carrier destruction: jet run along the hull → bomb drop → burst → delayed sink (~2.3s). */
+.carrier-run {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  z-index: var(--z-board-fx);
+  animation: carrier-pass 1.4s ease-in-out forwards;
+}
+.carrier-run--r {
+  animation-name: carrier-pass-r;
+}
+.carrier-run--v {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+.carrier-run-jet {
+  position: absolute;
+  width: 15%;
+  margin-left: calc(var(--cx) - 7.5%);
+  color: var(--sea-label);
+}
+.carrier-run-jet svg {
+  display: block;
+  width: 100%;
+  transform: translateY(-50%);
+}
+.carrier-run--r .carrier-run-jet svg {
+  transform: translateY(-50%) scaleX(-1);
+}
+@keyframes carrier-pass {
+  0% {
+    transform: translateX(-130%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  45% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(130%);
+    opacity: 0;
+  }
+}
+@keyframes carrier-pass-r {
+  0% {
+    transform: translateX(130%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  45% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-130%);
+    opacity: 0;
+  }
+}
+.carrier-bomb svg {
+  width: 55%;
+  color: var(--sea-label);
+  animation: bomb-drop 0.5s ease-in 0.6s both;
+}
+@keyframes bomb-drop {
+  0% {
+    transform: translateY(-40%) scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 0;
+  }
+}
+.carrier-burst {
+  animation: carrier-burst 0.5s ease 1.05s both;
+}
+@keyframes carrier-burst {
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  35% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+.sink-ship .sink-anim--late {
+  animation-delay: 1.3s;
+  animation-fill-mode: both;
+}
+
+/* FX stage: sink banner and own-ship-sunk vignette. Never interactive. */
+.fx-banner-region {
+  position: fixed;
+  left: 50%;
+  top: calc(84px + env(safe-area-inset-top));
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  z-index: var(--z-banner);
+  pointer-events: none;
+}
+.fx-banner {
+  padding: 10px 20px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: var(--fs-lg);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--accent-text);
+  background: var(--amber);
+  border: 2px solid color-mix(in srgb, var(--sea-label) 70%, transparent);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  animation: banner var(--fx-banner-ms, 2200ms) ease-out both;
+}
+.fx-banner--own {
+  color: var(--on-danger);
+  font-size: var(--fs-lg);
+  background: var(--danger-fill);
+  border-color: color-mix(in srgb, var(--mark-sunk-fill) 75%, transparent);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--mark-sunk-fill) 25%, transparent),
+    0 10px 28px rgba(0, 0, 0, 0.45);
+}
+@keyframes banner {
+  0% {
+    transform: translateY(-14px) scale(0.9);
+    opacity: 0;
+  }
+  10% {
+    transform: translateY(0) scale(1.04);
+    opacity: 1;
+  }
+  16% {
+    transform: scale(1);
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-6px);
+    opacity: 0;
+  }
+}
+.fx-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-board-fx);
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, transparent 40%, color-mix(in srgb, var(--mark-sunk-fill) 60%, transparent) 100%),
+    color-mix(in srgb, var(--mark-sunk-fill) 14%, transparent);
+  opacity: 0;
+  animation: vignette 0.9s ease-out both;
+}
+@keyframes vignette {
+  0% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Reduced motion: no flights, shake, particles or water drift; effects become short fades. */
+@keyframes fx-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes fx-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .strike-jet-path,
+  .carrier-run,
+  .carrier-run--v,
+  .carrier-bomb,
+  .strike-ripple,
+  .fx-particles,
+  .board-water {
+    display: none !important;
+  }
+  .fx .strike-reticle svg {
+    animation: fx-fade-in 180ms ease-out both !important;
+  }
+  .fx .strike-splash,
+  .fx .strike-burst {
+    animation:
+      fx-fade-in 150ms ease-out both,
+      fx-fade-out 180ms ease-in 900ms forwards !important;
+  }
+  .fx .sink-ship .sink-anim {
+    animation:
+      fx-fade-in 180ms ease-out both,
+      fx-fade-out 200ms ease-in 1400ms forwards !important;
+  }
+  .fx-banner {
+    animation:
+      fx-fade-in 180ms ease-out both,
+      fx-fade-out 200ms ease-in calc(var(--fx-banner-ms, 2200ms) - 200ms) forwards !important;
+  }
+  .fx-vignette {
+    animation:
+      fx-fade-in 150ms ease-out both,
+      fx-fade-out 200ms ease-in 450ms forwards !important;
+  }
+  .board--fog .cell::before {
+    transition: opacity 150ms linear !important;
+  }
+}

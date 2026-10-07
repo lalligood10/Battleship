@@ -8,7 +8,8 @@
   border-radius: var(--radius);
   background: var(--card);
   color: var(--text);
-  font-size: 13px;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
   line-height: 1.2;
 }
 
@@ -84,7 +85,7 @@
 
 .turn-timer-picker .gm-choice {
   align-items: center;
-  min-height: 40px;
+  min-height: var(--tap-min);
   gap: 7px;
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isInteractive, moveFocus } from './boardNav';
+import { focusReturnTarget, isInteractive, moveFocus } from './boardNav';
 
 describe('moveFocus', () => {
   it('moves one cell in each direction', () => {
@@ -50,5 +50,18 @@ describe('isInteractive', () => {
     expect(isInteractive('water', { disabled: true })).toBe(false);
     expect(isInteractive('water', { targeting: true, disabled: true })).toBe(false);
     expect(isInteractive('miss', { disabled: true })).toBe(false);
+  });
+});
+
+describe('focusReturnTarget', () => {
+  const fired = [{ row: 1, col: 2 }, { row: 4, col: 5 }];
+
+  it.each(['none', 'fire-control', 'board'] as const)('returns the last fired cell for %s focus', (context) => {
+    expect(focusReturnTarget(context, fired)).toEqual({ row: 4, col: 5 });
+  });
+
+  it('does not steal focus from elsewhere or from an empty volley', () => {
+    expect(focusReturnTarget('elsewhere', fired)).toBeNull();
+    expect(focusReturnTarget('board', [])).toBeNull();
   });
 });

@@ -1,8 +1,12 @@
 /** Shown when no Firebase config is present, so a fresh deploy explains itself instead of crashing. */
 export function SetupPage() {
   return (
-    <div className="app page page--center">
-      <div className="card stack">
+    <main className="app page page--center setup">
+      <div className="card stack setup__card">
+        <p className="panel-title">
+          <span className="setup__status" aria-hidden="true" />
+          Systems offline
+        </p>
         <h1 className="title">Broadside needs its Firebase settings</h1>
         <p className="muted">
           This copy of the app hasn't been connected to a Firebase project yet, so it can't sign anyone in.
@@ -13,11 +17,16 @@ export function SetupPage() {
           Firebase Hosting the config is picked up automatically once a web app is registered with{' '}
           <i>Also set up Firebase Hosting</i> ticked.
         </p>
-        <p className="muted small">
-          Variables expected: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID,
-          VITE_FIREBASE_APP_ID.
-        </p>
+        <div className="setup__vars">
+          <p className="panel-title">Variables expected</p>
+          <ul className="mono small">
+            <li>VITE_FIREBASE_API_KEY</li>
+            <li>VITE_FIREBASE_AUTH_DOMAIN</li>
+            <li>VITE_FIREBASE_PROJECT_ID</li>
+            <li>VITE_FIREBASE_APP_ID</li>
+          </ul>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { CHAT_INITIAL_FOCUS_ATTR, chatInitialFocusTarget, chatKeyAction } from '../a11y/chatFocus';
 import { commentaryForGame } from '../game/commentary';
 import { sendChatMessage } from '../lib/api';
 import { errorMessage } from '../lib/errors';
@@ -29,6 +30,9 @@ export function GameChat({ game, uid }: { game: Game; uid: string }) {
   const [speech, setSpeech] = useState(isSpeechEnabled);
   const [volume, setVolume] = useState(speechVolume);
   const listRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const focusPanelOnOpen = useRef(false);
   const initialChat = useRef(true);
   const seenMessageIds = useRef(new Set<string>());
 
@@ -69,11 +73,36 @@ export function GameChat({ game, uid }: { game: Game; uid: string }) {
     });
   }, [open, messages.length, commentary.length]);
 
-  const toggleOpen = () => {
-    const next = !open;
+  useEffect(() => {
+    if (!open || !focusPanelOnOpen.current) return;
+    focusPanelOnOpen.current = false;
+    const frame = requestAnimationFrame(() => {
+      if (panelRef.current) chatInitialFocusTarget(panelRef.current)?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open]);
+
+  const setPanelOpen = (next: boolean) => {
     localStorage.setItem(OPEN_KEY, String(next));
     if (next) setUnread(0);
     setOpen(next);
+  };
+
+  const toggleOpen = () => {
+    focusPanelOnOpen.current = !open;
+    setPanelOpen(!open);
+  };
+
+  const closeAndReturnFocus = () => {
+    setPanelOpen(false);
+    toggleRef.current?.focus();
+  };
+
+  const onPanelKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (chatKeyAction(event.key, open) !== 'close') return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeAndReturnFocus();
   };
 
   const submit = async (event: FormEvent) => {
@@ -107,6 +136,7 @@ export function GameChat({ game, uid }: { game: Game; uid: string }) {
   return (
     <>
       <button
+        ref={toggleRef}
         type="button"
         className={`game-chat-toggle${open ? ' game-chat-toggle--open' : ''}`}
         onClick={toggleOpen}
@@ -114,23 +144,35 @@ export function GameChat({ game, uid }: { game: Game; uid: string }) {
         aria-controls="game-chat-panel"
       >
         {botGame ? 'Commentary' : 'Chat'}
-        {!open && unread > 0 && <span className="game-chat-unread">{unread}</span>}
+        {!open && unread > 0 && (
+          <span className="game-chat-unread">
+            {unread}
+            <span className="sr-only"> unread</span>
+          </span>
+        )}
       </button>
 
       <aside
+        ref={panelRef}
         id="game-chat-panel"
         className={`game-chat${open ? ' game-chat--open' : ''}`}
         aria-label={botGame ? 'Computer commentary' : `Chat with ${opponentName}`}
         aria-hidden={!open}
         inert={!open}
+        onKeyDown={onPanelKeyDown}
       >
         <header className="game-chat__header">
           <div>
+            <span className="game-chat__kicker">{botGame ? 'Scripted play-by-play' : 'In-game chat'}</span>
             <strong>{botGame ? 'Computer commentary' : opponentName}</strong>
-            <span>{botGame ? 'Scripted play-by-play' : 'In-game chat'}</span>
           </div>
-          <button type="button" className="btn btn--ghost btn--icon" onClick={toggleOpen} aria-label="Close chat">
-            ×
+          <button
+            type="button"
+            className="btn btn--ghost btn--icon game-chat__close"
+            onClick={closeAndReturnFocus}
+            aria-label="Close chat"
+          >
+            <span aria-hidden="true">×</span>
           </button>
         </header>
 
@@ -169,11 +211,16 @@ export function GameChat({ game, uid }: { game: Game; uid: string }) {
 
         {botGame ? (
           <div className="game-chat__controls">
-            <label className="row row--between">
+            <label className="row row--between game-chat__switch">
               <span>Read commentary aloud</span>
-              <input type="checkbox" checked={speech} onChange={toggleSpeech} />
+              <input
+                type="checkbox"
+                checked={speech}
+                onChange={toggleSpeech}
+                {...{ [CHAT_INITIAL_FOCUS_ATTR]: '' }}
+              />
             </label>
-            <label>
+            <label className="game-chat__volume">
               <span className="row row--between">
                 <span>Voice volume</span>
                 <span>{Math.round(volume * 100)}%</span>
@@ -195,17 +242,21 @@ export function GameChat({ game, uid }: { game: Game; uid: string }) {
             <Reactions game={game} uid={uid} />
             <form onSubmit={(event) => void submit(event)}>
               <input
+                className="input"
                 value={draft}
                 maxLength={MAX_MESSAGE_LENGTH}
                 onChange={(event) => setDraft(event.target.value)}
                 placeholder={`Message ${opponentName}`}
                 aria-label={`Message ${opponentName}`}
+                {...{ [CHAT_INITIAL_FOCUS_ATTR]: '' }}
               />
               <button className="btn btn--primary" type="submit" disabled={!draft.trim() || busy}>
                 Send
               </button>
             </form>
-            <span className="small muted">{draft.length}/{MAX_MESSAGE_LENGTH}</span>
+            <span className="small muted mono" aria-hidden="true">
+              {draft.length}/{MAX_MESSAGE_LENGTH}
+            </span>
           </div>
         )}
       </aside>

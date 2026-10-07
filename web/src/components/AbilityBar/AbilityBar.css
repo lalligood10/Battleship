@@ -19,7 +19,7 @@
   min-height: 44px;
   padding: 8px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--card-2);
   color: var(--text);
   text-align: left;
@@ -32,7 +32,7 @@
   transform: scale(0.98);
 }
 .ability-option:focus-visible {
-  outline: 3px solid var(--accent);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 .ability-option--selected {
@@ -71,7 +71,7 @@
 .ability-status {
   flex: none;
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 11px;
   font-weight: 800;
   line-height: 16px;
@@ -149,27 +149,27 @@
 /* Board cells covered by the aimed ability. Applied by the board alongside `.cell`. */
 .cell.ability-preview {
   box-shadow:
-    inset 0 0 0 2px var(--accent),
-    inset 0 0 0 999px color-mix(in srgb, var(--accent) 35%, transparent);
+    inset 0 0 0 2px var(--radar),
+    inset 0 0 0 999px color-mix(in srgb, var(--radar) 35%, transparent);
   z-index: 1;
 }
 .cell.ability-preview--invalid {
   box-shadow:
-    inset 0 0 0 2px var(--danger),
-    inset 0 0 0 999px color-mix(in srgb, var(--danger) 35%, transparent);
+    inset 0 0 0 2px var(--ship-invalid),
+    inset 0 0 0 999px color-mix(in srgb, var(--ship-invalid) 35%, transparent);
   cursor: not-allowed;
 }
 .cell.sonar-marker {
-  outline: 1px dashed var(--muted);
+  outline: 1px dashed var(--sea-label);
   outline-offset: -4px;
   z-index: 1;
 }
 .cell.sonar-marker--detected {
-  outline: 2px solid var(--success);
-  background-color: color-mix(in srgb, var(--success) 18%, var(--water));
+  outline: 2px solid var(--radar);
+  background-color: color-mix(in srgb, var(--radar) 18%, var(--sea));
 }
 .cell.sonar-marker--clear {
-  outline: 1px dashed var(--muted);
+  outline: 1px dashed var(--sea-label);
 }
 .sonar-history {
   display: flex;
@@ -181,31 +181,31 @@
   font-size: 12px;
 }
 .sonar-history__item--detected {
-  color: var(--success);
+  color: var(--radar);
 }
 .cell.sonar-flash {
   animation: sonar-flash 800ms ease-out;
 }
 @keyframes sonar-flash {
   0% {
-    background-color: color-mix(in srgb, var(--accent) 72%, var(--water));
-    box-shadow: inset 0 0 0 3px var(--accent);
+    background-color: color-mix(in srgb, var(--radar) 72%, var(--sea));
+    box-shadow: inset 0 0 0 3px var(--radar);
   }
   100% {
-    background-color: transparent;
+    background-color: var(--sea);
     box-shadow: none;
   }
 }
 .cell-sonar-label {
   position: absolute;
-  z-index: 5;
+  z-index: var(--z-board-fx);
   top: calc(100% - 1px);
   left: 50%;
   padding: 2px 5px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--card);
-  color: var(--text);
+  border: 1px solid var(--grid-line);
+  border-radius: var(--radius-pill);
+  background: var(--sea-2);
+  color: var(--sea-label);
   font-size: 9px;
   font-weight: 800;
   line-height: 1.2;

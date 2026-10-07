@@ -95,12 +95,16 @@ export function Reactions({ game, uid }: { game: Game; uid: string }) {
 
   return (
     <>
+      {/* Always mounted, so screen readers announce text that appears in it (audit R16). */}
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {visibleError ?? visibleToast ?? ''}
+      </p>
       {visibleToast && (
-        <div className="reaction-toast" role="status" aria-live="polite">
+        <div className="reaction-toast" aria-hidden="true">
           {visibleToast}
         </div>
       )}
-      <div className="reaction-bar" aria-label="Send a reaction">
+      <div className="reaction-bar" role="group" aria-label="Send a reaction">
         {REACTIONS.map((reaction) => (
           <button
             key={reaction.id}
@@ -113,7 +117,7 @@ export function Reactions({ game, uid }: { game: Game; uid: string }) {
         ))}
       </div>
       {visibleError && (
-        <p className="reaction-error small muted" role="status">
+        <p className="reaction-error small" aria-hidden="true">
           {visibleError}
         </p>
       )}

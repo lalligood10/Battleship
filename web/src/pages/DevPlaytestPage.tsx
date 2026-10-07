@@ -75,7 +75,7 @@ export default function DevPlaytestPage() {
 
       <section className="card stack">
         <h2 style={heading}>By mode</h2>
-        <div style={scroll}>
+        <div style={scroll} tabIndex={0} role="region" aria-label="By mode table">
           <table style={table}>
             <thead>
               <tr>
@@ -122,7 +122,7 @@ export default function DevPlaytestPage() {
         {newestFirst.length === 0 ? (
           <Empty title="No games recorded" message="Finish a game with playtest analytics enabled." />
         ) : (
-          <div style={scroll}>
+          <div style={scroll} tabIndex={0} role="region" aria-label="Games table">
             <table style={table}>
               <thead>
                 <tr>

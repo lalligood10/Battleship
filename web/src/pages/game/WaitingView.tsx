@@ -58,24 +58,23 @@ export function WaitingView({ game, uid }: { game: Game; uid: string }) {
   };
 
   return (
-    <div className="page">
+    <div className="page waiting">
       <TopBar title="Invite a friend" back="/" right={<ModeBadge mode={game.mode} />} />
       {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
 
       {!game.invitedUid && (
-        <section className="card stack center">
-          <p className="muted">Your join code</p>
+        <section className="card stack center waiting__invite">
+          <p className="panel-title">Your join code</p>
           <button
             type="button"
-            className="mono"
-            style={{ fontSize: 44, fontWeight: 800, letterSpacing: '0.25em', background: 'none', border: 0, color: 'inherit', cursor: 'pointer' }}
+            className="waiting__code"
             onClick={() => copy(game.code, 'Code')}
             aria-label={`Join code ${game.code.split('').join(' ')}. Tap to copy.`}
           >
             {game.code}
           </button>
           <p className="muted small">Tap the code to copy it, or share the link below.</p>
-          <div className="stack">
+          <div className="stack waiting__actions">
             <button className="btn btn--primary btn--block" onClick={share}>
               Share invite link
             </button>
@@ -83,26 +82,29 @@ export function WaitingView({ game, uid }: { game: Game; uid: string }) {
               Copy link
             </button>
           </div>
-          <p className="small mono muted" style={{ wordBreak: 'break-all' }}>
+          <p className="small mono muted waiting__link">
             {link}
           </p>
         </section>
       )}
 
-      <Spinner
-        label={
+      <div className="waiting__status">
+        <span className="radar-emblem" aria-hidden="true" />
+        <Spinner
+          label={
           game.invitedUid
             ? `Waiting for ${game.players[game.invitedUid]?.username ?? 'your opponent'} to accept your rematch… this page updates automatically.`
             : 'Waiting for your friend to join… this page updates automatically.'
-        }
-      />
+          }
+        />
+      </div>
 
       <p className="muted small center">
         You can leave this screen — the game stays in "Your games" on the home screen until someone joins.
       </p>
 
       {isHost && (
-        <button className="btn btn--danger btn--block" onClick={cancel} disabled={busy}>
+        <button className="btn btn--outline-danger" onClick={cancel} disabled={busy}>
           Cancel game
         </button>
       )}
