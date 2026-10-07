@@ -11,6 +11,7 @@
     "lint": "oxlint",
     "test": "vitest run",
     "visual-qa": "playwright test",
+    "a11y-qa": "playwright test e2e/a11y.spec.ts",
     "preview": "vite preview"
   },
   "dependencies": {
